@@ -4,6 +4,94 @@ A lightweight, file-based issue tracker. Your Agile board lives in your repo as
 folders and markdown files, versioned with git — no server, no database, no
 account.
 
+## Install
+
+Requires Node 20+. The package is `light-plan` and the command it installs is
+`lpm`:
+
+```bash
+npm install -g light-plan
+lpm init
+```
+
+Or run it without installing anything:
+
+```bash
+npx light-plan init
+npx light-plan ui
+```
+
+To get started:
+
+```bash
+cd my-project
+lpm init        # create the board in .lpm/
+lpm ui          # open it in your browser
+```
+
+`lpm init` writes the board into `.lpm/` in the current folder. It uses the
+Scrum template (`--template kanban` or `--template blank` for the others) and
+takes the issue-id prefix from the folder name (`--prefix LP` to choose your
+own). It also makes `.lpm` a git repository of its own and adds it to your
+project's `.gitignore`, so the board keeps its own history (`--no-git` skips
+that).
+
+`lpm ui` starts a local server on `http://localhost:4571` and opens the editor
+in your browser. What you change there is held as a draft until you press
+**Push**, which writes it to `.lpm/`. Stop the server with Ctrl-C. To build a
+board from the command line instead, see [Quick start](#quick-start).
+
+
+The experimental features — [`lpm queue agent`](#draining-the-queue-with-an-agent-lpm-queue-agent) and
+[Jira sync](docs/remote-jira.md) — need packages a standard install leaves out;
+their sections say what to add.
+
+### Agent configuration with hcm
+
+light-plan ships agents (a developer and a planner), skills and an MCP server
+for AI coding hosts. If you manage agent configuration with
+[hcm](https://github.com/fleskovar/harness_config_manager)
+(harness-config-manager), register the light-plan bundle once, then install it
+into any project:
+
+```bash
+npm install -g harness-config-manager      # hcm itself, once per machine
+lpm hcm init                               # register the bundle; again after each light-plan upgrade
+
+# then, in each project
+hcm install light-plan -t claude-code                  # developer and planner
+hcm install light-plan -t copilot --flavor developer   # the developer agent only
+hcm update light-plan                                  # after re-running lpm hcm init
+```
+
+`-t` names the harness (`hcm targets` lists them) and `--flavor` picks a role
+(`developer` or `pm`). The MCP server starts as `lpm mcp`, so agents need `lpm`
+on their PATH: install light-plan globally, not only through npx. Without hcm,
+[`lpm agent`](#working-with-agents) installs the same files straight into a
+project. The details are in
+[The same assets as an hcm bundle](#the-same-assets-as-an-hcm-bundle) and
+[docs/hcm.md](docs/hcm.md).
+
+### From a checkout
+
+```bash
+make setup        # installs, builds, and puts `lpm` on your PATH
+```
+
+Requires GNU Make. Without Make:
+
+```bash
+npm install
+npm run build
+npm link          # puts `lpm` on your PATH
+```
+
+`make doctor` checks your machine before you start, and `make` on its own lists
+every target. See [Development](#development).
+
+
+## How a board is laid out
+
 ```
 .lpm/
 ├── config.yml
@@ -54,49 +142,6 @@ any resource via its `assignee:` field.
 `templates/context/` holds no documents. It is the one folder the engine never
 walks: the layouts `lpm instructions` renders a [working brief](#working-briefs-the-context-to-actually-do-it)
 with, so a team decides what a developer is handed when they pick an issue up.
-
-## Install
-
-Requires Node 20+. The package is `light-plan` and the command it installs is
-`lpm`:
-
-```bash
-npm install -g light-plan
-lpm init
-```
-
-Or run it without installing anything:
-
-```bash
-npx light-plan init
-npx light-plan ui
-```
-
-Spell it `npx light-plan`, never `npx lpm` — `lpm` on npm is an unrelated
-package. `lpm mcp setup` and `lpm agent` notice when they were started through
-npx and write a host config that starts the server with `npx -y light-plan mcp`,
-so nothing points into npm's cache.
-
-The experimental features — [`lpm queue agent`](#draining-the-queue-with-an-agent-lpm-queue-agent) and
-[Jira sync](docs/remote-jira.md) — need packages a standard install leaves out;
-their sections say what to add.
-
-### From a checkout
-
-```bash
-make setup        # installs, builds, and puts `lpm` on your PATH
-```
-
-Requires GNU Make. Without Make:
-
-```bash
-npm install
-npm run build
-npm link          # puts `lpm` on your PATH
-```
-
-`make doctor` checks your machine before you start, and `make` on its own lists
-every target. See [Development](#development).
 
 ## Quick start
 
