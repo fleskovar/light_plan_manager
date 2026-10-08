@@ -1,0 +1,67 @@
+{
+  "_comment": "What the board must look like after a push to the remote and a pull back into a fresh board, expressed in board vocabulary and keyed by title so it is provider-independent. Sorted by title. Derived by hand from inputs/ plus the mapping rules in README.md - not generated from a run. `period` is asserted only for providers that recover scheduling; see README.md, Known gaps.",
+  "documents": [
+    {
+      "title": "Card payments",
+      "type": "epic",
+      "status": "backlog",
+      "parent": "Payments",
+      "depends_on": [],
+      "attributes": {},
+      "period": null
+    },
+    {
+      "title": "Payments",
+      "type": "program",
+      "status": "backlog",
+      "parent": null,
+      "depends_on": [],
+      "attributes": {},
+      "period": null
+    },
+    {
+      "title": "Refund a captured charge",
+      "type": "user_story",
+      "status": "in_progress",
+      "parent": "Refunds",
+      "depends_on": [],
+      "attributes": {
+        "story_points": 5
+      },
+      "period": "Sprint A"
+    },
+    {
+      "title": "Refund a voided charge",
+      "type": "user_story",
+      "status": "done",
+      "parent": "Refunds",
+      "depends_on": [],
+      "attributes": {
+        "story_points": 3
+      },
+      "period": null
+    },
+    {
+      "title": "Refunds",
+      "type": "feature",
+      "status": "backlog",
+      "parent": "Card payments",
+      "depends_on": [],
+      "attributes": {},
+      "period": null
+    },
+    {
+      "title": "Show the refund on the receipt",
+      "type": "user_story",
+      "status": "backlog",
+      "parent": "Refunds",
+      "depends_on": [
+        "Refund a captured charge"
+      ],
+      "attributes": {
+        "story_points": 2
+      },
+      "period": null
+    }
+  ]
+}

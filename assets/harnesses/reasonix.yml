@@ -1,0 +1,49 @@
+# Reasonix (DeepSeek) — where it keeps agents, skills and MCP servers.
+#
+# Source: https://github.com/esengine/DeepSeek-Reasonix/blob/main-v2/docs/GUIDE.md
+# See docs/harness-layouts.md for the schema and for what each field means.
+#
+# Reasonix is the odd one out twice over: one directory holds both agents and
+# skills, and the user-level config is TOML.
+
+name: reasonix
+label: Reasonix (DeepSeek)
+docs: https://github.com/esengine/DeepSeek-Reasonix/blob/main-v2/docs/GUIDE.md
+verified: 2026-08-03
+aliases: [deepseek]
+
+roots:
+  project: "{project}/.reasonix"
+  user: "{home}/.reasonix"
+
+files:
+  # Every file under commands/ is a /slash-command; `runAs: subagent` is the
+  # only thing that makes one a subagent profile.
+  - from: agents/*.md
+    to: "{root}/commands/{basename}"
+    frontmatter:
+      description: "{description}"
+      runAs: subagent
+
+  # Same directory, no marker: a skill is just a command.
+  - from: skills/*.md
+    to: "{root}/commands/{basename}"
+    frontmatter:
+      description: "{description}"
+
+mcp:
+  # Project .mcp.json in the standard format wins over both TOML sources, and is
+  # the same file Claude and Copilot read.
+  project:
+    file: "{project}/.mcp.json"
+    key: mcpServers
+  user:
+    # ~/.reasonix/config.toml is TOML and this package has no TOML support.
+    # Merging into somebody's config file blind is how you lose it, so we print
+    # the entry instead of writing it.
+    advice: |
+      Add the server to ~/.reasonix/config.toml as a [[plugins]] entry:
+          [[plugins]]
+          name = "light-plan"
+          command = "lpm"
+          args = ["mcp"]

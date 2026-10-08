@@ -1,0 +1,24 @@
+{
+  "extends": "@tsconfig/svelte/tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "paths": {
+      "$shared": ["../src/shared/index.ts"],
+      "$shared/*": ["../src/shared/*"],
+      "$lib/*": ["./src/lib/*"],
+      "$features/*": ["./src/features/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.svelte", "test/**/*.ts", "../src/shared/**/*.ts"]
+}

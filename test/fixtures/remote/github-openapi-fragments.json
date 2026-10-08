@@ -1,0 +1,1074 @@
+{
+ "_source": "https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json",
+ "_note": "Documentation-derived (OpenAPI description), NOT a captured HTTP response. No scratch account was available; lifecycle response bodies must be re-verified empirically before on_delete:delete/restore are committed.",
+ "get_issue_responses": {
+  "301": {
+   "description": "Moved permanently",
+   "content": {
+    "application/json": {
+     "schema": {
+      "$ref": "#/components/schemas/basic-error"
+     }
+    }
+   }
+  },
+  "404": {
+   "description": "Resource not found",
+   "content": {
+    "application/json": {
+     "schema": {
+      "$ref": "#/components/schemas/basic-error"
+     }
+    }
+   }
+  },
+  "410": {
+   "description": "Gone",
+   "content": {
+    "application/json": {
+     "schema": {
+      "$ref": "#/components/schemas/basic-error"
+     }
+    }
+   }
+  }
+ },
+ "basic_error_schema": {
+  "title": "Basic Error",
+  "description": "Basic Error",
+  "type": "object",
+  "properties": {
+   "message": {
+    "type": "string"
+   },
+   "documentation_url": {
+    "type": "string"
+   },
+   "url": {
+    "type": "string"
+   },
+   "status": {
+    "type": "string"
+   }
+  }
+ },
+ "issue_type_schema": {
+  "title": "Issue Type",
+  "description": "The type assigned to the issue. This is only present for issues in repositories where issue types are supported.",
+  "type": "object",
+  "nullable": true,
+  "properties": {
+   "id": {
+    "type": "integer",
+    "description": "The unique identifier of the issue type."
+   },
+   "node_id": {
+    "type": "string",
+    "description": "The node identifier of the issue type."
+   },
+   "name": {
+    "type": "string",
+    "description": "The name of the issue type."
+   },
+   "description": {
+    "type": "string",
+    "description": "The description of the issue type.",
+    "nullable": true
+   },
+   "color": {
+    "type": "string",
+    "description": "The color of the issue type.",
+    "enum": [
+     "gray",
+     "blue",
+     "green",
+     "yellow",
+     "orange",
+     "red",
+     "pink",
+     "purple"
+    ],
+    "nullable": true
+   },
+   "created_at": {
+    "type": "string",
+    "description": "The time the issue type created.",
+    "format": "date-time"
+   },
+   "updated_at": {
+    "type": "string",
+    "description": "The time the issue type last updated.",
+    "format": "date-time"
+   },
+   "is_enabled": {
+    "type": "boolean",
+    "description": "The enabled state of the issue type."
+   }
+  },
+  "required": [
+   "id",
+   "node_id",
+   "name",
+   "description"
+  ]
+ },
+ "issue_field_schema": {
+  "title": "Issue Field",
+  "description": "A custom attribute defined at the organization level for attaching structured data to issues.",
+  "type": "object",
+  "nullable": true,
+  "properties": {
+   "id": {
+    "type": "integer",
+    "description": "The unique identifier of the issue field."
+   },
+   "node_id": {
+    "type": "string",
+    "description": "The node identifier of the issue field."
+   },
+   "name": {
+    "type": "string",
+    "description": "The name of the issue field."
+   },
+   "description": {
+    "type": "string",
+    "description": "The description of the issue field.",
+    "nullable": true
+   },
+   "data_type": {
+    "type": "string",
+    "description": "The data type of the issue field.",
+    "enum": [
+     "text",
+     "date",
+     "single_select",
+     "multi_select",
+     "number"
+    ]
+   },
+   "visibility": {
+    "type": "string",
+    "description": "The visibility of the issue field. Can be `organization_members_only` (visible only within the organization) or `all` (visible to all users who can see issues).",
+    "enum": [
+     "organization_members_only",
+     "all"
+    ]
+   },
+   "options": {
+    "description": "Available options for single select and multi select fields.",
+    "type": "array",
+    "items": {
+     "type": "object",
+     "properties": {
+      "id": {
+       "type": "integer",
+       "description": "The unique identifier of the option."
+      },
+      "name": {
+       "type": "string",
+       "description": "The name of the option."
+      },
+      "description": {
+       "type": "string",
+       "description": "The description of the option.",
+       "nullable": true
+      },
+      "color": {
+       "type": "string",
+       "description": "The color of the option.",
+       "enum": [
+        "gray",
+        "blue",
+        "green",
+        "yellow",
+        "orange",
+        "red",
+        "pink",
+        "purple"
+       ],
+       "nullable": true
+      },
+      "priority": {
+       "type": "integer",
+       "description": "The priority of the option for ordering.",
+       "nullable": true
+      },
+      "created_at": {
+       "type": "string",
+       "description": "The time the option was created.",
+       "format": "date-time"
+      },
+      "updated_at": {
+       "type": "string",
+       "description": "The time the option was last updated.",
+       "format": "date-time"
+      }
+     },
+     "required": [
+      "id",
+      "name"
+     ]
+    },
+    "nullable": true
+   },
+   "created_at": {
+    "type": "string",
+    "description": "The time the issue field was created.",
+    "format": "date-time"
+   },
+   "updated_at": {
+    "type": "string",
+    "description": "The time the issue field was last updated.",
+    "format": "date-time"
+   }
+  },
+  "required": [
+   "id",
+   "node_id",
+   "name",
+   "data_type"
+  ]
+ },
+ "issue_field_value_schema": {
+  "title": "Issue Field Value",
+  "description": "A value assigned to an issue field",
+  "type": "object",
+  "properties": {
+   "issue_field_id": {
+    "description": "Unique identifier for the issue field.",
+    "type": "integer",
+    "format": "int64",
+    "example": 1
+   },
+   "issue_field_name": {
+    "description": "The human-readable name of the issue field.",
+    "type": "string",
+    "example": "Priority"
+   },
+   "node_id": {
+    "type": "string",
+    "example": "IFT_GDKND"
+   },
+   "data_type": {
+    "description": "The data type of the issue field",
+    "type": "string",
+    "enum": [
+     "text",
+     "single_select",
+     "multi_select",
+     "number",
+     "date"
+    ],
+    "example": "text"
+   },
+   "value": {
+    "description": "The value of the issue field",
+    "anyOf": [
+     {
+      "type": "string",
+      "example": "Sample text"
+     },
+     {
+      "type": "number",
+      "example": 42.5
+     },
+     {
+      "type": "integer",
+      "example": 1
+     }
+    ],
+    "nullable": true
+   },
+   "single_select_option": {
+    "description": "Details about the selected option (only present for single_select fields)",
+    "type": "object",
+    "properties": {
+     "id": {
+      "description": "Unique identifier for the option.",
+      "type": "integer",
+      "format": "int64",
+      "example": 1
+     },
+     "name": {
+      "description": "The name of the option",
+      "type": "string",
+      "example": "High"
+     },
+     "color": {
+      "description": "The color of the option",
+      "type": "string",
+      "example": "red"
+     }
+    },
+    "required": [
+     "id",
+     "name",
+     "color"
+    ],
+    "nullable": true
+   },
+   "multi_select_options": {
+    "description": "Details about the selected options",
+    "type": "array",
+    "items": {
+     "type": "object",
+     "properties": {
+      "id": {
+       "description": "Unique identifier for the option.",
+       "type": "integer",
+       "format": "int64",
+       "example": 1
+      },
+      "name": {
+       "description": "The name of the option",
+       "type": "string",
+       "example": "High"
+      },
+      "color": {
+       "description": "The color of the option",
+       "type": "string",
+       "example": "red"
+      }
+     },
+     "required": [
+      "id",
+      "name",
+      "color"
+     ]
+    },
+    "nullable": true
+   }
+  },
+  "required": [
+   "issue_field_id",
+   "node_id",
+   "data_type",
+   "value"
+  ]
+ },
+ "since_parameter": {
+  "name": "since",
+  "description": "Only show results that were last updated after the given time. This is a timestamp in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) format: `YYYY-MM-DDTHH:MM:SSZ`.",
+  "in": "query",
+  "required": false,
+  "schema": {
+   "type": "string",
+   "format": "date-time"
+  }
+ },
+ "list_issues_type_param": [
+  {
+   "name": "milestone",
+   "description": "If an `integer` is passed, it should refer to a milestone by its `number` field. If the string `*` is passed, issues with any milestone are accepted. If the string `none` is passed, issues without milestones are returned.",
+   "in": "query",
+   "required": false,
+   "schema": {
+    "type": "string"
+   }
+  },
+  {
+   "name": "state",
+   "description": "Indicates the state of the issues to return.",
+   "in": "query",
+   "required": false,
+   "schema": {
+    "type": "string",
+    "enum": [
+     "open",
+     "closed",
+     "all"
+    ],
+    "default": "open"
+   }
+  },
+  {
+   "name": "type",
+   "description": "Can be the name of an issue type. If the string `*` is passed, issues with any type are accepted. If the string `none` is passed, issues without type are returned.",
+   "in": "query",
+   "required": false,
+   "schema": {
+    "type": "string"
+   }
+  },
+  {
+   "name": "issue_field_values",
+   "description": "A comma-separated list of issue field filters in `field_slug:value` format.\nOnly issues matching all specified field values are returned.\nRequires issue fields to be enabled for the repository. Issue fields are\nnot available for user-owned repositories, and field availability for\norganization-owned public repositories depends on the organization's\nvisibility settings. For example, `priority:Urgent,severity:High` filters\nissues where the `priority` field is `Urgent` AND the `severity` field is\n`High`.",
+   "in": "query",
+   "required": false,
+   "schema": {
+    "type": "string"
+   }
+  }
+ ],
+ "endpoints_of_note": {
+  "sub_issues": {
+   "get": {
+    "summary": "List sub-issues",
+    "description": "You can use the REST API to list the sub-issues on an issue.\n\nThis endpoint supports the following custom media types. For more information, see [Media types](https://docs.github.com/rest/using-the-rest-api/getting-started-with-the-rest-api#media-types).\n\n- **`application/vnd.github.raw+json`**: Returns the raw Markdown body. Response will include `body`. This is the default if you do not pass any specific media type.\n- **`application/vnd.github.text+json`**: Returns a text only representation of the Markdown body. Response will include `body_text`.\n- **`application/vnd.github.html+json`**: Returns HTML rendered from the body's Markdown. Response will include `body_html`.\n- **`application/vnd.github.full+json`**: Returns raw, text, and HTML representations. Response will include `body`, `body_text`, and `body_html`.",
+    "tags": [
+     "issues"
+    ],
+    "operationId": "issues/list-sub-issues",
+    "externalDocs": {
+     "description": "API method documentation",
+     "url": "https://docs.github.com/rest/issues/sub-issues#list-sub-issues"
+    },
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/owner"
+     },
+     {
+      "$ref": "#/components/parameters/repo"
+     },
+     {
+      "$ref": "#/components/parameters/issue-number"
+     },
+     {
+      "$ref": "#/components/parameters/per-page"
+     },
+     {
+      "$ref": "#/components/parameters/page"
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/issue"
+         }
+        },
+        "examples": {
+         "default": {
+          "$ref": "#/components/examples/issue-items"
+         }
+        }
+       }
+      },
+      "headers": {
+       "Link": {
+        "$ref": "#/components/headers/link"
+       }
+      }
+     },
+     "404": {
+      "$ref": "#/components/responses/not_found"
+     },
+     "410": {
+      "$ref": "#/components/responses/gone"
+     }
+    },
+    "x-github": {
+     "githubCloudOnly": false,
+     "enabledForGitHubApps": true,
+     "category": "issues",
+     "subcategory": "sub-issues"
+    }
+   },
+   "post": {
+    "summary": "Add sub-issue",
+    "description": "You can use the REST API to add sub-issues to issues.\n\nCreating content too quickly using this endpoint may result in secondary rate limiting.\nFor more information, see \"[Rate limits for the API](https://docs.github.com/rest/using-the-rest-api/rate-limits-for-the-rest-api#about-secondary-rate-limits)\"\nand \"[Best practices for using the REST API](https://docs.github.com/rest/guides/best-practices-for-using-the-rest-api).\"\n\nThis endpoint supports the following custom media types. For more information, see \"[Media types](https://docs.github.com/rest/using-the-rest-api/getting-started-with-the-rest-api#media-types).\"\n\n- **`application/vnd.github.raw+json`**: Returns the raw markdown body. Response will include `body`. This is the default if you do not pass any specific media type.\n- **`application/vnd.github.text+json`**: Returns a text only representation of the markdown body. Response will include `body_text`.\n- **`application/vnd.github.html+json`**: Returns HTML rendered from the body's markdown. Response will include `body_html`.\n- **`application/vnd.github.full+json`**: Returns raw, text, and HTML representations. Response will include `body`, `body_text`, and `body_html`.",
+    "tags": [
+     "issues"
+    ],
+    "operationId": "issues/add-sub-issue",
+    "externalDocs": {
+     "description": "API method documentation",
+     "url": "https://docs.github.com/rest/issues/sub-issues#add-sub-issue"
+    },
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/owner"
+     },
+     {
+      "$ref": "#/components/parameters/repo"
+     },
+     {
+      "$ref": "#/components/parameters/issue-number"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "sub_issue_id": {
+          "type": "integer",
+          "description": "The id of the sub-issue to add. The sub-issue must belong to the same repository owner as the parent issue"
+         },
+         "replace_parent": {
+          "type": "boolean",
+          "description": "Option that, when true, instructs the operation to replace the sub-issues current parent issue"
+         }
+        },
+        "required": [
+         "sub_issue_id"
+        ]
+       },
+       "examples": {
+        "default": {
+         "value": {
+          "sub_issue_id": 1
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/issue"
+        },
+        "examples": {
+         "default": {
+          "$ref": "#/components/examples/issue"
+         }
+        }
+       }
+      },
+      "headers": {
+       "Location": {
+        "example": "https://api.github.com/repos/octocat/Hello-World/issues/sub-issues/1",
+        "schema": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     "403": {
+      "$ref": "#/components/responses/forbidden"
+     },
+     "410": {
+      "$ref": "#/components/responses/gone"
+     },
+     "422": {
+      "$ref": "#/components/responses/validation_failed"
+     },
+     "404": {
+      "$ref": "#/components/responses/not_found"
+     }
+    },
+    "x-github": {
+     "githubCloudOnly": false,
+     "enabledForGitHubApps": true,
+     "category": "issues",
+     "subcategory": "sub-issues"
+    }
+   }
+  },
+  "milestones": {
+   "get": {
+    "summary": "List milestones",
+    "description": "Lists milestones for a repository.",
+    "tags": [
+     "issues"
+    ],
+    "operationId": "issues/list-milestones",
+    "externalDocs": {
+     "description": "API method documentation",
+     "url": "https://docs.github.com/rest/issues/milestones#list-milestones"
+    },
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/owner"
+     },
+     {
+      "$ref": "#/components/parameters/repo"
+     },
+     {
+      "name": "state",
+      "description": "The state of the milestone. Either `open`, `closed`, or `all`.",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "enum": [
+        "open",
+        "closed",
+        "all"
+       ],
+       "default": "open"
+      }
+     },
+     {
+      "name": "sort",
+      "description": "What to sort results by. Either `due_on` or `completeness`.",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "enum": [
+        "due_on",
+        "completeness"
+       ],
+       "default": "due_on"
+      }
+     },
+     {
+      "name": "direction",
+      "description": "The direction of the sort. Either `asc` or `desc`.",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "enum": [
+        "asc",
+        "desc"
+       ],
+       "default": "asc"
+      }
+     },
+     {
+      "$ref": "#/components/parameters/per-page"
+     },
+     {
+      "$ref": "#/components/parameters/page"
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/milestone"
+         }
+        },
+        "examples": {
+         "default": {
+          "$ref": "#/components/examples/milestone-items"
+         }
+        }
+       }
+      },
+      "headers": {
+       "Link": {
+        "$ref": "#/components/headers/link"
+       }
+      }
+     },
+     "404": {
+      "$ref": "#/components/responses/not_found"
+     }
+    },
+    "x-github": {
+     "githubCloudOnly": false,
+     "enabledForGitHubApps": true,
+     "category": "issues",
+     "subcategory": "milestones"
+    }
+   },
+   "post": {
+    "summary": "Create a milestone",
+    "description": "Creates a milestone.",
+    "tags": [
+     "issues"
+    ],
+    "operationId": "issues/create-milestone",
+    "externalDocs": {
+     "description": "API method documentation",
+     "url": "https://docs.github.com/rest/issues/milestones#create-a-milestone"
+    },
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/owner"
+     },
+     {
+      "$ref": "#/components/parameters/repo"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "title": {
+          "type": "string",
+          "description": "The title of the milestone."
+         },
+         "state": {
+          "type": "string",
+          "description": "The state of the milestone. Either `open` or `closed`.",
+          "enum": [
+           "open",
+           "closed"
+          ],
+          "default": "open"
+         },
+         "description": {
+          "type": "string",
+          "description": "A description of the milestone."
+         },
+         "due_on": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The milestone due date. This is a timestamp in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) format: `YYYY-MM-DDTHH:MM:SSZ`."
+         }
+        },
+        "required": [
+         "title"
+        ]
+       },
+       "examples": {
+        "default": {
+         "value": {
+          "title": "v1.0",
+          "state": "open",
+          "description": "Tracking milestone for version 1.0",
+          "due_on": "2012-10-09T23:39:01Z"
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/milestone"
+        },
+        "examples": {
+         "default": {
+          "$ref": "#/components/examples/milestone"
+         }
+        }
+       }
+      },
+      "headers": {
+       "Location": {
+        "example": "https://api.github.com/repos/octocat/Hello-World/milestones/1",
+        "schema": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     "404": {
+      "$ref": "#/components/responses/not_found"
+     },
+     "422": {
+      "$ref": "#/components/responses/validation_failed"
+     }
+    },
+    "x-github": {
+     "githubCloudOnly": false,
+     "enabledForGitHubApps": true,
+     "category": "issues",
+     "subcategory": "milestones"
+    }
+   }
+  },
+  "org_issue_types": {
+   "get": {
+    "summary": "List issue types for an organization",
+    "description": "Lists all issue types for an organization. OAuth app tokens and personal access tokens (classic) need the read:org scope to use this endpoint.",
+    "tags": [
+     "orgs"
+    ],
+    "operationId": "orgs/list-issue-types",
+    "externalDocs": {
+     "description": "API method documentation",
+     "url": "https://docs.github.com/rest/orgs/issue-types#list-issue-types-for-an-organization"
+    },
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/org"
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/issue-type"
+         }
+        },
+        "examples": {
+         "default": {
+          "$ref": "#/components/examples/issue-type-items"
+         }
+        }
+       }
+      }
+     },
+     "404": {
+      "$ref": "#/components/responses/not_found"
+     }
+    },
+    "x-github": {
+     "githubCloudOnly": false,
+     "enabledForGitHubApps": true,
+     "category": "orgs",
+     "subcategory": "issue-types"
+    }
+   },
+   "post": {
+    "summary": "Create issue type for an organization",
+    "description": "Create a new issue type for an organization.\n\nYou can find out more about issue types in [Managing issue types in an organization](https://docs.github.com/issues/tracking-your-work-with-issues/configuring-issues/managing-issue-types-in-an-organization).\n\nTo use this endpoint, the authenticated user must be an administrator for the organization. OAuth app tokens and\npersonal access tokens (classic) need the `admin:org` scope to use this endpoint.",
+    "tags": [
+     "orgs"
+    ],
+    "operationId": "orgs/create-issue-type",
+    "externalDocs": {
+     "description": "API method documentation",
+     "url": "https://docs.github.com/rest/orgs/issue-types#create-issue-type-for-an-organization"
+    },
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/org"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/organization-create-issue-type"
+       },
+       "examples": {
+        "default": {
+         "value": {
+          "name": "Epic",
+          "description": "An issue type for a multi-week tracking of work",
+          "is_enabled": true,
+          "color": "green"
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/issue-type"
+        },
+        "examples": {
+         "default": {
+          "$ref": "#/components/examples/issue-type"
+         }
+        }
+       }
+      }
+     },
+     "404": {
+      "$ref": "#/components/responses/not_found"
+     },
+     "422": {
+      "$ref": "#/components/responses/validation_failed_simple"
+     }
+    },
+    "x-github": {
+     "githubCloudOnly": false,
+     "enabledForGitHubApps": true,
+     "category": "orgs",
+     "subcategory": "issue-types"
+    }
+   }
+  },
+  "org_issue_fields": {
+   "get": {
+    "summary": "List issue fields for an organization",
+    "description": "Lists all issue fields for an organization. OAuth app tokens and personal access tokens (classic) need the read:org scope to use this endpoint.",
+    "tags": [
+     "orgs"
+    ],
+    "operationId": "orgs/list-issue-fields",
+    "externalDocs": {
+     "description": "API method documentation",
+     "url": "https://docs.github.com/rest/orgs/issue-fields#list-issue-fields-for-an-organization"
+    },
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/org"
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/issue-field"
+         }
+        },
+        "examples": {
+         "default": {
+          "$ref": "#/components/examples/issue-field-items"
+         }
+        }
+       }
+      }
+     },
+     "404": {
+      "$ref": "#/components/responses/not_found"
+     }
+    },
+    "x-github": {
+     "githubCloudOnly": false,
+     "enabledForGitHubApps": true,
+     "category": "orgs",
+     "subcategory": "issue-fields"
+    }
+   },
+   "post": {
+    "summary": "Create issue field for an organization",
+    "description": "Creates a new issue field for an organization.\n\nYou can find out more about issue fields in [Managing issue fields in an organization](https://docs.github.com/issues/tracking-your-work-with-issues/using-issues/managing-issue-fields-in-an-organization).\n\nTo use this endpoint, the authenticated user must be an administrator for the organization. OAuth app tokens and\npersonal access tokens (classic) need the `admin:org` scope to use this endpoint.",
+    "tags": [
+     "orgs"
+    ],
+    "operationId": "orgs/create-issue-field",
+    "externalDocs": {
+     "description": "API method documentation",
+     "url": "https://docs.github.com/rest/orgs/issue-fields#create-issue-field-for-an-organization"
+    },
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/org"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/organization-create-issue-field"
+       },
+       "examples": {
+        "default": {
+         "value": {
+          "name": "Priority",
+          "description": "Level of importance for the issue",
+          "data_type": "single_select",
+          "options": [
+           {
+            "name": "High",
+            "description": "High priority",
+            "color": "red"
+           },
+           {
+            "name": "Medium",
+            "description": "Medium priority",
+            "color": "yellow"
+           },
+           {
+            "name": "Low",
+            "description": "Low priority",
+            "color": "green"
+           }
+          ]
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/issue-field"
+        },
+        "examples": {
+         "default": {
+          "$ref": "#/components/examples/issue-field"
+         }
+        }
+       }
+      }
+     },
+     "404": {
+      "$ref": "#/components/responses/not_found"
+     },
+     "422": {
+      "$ref": "#/components/responses/validation_failed_simple"
+     }
+    },
+    "x-github": {
+     "githubCloudOnly": false,
+     "enabledForGitHubApps": true,
+     "category": "orgs",
+     "subcategory": "issue-fields"
+    }
+   }
+  },
+  "issue_field_value_delete": {
+   "delete": {
+    "summary": "Delete an issue field value from an issue",
+    "description": "Remove a specific custom field value from an issue.\n\nOnly users with push access to the repository can delete issue field values. If you don't have the proper permissions, you'll receive a `403 Forbidden` response.\n\nIf the specified field does not have a value set on the issue, this operation will return a `404` error.\n\nThis endpoint triggers [notifications](https://docs.github.com/github/managing-subscriptions-and-notifications-on-github/about-notifications). Creating content too quickly using this endpoint may result in secondary rate limiting. For more information, see \"[Rate limits for the API](https://docs.github.com/rest/using-the-rest-api/rate-limits-for-the-rest-api#about-secondary-rate-limits)\"\nand \"[Best practices for using the REST API](https://docs.github.com/rest/guides/best-practices-for-using-the-rest-api).\"",
+    "tags": [
+     "issues"
+    ],
+    "operationId": "issues/delete-issue-field-value",
+    "externalDocs": {
+     "description": "API method documentation",
+     "url": "https://docs.github.com/rest/issues/issue-field-values#delete-an-issue-field-value-from-an-issue"
+    },
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/owner"
+     },
+     {
+      "$ref": "#/components/parameters/repo"
+     },
+     {
+      "$ref": "#/components/parameters/issue-number"
+     },
+     {
+      "$ref": "#/components/parameters/issue-field-id"
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Issue field value deleted successfully"
+     },
+     "403": {
+      "$ref": "#/components/responses/forbidden"
+     },
+     "404": {
+      "$ref": "#/components/responses/not_found"
+     },
+     "422": {
+      "$ref": "#/components/responses/validation_failed"
+     },
+     "503": {
+      "$ref": "#/components/responses/service_unavailable"
+     }
+    },
+    "x-github": {
+     "triggersNotification": true,
+     "githubCloudOnly": false,
+     "enabledForGitHubApps": true,
+     "category": "issues",
+     "subcategory": "issue-field-values"
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,54 @@
+{
+  "_comment": "Six documents, in creation order. Each row demonstrates exactly one rule; see README.md. Ids are assigned by the board in this order, so LP-1..LP-6 are stable.",
+  "periods": [
+    { "type": "sprint", "title": "Sprint A", "starts": "2026-09-01", "ends": "2026-09-14" }
+  ],
+  "issues": [
+    {
+      "type": "program",
+      "title": "Payments",
+      "body": "The scope root. Everything below it is mirrored; nothing above it is.",
+      "status": "backlog"
+    },
+    {
+      "type": "epic",
+      "title": "Card payments",
+      "parent": "Payments",
+      "body": "Level two. Its parent is one hop up.",
+      "status": "backlog"
+    },
+    {
+      "type": "feature",
+      "title": "Refunds",
+      "parent": "Card payments",
+      "body": "Level three: deeper than any flat tracker can hold natively.",
+      "status": "backlog"
+    },
+    {
+      "type": "user_story",
+      "title": "Refund a captured charge",
+      "parent": "Refunds",
+      "body": "The normal path: an open story with an attribute and a sprint.",
+      "status": "in_progress",
+      "period": "Sprint A",
+      "attributes": { "story_points": 5 }
+    },
+    {
+      "type": "user_story",
+      "title": "Refund a voided charge",
+      "parent": "Refunds",
+      "body": "A finished story: its status is the terminal one.",
+      "status": "done",
+      "attributes": { "story_points": 3 }
+    },
+    {
+      "type": "user_story",
+      "title": "Show the refund on the receipt",
+      "parent": "Refunds",
+      "body": "Waits on the normal-path story, so a dependency edge must cross.",
+      "status": "backlog",
+      "depends_on": ["Refund a captured charge"],
+      "attributes": { "story_points": 2 }
+    }
+  ]
+}

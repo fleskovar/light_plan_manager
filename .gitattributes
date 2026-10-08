@@ -1,0 +1,4 @@
+# Check out with LF everywhere. The templates and starters ship in the npm
+# package and are compared byte for byte by the tests, so a CRLF checkout on
+# Windows would both fail the suite and publish CRLF files.
+* text=auto eol=lf

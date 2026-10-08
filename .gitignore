@@ -1,0 +1,23 @@
+node_modules/
+dist/
+# Second bundle of web/, built by `make build-viewer` for `lpm export --site`
+dist-viewer/
+*.tsbuildinfo
+.DS_Store
+
+# Throwaway board created by `make demo`
+.demo/
+
+# Tarballs built by `make dist`
+release/
+
+# light-plan board (tracked as its own git repo)
+.lpm/
+.pi
+
+.hcm
+.reasonix
+
+# A `> nul` redirect under Git Bash writes a real file; git refuses to index it
+nul
+.claude

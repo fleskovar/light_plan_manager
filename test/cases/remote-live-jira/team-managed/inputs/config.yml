@@ -1,0 +1,59 @@
+# The board the Jira integration suite runs against.
+#
+# Deliberately the smallest config that still makes Jira spend its native
+# parent edge in both places and degrade above it. Jira Cloud team-managed
+# projects hold two native parent levels (Epic > standard > Subtask), and the
+# provider is **leaf-anchored**, so on a five-level board the native edge
+# covers depths 3 and 4 and the two levels above ride the managed block:
+#
+#   depth 0  program     the remote root, no parent at all
+#   depth 1  epic        parent carried in the managed block
+#   depth 2  feature     parent carried in the managed block
+#   depth 3  user_story  NATIVE parent (the story under its feature-Epic)
+#   depth 4  sub_task    NATIVE parent (the sub-task under its story)
+#
+# A board with fewer levels would put every parent on the native edge and the
+# block carrier would go untested; a board with more would add no new case.
+version: 1
+
+key_prefix: LP
+
+statuses:
+  - id: backlog
+    label: Backlog
+  - id: in_progress
+    label: In Progress
+    active: true
+  - id: done
+    label: Done
+    terminal: true
+
+default_status: backlog
+
+hierarchy:
+  - program
+  - epic
+  - feature
+  - user_story
+  - sub_task
+
+issue_types:
+  program:
+    label: Program
+  epic:
+    label: Epic
+  feature:
+    label: Feature
+  user_story:
+    label: User Story
+  sub_task:
+    label: Sub-task
+
+period_prefix: TL
+
+period_hierarchy:
+  - sprint
+
+period_types:
+  sprint:
+    label: Sprint

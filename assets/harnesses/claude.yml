@@ -1,0 +1,43 @@
+# Claude Code — where it keeps agents, skills and MCP servers.
+#
+# Source: https://code.claude.com/docs/en/claude-directory
+# See docs/harness-layouts.md for the schema and for what each field means.
+
+name: claude
+label: Claude Code
+docs: https://code.claude.com/docs/en/claude-directory
+verified: 2026-08-03
+aliases: [claude-code, cc]
+
+roots:
+  project: "{project}/.claude"
+  user: "{home}/.claude"
+
+files:
+  # Subagents: one markdown file each, running in their own context window.
+  # `tools:` is a comma-separated string here, not a list.
+  - from: agents/*.md
+    to: "{root}/agents/{basename}"
+    frontmatter:
+      name: "{name}"
+      description: "{description}"
+      tools: "{tools|join}"
+
+  # Skills: a folder with a SKILL.md, so supporting files can be bundled beside
+  # the prompt.
+  - from: skills/*.md
+    to: "{root}/skills/{name}/SKILL.md"
+    frontmatter:
+      name: "{name}"
+      description: "{description}"
+
+mcp:
+  # Project servers live at the project root, NOT inside .claude/.
+  project:
+    file: "{project}/.mcp.json"
+    key: mcpServers
+  # Personal servers go in ~/.claude.json, which also holds session state —
+  # merge into it, never rewrite it.
+  user:
+    file: "{home}/.claude.json"
+    key: mcpServers

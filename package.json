@@ -1,0 +1,97 @@
+{
+  "name": "light-plan",
+  "version": "0.1.0",
+  "description": "A lightweight, file-based issue tracking system. Agile boards as folders and markdown.",
+  "keywords": [
+    "issue-tracker",
+    "agile",
+    "scrum",
+    "kanban",
+    "markdown",
+    "git",
+    "cli",
+    "mcp"
+  ],
+  "homepage": "https://github.com/fleskovar/light_plan_manager#readme",
+  "bugs": {
+    "url": "https://github.com/fleskovar/light_plan_manager/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fleskovar/light_plan_manager.git"
+  },
+  "author": "fleskovar",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "lpm": "dist/cli/index.js"
+  },
+  "main": "dist/core/index.js",
+  "types": "dist/core/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/core/index.d.ts",
+      "default": "./dist/core/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "templates",
+    "assets",
+    "web/dist",
+    "web/dist-viewer",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:web": "cd web && npm run build",
+    "build:viewer": "cd web && npm run build:viewer",
+    "build:all": "npm run build && cd web && npm run build:all",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "typecheck:web": "cd web && npm run typecheck",
+    "pretest": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:web": "cd web && npm run test",
+    "dev:web": "cd web && npm run dev",
+    "install:web": "cd web && npm install",
+    "lpm": "node dist/cli/index.js",
+    "prepublishOnly": "node -e \"console.error(\\\"Publish with: make publish CONFIRM=yes (it builds and checks the tarball first)\\\");process.exit(1)\""
+  },
+  "dependencies": {
+    "acorn": "^8.18.0",
+    "eta": "^4.6.0",
+    "yaml": "^2.5.1",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "^0.84.1",
+    "@earendil-works/pi-coding-agent": "^0.84.1",
+    "@types/node": "^22.7.0",
+    "jira.js": "^6.2.0",
+    "typescript": "^5.6.0",
+    "vitest": "^4.0.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "^0.84.1",
+    "@earendil-works/pi-coding-agent": "^0.84.1",
+    "jira.js": "^6.2.0"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-ai": {
+      "optional": true
+    },
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "jira.js": {
+      "optional": true
+    }
+  },
+  "optionalDependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  }
+}

@@ -1,0 +1,45 @@
+# The light-plan hcm bundle — which assets it carries, and where each lands.
+#
+# `lpm hcm init` renders every file in this folder into an hcm bundle and
+# registers them all with `hcm registry add`. A bundle is never a second copy
+# of the agents and skills: it is rendered from `assets/` each time, the way
+# `lpm agent` renders a harness layout, so edit the asset and run the command
+# again. See docs/hcm.md.
+#
+# Written by the code, not here, because they are not choices:
+#   version      the package's own version, so the two cannot drift
+#   author, homepage   from package.json
+#   mcp/<mcp>.json     how to start `lpm mcp` on this machine
+#   context/<context>.md   the pointer block `lpm agent` writes for Copilot,
+#                          listing what every flavor installs
+
+name: light-plan
+description: >-
+  Plan and work a light-plan board (.lpm): the lpm skills, the planner and
+  developer agents, and the light-plan MCP server. Needs the lpm CLI.
+tags: [light-plan, lpm, planning, issue-tracker, mcp]
+
+# The roles `lpm agent --type` installs, under hcm's name for the same idea.
+# `hcm install light-plan --flavor developer` is `lpm agent --type developer`.
+flavors:
+  developer: >-
+    Pick work up off the board, implement it and leave a reviewable trail.
+  pm: >-
+    Write epics, features and stories, sequence them and set the board up.
+
+context: 10-light-plan
+mcp: light-plan
+
+files:
+  - from: agents/*.md
+    to: "{root}/subagents/{basename}"
+    frontmatter:
+      description: "{description}"
+      tools: "{tools}"
+      flavors: "{roles}"
+
+  - from: skills/*.md
+    to: "{root}/skills/{name}/SKILL.md"
+    frontmatter:
+      description: "{description}"
+      flavors: "{roles}"

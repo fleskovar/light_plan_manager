@@ -1,0 +1,54 @@
+# GitHub Copilot — where it keeps agents, skills and MCP servers.
+#
+# Source: https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference
+#         https://awesome-copilot.github.com/learning-hub/copilot-configuration-basics/
+# See docs/harness-layouts.md for the schema and for what each field means.
+
+name: copilot
+label: GitHub Copilot
+docs: https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference
+verified: 2026-08-03
+aliases: [github-copilot, github, gh]
+
+roots:
+  project: "{project}/.github"
+  user:
+    # Copilot CLI's config directory, which COPILOT_HOME may move.
+    env: COPILOT_HOME
+    default: "{home}/.copilot"
+
+files:
+  - from: agents/*.md
+    to: "{root}/agents/{name}.agent.md"
+    frontmatter:
+      name: "{name}"
+      description: "{description}"
+      # `tools` is deliberately not emitted. Copilot's tool vocabulary is its
+      # own, and our assets carry Claude's names: an agent naming tools that do
+      # not exist is worse off than one with the default set.
+
+  # The same shape as Claude's: a folder with a SKILL.md.
+  - from: skills/*.md
+    to: "{root}/skills/{name}/SKILL.md"
+    frontmatter:
+      name: "{name}"
+      description: "{description}"
+
+mcp:
+  project:
+    file: "{project}/.mcp.json"
+    key: mcpServers
+  user:
+    file: "{root}/mcp-config.json"
+    key: mcpServers
+
+# The repo-wide instructions file, which is somebody else's document — we append
+# a delimited block to it rather than writing it.
+pointer:
+  project: "{root}/copilot-instructions.md"
+  user: "{root}/copilot-instructions.md"
+
+note: >-
+  VS Code reads MCP servers from .vscode/mcp.json under a `servers` key rather
+  than from .mcp.json. If Copilot Chat in VS Code is your only surface, copy the
+  entry across.

@@ -1,0 +1,71 @@
+# light-plan board config -- blank template
+#
+# The smallest board that validates: one issue type, three columns.
+# Grow it by adding types to `issue_types` and listing them in `hierarchy`
+# (order in `hierarchy` = folder depth; types on one line share a level).
+#
+# There is no timeline and no team roster here -- both are opt-in. See the
+# scrum template for `period_*` (sprints) and `resource_*` (people and pools).
+#
+# Attribute types: string, text, int, float, bool, date, enum, array
+# Any attribute may also set `required: true` and `default: <value>`.
+
+version: 1
+
+key_prefix: LP
+
+# `terminal: true` is what "finished" means on this board — nothing in
+# light-plan knows the word "done", it reads this flag. A parent's status
+# derives from it: finish everything inside a document and it finishes too.
+statuses:
+  - id: todo
+    label: To Do
+  - id: doing
+    label: Doing
+    active: true
+  - id: done
+    label: Done
+    terminal: true
+
+default_status: todo
+
+hierarchy:
+  - task
+
+issue_types:
+  task:
+    label: Task
+    attributes:
+      notes:
+        type: text
+    body: |
+      ## Description
+
+# ---------------------------------------------------------------------------
+# Remotes — mirror this board onto an external tracker (GitHub, Jira, Linear)
+# or a local JSON file, in either direction.
+#
+# You do not write this block by hand, and three commands is the whole setup:
+#
+#   lpm remote add jira --provider jira --site https://acme.atlassian.net --project PAY
+#   echo <api-token> | lpm remote login jira     # `add` prints where to get one
+#   lpm remote setup jira                        # match the mapping to the live project
+#   lpm remote sync
+#
+# `add` declares the remote *and* drafts the whole `mapping:` — this board's own
+# types and statuses against what the provider can hold, using the platform's
+# conventional names (Jira's Epic / Story / Task / Bug / Sub-task, a Linear
+# team's Backlog / Todo / In Progress / In Review / Done) where the words are the
+# platform's to give. `setup` then asks the live remote what its words actually
+# are and corrects the draft, so a renamed status is one command rather than an
+# afternoon in YAML. Editing this block by hand is for the cases the defaults do
+# not cover, not for getting started.
+#
+# Add `--scope <id>` to mirror one subtree instead of the whole board. Two
+# remotes may never cover the same work, so scopes may not overlap — mirroring
+# one board onto two trackers means a `scope:` on each.
+#
+# `lpm remote` lists what is declared; `lpm remote rm <name>` removes one. The
+# full guide is docs/remotes.md; docs/remote-capabilities.md is what each
+# platform can carry.
+# ---------------------------------------------------------------------------

@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  // The base config excludes `test` so the build never emits it. `exclude`
+  // filters `include`, so it has to be overridden here or tests go unchecked.
+  "exclude": ["node_modules", "dist"]
+}

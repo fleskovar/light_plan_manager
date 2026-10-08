@@ -1,0 +1,567 @@
+# light-plan board config -- Scrum template
+#
+# Hierarchy follows the common SAFe/Scrum breakdown:
+#   Program > Epic > Feature > User Story | Bug | Test | Review | Research > Sub-task
+#
+# Edit freely. `lpm check` validates this file and the board against it.
+# Attribute types: string, text, int, float, bool, date, enum, array
+# Any attribute may also set `required: true` and `default: <value>`.
+
+version: 1
+
+# Prefix for issue ids (LP-1, LP-2, ...). `lpm init` sets this from your folder name.
+key_prefix: LP
+
+# Kanban columns, in board order.
+#
+# `terminal: true` is what "finished" means on this board, and nothing in
+# light-plan knows the word "done" — it reads this flag. It is also what makes a
+# container's status derive from its contents: close the last issue in a feature
+# and the feature closes with it, up as far as it goes, and anything waiting on
+# it is offered straight away. Reopen one and they reopen. `lpm check` reports a
+# container that is out of step and `lpm check --fix` rolls it up.
+#
+# When more than one status is terminal, a parent closes into the one its
+# children agree on, and into the first one declared here when they do not.
+#
+# `active: true` marks work in progress, which is where `lpm task start` moves
+# an issue and what `lpm task current` lists.
+statuses:
+  - id: backlog
+    label: Backlog
+  - id: ready
+    label: Ready
+  - id: in_progress
+    label: In Progress
+    active: true
+  - id: in_review
+    label: In Review
+    active: true
+  - id: done
+    label: Done
+    terminal: true
+
+default_status: backlog
+
+# Optional: the attributes light-plan reads to rank work and add up load.
+# `priority_attribute` must be an enum (most important value first);
+# `effort_attribute` must be an int or a float.
+priority_attribute: priority
+effort_attribute: story_points
+
+# Folder depth is the hierarchy. Types on the same line share a level.
+hierarchy:
+  - program
+  - epic
+  - feature
+  - [user_story, bug, test, review, research]
+  - sub_task
+
+# ---------------------------------------------------------------------------
+# Time hierarchy
+#
+# Periods live under .lpm/timeline and answer "when does this get built?",
+# cutting across the issue hierarchy above. Any issue at any level can be
+# scheduled into any period via its `period:` field.
+#
+# Remove period_prefix / period_hierarchy / period_types to turn this off.
+# ---------------------------------------------------------------------------
+
+# Prefix for period ids (TL-1, TL-2, ...). Must differ from key_prefix.
+period_prefix: TL
+
+period_hierarchy:
+  - increment
+  - sprint
+
+period_types:
+  increment:
+    label: Product Increment
+    attributes:
+      theme:
+        type: string
+        description: One-line framing for the increment
+      labels:
+        type: array
+        default: []
+    body: |
+      ## Increment Objectives
+
+      | Objective | Business value | Confidence |
+      | --- | --- | --- |
+      |  |  |  |
+
+      ## Planned Scope
+
+      Epics and features committed to this increment.
+
+      ## Risks
+
+      - [ ] Risk, owner, mitigation
+
+      ## Retrospective
+
+      What should the next increment do differently?
+
+  sprint:
+    label: Sprint
+    attributes:
+      goal:
+        type: string
+        description: The single sentence the team commits to
+      capacity:
+        type: int
+        description: Team capacity in story points
+      committed_points:
+        type: int
+        description: Points pulled in at planning
+      completed_points:
+        type: int
+        description: Points accepted at review
+    body: |
+      ## Sprint Goal
+
+      One sentence the team can rally behind.
+
+      ## Capacity Notes
+
+      Leave, holidays, on-call, anything that changes available capacity.
+
+      ## Review
+
+      What was demoed and accepted?
+
+      ## Retrospective
+
+      - Keep:
+      - Change:
+      - Action:
+
+# ---------------------------------------------------------------------------
+# Team roster
+#
+# Resources live under .lpm/team and answer "who does the work?". Issues point
+# at one via their `assignee:` field.
+#
+# A type with `generic: true` describes a pool -- "a jr. software developer",
+# "a data scientist, any level" -- rather than a named person. Park work in a
+# pool and anyone who covers it (`lpm link RS-1 --covers RS-7`) can pick it up.
+# `capacity` is full-time equivalents: 1 a full-timer, 0.5 part-time, 3 a pool
+# of three.
+#
+# Remove resource_prefix / resource_hierarchy / resource_types to turn this off.
+# ---------------------------------------------------------------------------
+
+# Prefix for resource ids (RS-1, RS-2, ...). Must differ from the other two.
+resource_prefix: RS
+
+resource_hierarchy:
+  - [person, role]
+
+resource_types:
+  person:
+    label: Person
+    attributes:
+      email:
+        type: string
+      github:
+        type: string
+        description: Handle used in commits and reviews
+      discipline:
+        type: string
+        description: Where this person mostly works, e.g. backend, data, QA
+      timezone:
+        type: string
+        description: IANA name, e.g. Europe/Madrid
+      skills:
+        type: array
+        default: []
+    body: |
+      ## Working Agreements
+
+      Hours, ceremonies, on-call, anything the team should know.
+
+      ## Notes
+
+      -
+
+  role:
+    label: Role
+    generic: true
+    attributes:
+      discipline:
+        type: string
+        description: What kind of work this pool takes, e.g. backend, data
+      level:
+        type: enum
+        description: Seniority the work needs; "any" leaves it open
+        values: [junior, mid, senior, any]
+        default: any
+      skills:
+        type: array
+        default: []
+    body: |
+      ## What this pool covers
+
+      The work anyone in this role can pick up.
+
+      ## Constraints
+
+      - Capacity is headcount: set `capacity` to how many people this represents.
+
+# ---------------------------------------------------------------------------
+# Issue types
+#
+# A type with `atomic: true` is the smallest unit of work the queue hands out.
+# Work of that type is taken whole: `lpm task next` offers it even when it has
+# children, and it never offers those children separately. That is why the story
+# level below is flagged -- a story broken into sub-tasks is still one job for
+# one person, and the sub-tasks are its checklist. They are listed in the brief
+# `lpm instructions` renders, so whoever picks the story up can see them.
+#
+# Without the flag the older rule applies: only an issue with nothing nested
+# inside it is offered, and a story with sub-tasks disappears behind them.
+# Where atomic types nest, the outermost one wins.
+# ---------------------------------------------------------------------------
+
+issue_types:
+  program:
+    label: Program
+    attributes:
+      owner:
+        type: string
+        description: Person accountable for the program
+      target_quarter:
+        type: string
+        description: Delivery horizon, e.g. 2026-Q3
+      labels:
+        type: array
+        description: Free-form tags
+        default: []
+    body: |
+      ## Vision
+
+      What outcome does this program pursue, and for whom?
+
+      ## Business Outcomes
+
+      - Outcome 1
+
+      ## Key Results
+
+      | Metric | Baseline | Target |
+      | --- | --- | --- |
+      |  |  |  |
+
+      ## Out of Scope
+
+      -
+
+  epic:
+    label: Epic
+    attributes:
+      owner:
+        type: string
+        description: Person accountable for the epic
+      priority:
+        type: enum
+        description: Relative importance
+        values: [critical, high, medium, low]
+        default: medium
+      target_release:
+        type: string
+        description: Release or milestone this epic targets
+      labels:
+        type: array
+        default: []
+    body: |
+      ## Summary
+
+      A short paragraph describing the epic.
+
+      ## Business Value
+
+      Why is this worth doing now? What happens if we do not?
+
+      ## Success Criteria
+
+      - [ ] Measurable criterion
+
+      ## Out of Scope
+
+      -
+
+  feature:
+    label: Feature
+    attributes:
+      priority:
+        type: enum
+        values: [critical, high, medium, low]
+        default: medium
+      labels:
+        type: array
+        default: []
+    body: |
+      ## Summary
+
+      What capability does this feature deliver?
+
+      ## Acceptance Criteria
+
+      - [ ] Criterion
+
+      ## Dependencies
+
+      -
+
+  user_story:
+    label: User Story
+    atomic: true
+    attributes:
+      commit:
+        type: string
+      story_points:
+        type: int
+        description: Relative size, Fibonacci (1, 2, 3, 5, 8, 13)
+      priority:
+        type: enum
+        values: [critical, high, medium, low]
+        default: medium
+      labels:
+        type: array
+        default: []
+    body: |
+      As a **<role>**, I want **<capability>**, so that **<benefit>**.
+
+      ## Acceptance Criteria
+
+      - [ ] **Given** <context> **when** <action> **then** <outcome>
+
+      ## Definition of Done
+
+      - [ ] Code reviewed and merged
+      - [ ] Tests cover the acceptance criteria
+      - [ ] Documentation updated
+
+      ## Notes
+
+      -
+
+  bug:
+    label: Bug
+    atomic: true
+    attributes:
+      severity:
+        type: enum
+        description: Impact on users if left unfixed
+        values: [blocker, major, minor, trivial]
+        default: major
+      priority:
+        type: enum
+        values: [critical, high, medium, low]
+        default: high
+      labels:
+        type: array
+        default: []
+    body: |
+      ## Summary
+
+      One sentence describing the defect.
+
+      ## Steps to Reproduce
+
+      1.
+
+      ## Expected Behaviour
+
+      ## Actual Behaviour
+
+      ## Environment
+
+      - Version:
+      - Platform:
+
+  test:
+    label: Test
+    atomic: true
+    attributes:
+      test_level:
+        type: enum
+        description: Where in the test pyramid this sits
+        values: [unit, integration, system, acceptance]
+        default: acceptance
+      automated:
+        type: bool
+        description: Whether this runs unattended in CI
+        default: false
+      priority:
+        type: enum
+        values: [critical, high, medium, low]
+        default: medium
+      labels:
+        type: array
+        default: []
+    body: |
+      ## Objective
+
+      What behaviour does this test verify, and for which story?
+
+      ## Preconditions
+
+      - Fixture, account or state the test assumes
+
+      ## Steps
+
+      1.
+
+      ## Expected Result
+
+      What must be true for this test to pass?
+
+      ## Test Data
+
+      -
+
+  # A gate, not a task: the work upstream of a review does not move on until
+  # somebody has looked at it and said yes. List what is being reviewed in
+  # `depends_on` so the board shows the queue forming behind it.
+  review:
+    label: Review
+    atomic: true
+    attributes:
+      reviewer:
+        type: string
+        description: Who has to approve, by name or resource id
+      decision:
+        type: enum
+        description: Where the review landed; the issue stays open until it is not pending
+        values: [pending, approved, changes_requested, rejected]
+        default: pending
+      story_points:
+        type: int
+        description: Relative size, Fibonacci (1, 2, 3, 5, 8, 13)
+      priority:
+        type: enum
+        values: [critical, high, medium, low]
+        default: medium
+      labels:
+        type: array
+        default: []
+    body: |
+      ## What is being reviewed
+
+      The upstream issues this gate covers; list them in `depends_on`.
+
+      ## Approval Criteria
+
+      - [ ] Criterion the reviewer is checking against
+
+      ## Decision
+
+      Outcome, date, and who signed off.
+
+      ## Follow-up
+
+      - Issues raised by the review
+
+  # A known unknown. Work stops here until the question is answered, and the
+  # answer usually creates new issues rather than unblocking existing ones.
+  # Anything that cannot start until it is answered says so with `depends_on`;
+  # what the finding actually was belongs in the body and the files it names.
+  research:
+    label: Research / Measure
+    atomic: true
+    attributes:
+      question:
+        type: string
+        description: The one question this issue exists to answer
+      method:
+        type: enum
+        description: How the question gets answered
+        values: [spike, experiment, measurement, benchmark, interview, desk_research]
+        default: spike
+      timebox_hours:
+        type: float
+        description: Effort cap; research without a cap does not end
+      confidence:
+        type: enum
+        description: How much weight the finding can carry once it is done
+        values: [unknown, low, medium, high]
+        default: unknown
+      story_points:
+        type: int
+        description: Relative size, Fibonacci (1, 2, 3, 5, 8, 13)
+      priority:
+        type: enum
+        values: [critical, high, medium, low]
+        default: medium
+      labels:
+        type: array
+        default: []
+    body: |
+      ## Question
+
+      What do we not know, and what does it block?
+
+      ## Why this is blocking
+
+      What cannot be estimated, designed or committed to until this is answered.
+
+      ## Method
+
+      How the question gets answered, and what would count as an answer.
+
+      ## Findings
+
+      What we now know. Record the confidence, and what would falsify it.
+
+      ## What this produced
+
+      The issues this answer created, and what each of them rests on. Anything
+      that cannot start until this is answered should say so:
+
+          lpm link <new-issue> --depends-on <this-id>
+
+  sub_task:
+    label: Sub-task
+    attributes:
+      estimate_hours:
+        type: float
+        description: Remaining effort in hours
+    body: |
+      ## Description
+
+      What exactly needs to be done?
+
+      ## Checklist
+
+      - [ ] Step
+
+# ---------------------------------------------------------------------------
+# Remotes — mirror this board onto an external tracker (GitHub, Jira, Linear)
+# or a local JSON file, in either direction.
+#
+# You do not write this block by hand, and three commands is the whole setup:
+#
+#   lpm remote add jira --provider jira --site https://acme.atlassian.net --project PAY
+#   echo <api-token> | lpm remote login jira     # `add` prints where to get one
+#   lpm remote setup jira                        # match the mapping to the live project
+#   lpm remote sync
+#
+# `add` declares the remote *and* drafts the whole `mapping:` — this board's own
+# types and statuses against what the provider can hold, using the platform's
+# conventional names (Jira's Epic / Story / Task / Bug / Sub-task, a Linear
+# team's Backlog / Todo / In Progress / In Review / Done) where the words are the
+# platform's to give. `setup` then asks the live remote what its words actually
+# are and corrects the draft, so a renamed status is one command rather than an
+# afternoon in YAML. Editing this block by hand is for the cases the defaults do
+# not cover, not for getting started.
+#
+# Add `--scope <id>` to mirror one subtree instead of the whole board. Two
+# remotes may never cover the same work, so scopes may not overlap — mirroring
+# one board onto two trackers means a `scope:` on each.
+#
+# `lpm remote` lists what is declared; `lpm remote rm <name>` removes one. The
+# full guide is docs/remotes.md; docs/remote-capabilities.md is what each
+# platform can carry.
+# ---------------------------------------------------------------------------

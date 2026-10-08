@@ -1,0 +1,48 @@
+{
+ "_source": "https://developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json",
+ "_note": "Documentation-derived (Jira Cloud REST v3 OpenAPI), NOT captured HTTP responses. No scratch site was available.",
+ "get_issue": {
+  "summary": "Get issue",
+  "description": "Returns the details for an issue.\n\nThe issue is identified by its ID or key, however, if the identifier doesn't match an issue, a case-insensitive search and check for moved issues is performed. If a matching issue is found its details are returned, a 302 or other redirect is **not** returned. The issue key returned in the response is the key of the issue found.\n\nThis operation can be accessed anonymously.\n\n**[Permissions](#permissions) required:**\n\n *  *Browse projects* [project permission](https://confluence.atlassian.com/x/yodKLg) for the project that the issue is in.\n *  If [issue-level security](https://confluence.atlassian.com/x/J4lKLg) is configured, issue-level security permission to view the issue.",
+  "responses": {
+   "200": "Returned if the request is successful.",
+   "401": "Returned if the authentication credentials are incorrect or missing.",
+   "404": "Returned if the issue is not found or the user does not have permission to view it."
+  }
+ },
+ "delete_issue": {
+  "summary": "Delete issue",
+  "description": "Deletes an issue.\n\nAn issue cannot be deleted if it has one or more subtasks. To delete an issue with subtasks, set `deleteSubtasks`. This causes the issue's subtasks to be deleted with the issue.\n\nThis operation can be accessed anonymously.\n\n**[Permissions](#permissions) required:**\n\n *  *Browse projects* and *Delete issues* [project permission](https://confluence.atlassian.com/x/yodKLg) for the project containing the issue.\n *  If [issue-level security](https://confluence.atlassian.com/x/J4lKLg) is configured, issue-level security permission to view the issue.",
+  "responses": {
+   "204": "Returned if the request is successful.",
+   "400": "Returned if the issue has subtasks and `deleteSubtasks` is not set to *true*.",
+   "401": "Returned if the authentication credentials are incorrect.",
+   "403": "Returned if the user does not have permission to delete the issue.",
+   "404": "Returned if the issue is not found or the user does not have permission to view the issue."
+  }
+ },
+ "bulk_move": {
+  "description": "Use this API to submit a bulk issue move request. You can move multiple issues from multiple projects in a single request, but they must all be moved to a single project, issue type, and parent. You can't move more than 1000 issues (including subtasks) at once.\n\n#### Scenarios: ####\n\nThis is an early version of the API and it doesn't have full feature parity with the Bulk Move UI experience.\n\n *  Moving issue of type A to issue of type B in the same project or a different project: `SUPPORTED`\n *  Moving multiple issues of type A in one or more projects to multiple issues of type B in one of the source projects or a different project: `SUPPORTED`\n *  Moving issues of multiple issue types in one or more projects to issues of a single issue type in one of the source project or a different project: **`SUPPORTED`**  \n    E.g. Moving issues of story and task issue types in project 1 and project 2 to issues of task issue type in project 3\n *  Moving a standard parent issue of type A with its multiple subtask issue types in one project to standard issue of type B and multiple subtask issue types in the same project or a different project: `SUPPORTED`\n *  Moving standard issues with their subtasks to a parent issue in the same project or a different project without losing their relation: `SUPPORTED`\n *  Moving an epic issue with its child issues to a different project without losing their relation: `SUPPORTED`  \n    This usecase is **supported using multiple requests**. Move the epic in one request and then move the children in a separate request with target parent set to the epic issue id  \n      \n    (Alternatively, move them individually and stitch the relationship back with the Bulk Edit API)\n\n#### Limits applied to bulk issue moves: ####\n\nWhen using the bulk move, keep in mind that there are limits on the number of issues and fields you can include.\n\n *  You can move up to 1,000 issues in a single operation, including any subtasks.\n *  The total combined number of fields across all issues must not exceed 1,500,000. For example, if each issue includes 15,000 fields, then the maximum number of issues that can be moved is 100.\n\n**[Permissions](#permissions) required:**\n\n *  Global bulk change [permission](https://support.atlassian.com/jira-cloud-administration/docs/manage-global-permissions/).\n *  Move [issues permission](https://support.atlassian.com/jira-cloud-administration/docs/manage-project-permissions/) in source projects.\n *  Create [issues permission](https://support.atlassian.com/jira-cloud-administration/docs/manage-project-permissions/) in destination projects.\n *  Browse [project permission](https://support.atlassian.com/jira-cloud-administration/docs/manage-project-permissions/) in destination projects, if moving subtasks only.\n *  If [issue-level security](https://confluence.atlassian.com/x/J4lKLg) is configured, issue-level security permission to view the issue."
+ },
+ "endpoints_of_note": {
+  "transitions": [
+   "get",
+   "post"
+  ],
+  "issue_link": [
+   "post"
+  ],
+  "issue_link_type": [
+   "get",
+   "post"
+  ],
+  "field_create": [
+   "get",
+   "post"
+  ],
+  "search_jql": [
+   "get",
+   "post"
+  ]
+ }
+}

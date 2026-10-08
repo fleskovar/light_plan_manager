@@ -1,0 +1,48 @@
+# The board this case is solved against. Deliberately the smallest config that
+# still exercises every rung of the degradation ladder a real board uses:
+# three nesting levels, a terminal status, one typed attribute, one period.
+version: 1
+
+key_prefix: LP
+
+statuses:
+  - id: backlog
+    label: Backlog
+  - id: in_progress
+    label: In Progress
+    active: true
+  - id: done
+    label: Done
+    terminal: true
+
+default_status: backlog
+
+hierarchy:
+  - program
+  - epic
+  - feature
+  - user_story
+
+issue_types:
+  program:
+    label: Program
+  epic:
+    label: Epic
+  feature:
+    label: Feature
+  user_story:
+    label: User Story
+    attributes:
+      story_points:
+        type: int
+
+effort_attribute: story_points
+
+period_prefix: TL
+
+period_hierarchy:
+  - sprint
+
+period_types:
+  sprint:
+    label: Sprint

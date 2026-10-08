@@ -1,0 +1,80 @@
+# Source: https://raw.githubusercontent.com/linear/linear/master/packages/sdk/src/schema.graphql
+# Note: documentation-derived (GraphQL schema), NOT captured responses.
+
+# --- IssueRelationType ---
+
+"""
+enum IssueRelationType {
+  blocks
+  duplicate
+  related
+  similar
+}
+
+"""
+
+# --- issueArchive mutation ---
+
+  issueArchive(
+    """
+    The identifier of the issue to archive.
+    """
+    id: String!
+    """
+    Whether to trash the issue.
+    """
+    trash: Boolean
+  ): IssueArchivePayload!
+  """
+  Creates a list of issues in one transaction.
+  """
+  issueBatchCreate(
+    """
+
+# --- issueDelete mutation ---
+
+  issueDelete(
+    """
+    The identifier of the issue to delete.
+    """
+    id: String!
+    """
+    Whether to permanently delete the issue and skip the grace period of 30 days. Available only to admins!
+    """
+    permanentlyDelete: Boolean
+  ): IssueArchivePayload!
+  """
+  [INTERNAL] Updates an issue description from the Front app to handle Front attachments correctly.
+  """
+  issueDescriptionUpdateFromFront(
+    """
+    Description to update the issue with.
+    """
+    description: String!
+    """
+
+# --- issueUnarchive mutation ---
+
+  issueUnarchive(
+    """
+    The identifier of the issue to unarchive.
+    """
+    id: String!
+  ): IssueArchivePayload!
+  """
+  Stops sharing an issue with a user. The viewer must have native access to the issue's full sub-issue tree and permission to share issues in the issue's team. Issues that inherit sharing from a parent issue cannot be unshared directly.
+  """
+  issueUnshare(
+    """
+    The identifier of the issue to stop sharing.
+    """
+    id: String!
+    """
+
+# --- Issue lifecycle-relevant fields (abridged) ---
+archivedAt: DateTime (nullable)
+trashed: Boolean
+previousIdentifiers: [String!]!
+identifier: String!
+number: Float!
+updatedAt: DateTime!

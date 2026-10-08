@@ -1,0 +1,10 @@
+{
+  "_comment": "The quiet-second-sync claim. After the first push has landed, a second push and a pull must both plan nothing, and `lpm remote status` must report every document in sync and exit 0. Any non-zero here is the duplicate-wave or phantom-edit failure the base snapshot exists to prevent.",
+  "pushPlanOperations": 0,
+  "pullPlanOperations": 0,
+  "statusExitCode": 0,
+  "documentsAhead": 0,
+  "documentsBehind": 0,
+  "documentsConflicted": 0,
+  "documentsUnlinked": 0
+}

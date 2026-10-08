@@ -1,0 +1,98 @@
+# Source: https://raw.githubusercontent.com/octokit/graphql-schema/master/schema.graphql
+# Note: Documentation-derived (GraphQL schema), NOT captured responses.
+
+# --- deleteIssue mutation ---
+
+  Deletes an Issue object.
+  """
+  deleteIssue(
+    """
+    Parameters for DeleteIssue
+    """
+    input: DeleteIssueInput!
+  ): DeleteIssuePayload
+
+  """
+  Deletes an IssueComment object.
+  """
+  deleteIssueComment(
+
+# --- transferIssue mutation ---
+
+  Transfer an issue to a different repository
+  """
+  transferIssue(
+    """
+    Parameters for TransferIssue
+    """
+    input: TransferIssueInput!
+  ): TransferIssuePayload
+
+  """
+  Unarchives a ProjectV2Item
+  """
+  unarchiveProjectV2Item(
+
+# --- ProjectV2FieldType enum ---
+
+"""
+enum ProjectV2FieldType {
+  """
+  Assignees
+  """
+  ASSIGNEES
+
+  """
+  Date
+  """
+  DATE
+
+  """
+  Iteration
+  """
+  ITERATION
+
+  """
+  Labels
+  """
+  LABELS
+
+  """
+  Linked Pull Requests
+  """
+  LINKED_PULL_REQUESTS
+
+  """
+  Milestone
+  """
+  MILESTONE
+
+  """
+  Number
+  """
+  NUMBER
+
+  """
+  Parent issue
+  """
+  PARENT_ISSUE
+
+  """
+  Repository
+  """
+  REPOSITORY
+
+  """
+  Reviewers
+  """
+  REVIEWERS
+
+  """
+  Single Select
+  """
+  SINGLE_SELECT
+
+  """
+  Sub-issues progress
+  """
+  SUB_ISSUES_PROGRESS

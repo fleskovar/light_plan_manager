@@ -1,0 +1,65 @@
+{
+  "_comment": "The mock project, in creation order. Ids are assigned in this order, so LP-1..LP-7 are stable. Each row is here for one reason; see README.md.",
+  "periods": [
+    {
+      "type": "sprint",
+      "title": "Sprint A",
+      "starts": "2026-09-01",
+      "ends": "2026-09-14"
+    }
+  ],
+  "issues": [
+    {
+      "type": "program",
+      "title": "Payments",
+      "status": "backlog",
+      "body": "The remote root: nothing above it, so it is filed with no parent at all."
+    },
+    {
+      "type": "epic",
+      "title": "Card payments",
+      "parent": "Payments",
+      "status": "backlog",
+      "body": "Depth 1. Beyond Jira's native reach on a leaf anchor, so its parent rides the managed block."
+    },
+    {
+      "type": "feature",
+      "title": "Refunds",
+      "parent": "Card payments",
+      "status": "in_progress",
+      "body": "Depth 2, also block-carried. Its status is the active one, which Jira reaches by transition."
+    },
+    {
+      "type": "feature",
+      "title": "Chargebacks",
+      "parent": "Card payments",
+      "status": "backlog",
+      "body": "A second feature, so there is somewhere for the reparent scenario to move a story to."
+    },
+    {
+      "type": "user_story",
+      "title": "Refund a voided charge",
+      "parent": "Refunds",
+      "status": "done",
+      "body": "Finished before it was ever pushed. Jira cannot set a status on create, so this is the document that proves the create transitions."
+    },
+    {
+      "type": "user_story",
+      "title": "Refund a captured charge",
+      "parent": "Refunds",
+      "status": "in_progress",
+      "period": "Sprint A",
+      "depends_on": [
+        "Refund a voided charge"
+      ],
+      "body": "Depth 3: the first level Jira holds natively. Carries the sprint and the one dependency."
+    },
+    {
+      "type": "sub_task",
+      "title": "Write the refund ledger entry",
+      "parent": "Refund a captured charge",
+      "status": "backlog",
+      "body": "Depth 4: the second native level, filed as a Jira Subtask under its story."
+    }
+  ]
+}

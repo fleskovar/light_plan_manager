@@ -1,0 +1,226 @@
+# light-plan board config -- lean Kanban template
+#
+# Hierarchy: Epic > Story > Task
+#
+# Kanban favours flow over estimation, so there are no story points or sprints
+# here -- size stories to be small enough to finish quickly instead.
+#
+# Attribute types: string, text, int, float, bool, date, enum, array
+# Any attribute may also set `required: true` and `default: <value>`.
+
+version: 1
+
+key_prefix: LP
+
+# `terminal: true` is what "finished" means on this board — nothing in
+# light-plan knows the word "done", it reads this flag. A container's status
+# derives from it: close the last issue in a card's parent and the parent closes
+# too. `lpm check --fix` rolls up a board where that never happened.
+statuses:
+  - id: backlog
+    label: Backlog
+  - id: ready
+    label: Ready
+  - id: in_progress
+    label: In Progress
+    active: true
+  - id: review
+    label: Review
+    active: true
+  - id: done
+    label: Done
+    terminal: true
+
+default_status: backlog
+
+# Kanban does not estimate, so there is no effort_attribute here -- only the
+# ordering `lpm task next` should respect.
+priority_attribute: priority
+
+hierarchy:
+  - epic
+  - story
+  - task
+
+# ---------------------------------------------------------------------------
+# Time hierarchy
+#
+# Kanban does not timebox work, but most teams still deliver on a cadence.
+# One flat level is enough: a cycle groups what shipped in a given window.
+# Periods live under .lpm/timeline; issues point at one via `period:`.
+#
+# Remove period_prefix / period_hierarchy / period_types to turn this off.
+# ---------------------------------------------------------------------------
+
+period_prefix: CY
+
+period_hierarchy:
+  - cycle
+
+period_types:
+  cycle:
+    label: Delivery Cycle
+    attributes:
+      focus:
+        type: string
+        description: What this cycle is mostly about
+      wip_limit:
+        type: int
+        description: Cards allowed in progress at once
+    body: |
+      ## Focus
+
+      What are we trying to move this cycle?
+
+      ## Flow Notes
+
+      Blockers, queues, anything that hurt cycle time.
+
+      ## Review
+
+      What shipped?
+
+# ---------------------------------------------------------------------------
+# Team roster
+#
+# Resources live under .lpm/team; issues point at one via `assignee:`.
+# A type with `generic: true` is a pool rather than a named person, so work can
+# wait for "whoever picks it up" -- `capacity` is how many people that is.
+#
+# Remove resource_prefix / resource_hierarchy / resource_types to turn this off.
+# ---------------------------------------------------------------------------
+
+resource_prefix: RS
+
+resource_hierarchy:
+  - [person, role]
+
+resource_types:
+  person:
+    label: Person
+    attributes:
+      email:
+        type: string
+      github:
+        type: string
+      skills:
+        type: array
+        default: []
+    body: |
+      ## Notes
+
+      -
+
+  role:
+    label: Role
+    generic: true
+    attributes:
+      discipline:
+        type: string
+        description: What kind of work this pool takes
+      skills:
+        type: array
+        default: []
+    body: |
+      ## What this pool covers
+
+      -
+
+issue_types:
+  epic:
+    label: Epic
+    attributes:
+      owner:
+        type: string
+      labels:
+        type: array
+        default: []
+    body: |
+      ## Summary
+
+      What outcome does this epic deliver?
+
+      ## Success Criteria
+
+      - [ ] Criterion
+
+      ## Out of Scope
+
+      -
+
+  story:
+    label: Story
+    # The smallest unit the queue hands out: a story is offered even when it has
+    # tasks under it, and those tasks are never offered on their own. They are
+    # its checklist, and they travel with it in `lpm instructions`.
+    atomic: true
+    attributes:
+      size:
+        type: enum
+        description: Right-sizing, not estimation -- prefer S
+        values: [s, m, l]
+        default: m
+      priority:
+        type: enum
+        values: [high, medium, low]
+        default: medium
+      blocked_by:
+        type: string
+        description: Id of the issue blocking this one, if any
+      labels:
+        type: array
+        default: []
+    body: |
+      As a **<role>**, I want **<capability>**, so that **<benefit>**.
+
+      ## Acceptance Criteria
+
+      - [ ] **Given** <context> **when** <action> **then** <outcome>
+
+      ## Notes
+
+      -
+
+  task:
+    label: Task
+    attributes:
+      labels:
+        type: array
+        default: []
+    body: |
+      ## Description
+
+      What needs to be done?
+
+      ## Checklist
+
+      - [ ] Step
+
+# ---------------------------------------------------------------------------
+# Remotes — mirror this board onto an external tracker (GitHub, Jira, Linear)
+# or a local JSON file, in either direction.
+#
+# You do not write this block by hand, and three commands is the whole setup:
+#
+#   lpm remote add jira --provider jira --site https://acme.atlassian.net --project PAY
+#   echo <api-token> | lpm remote login jira     # `add` prints where to get one
+#   lpm remote setup jira                        # match the mapping to the live project
+#   lpm remote sync
+#
+# `add` declares the remote *and* drafts the whole `mapping:` — this board's own
+# types and statuses against what the provider can hold, using the platform's
+# conventional names (Jira's Epic / Story / Task / Bug / Sub-task, a Linear
+# team's Backlog / Todo / In Progress / In Review / Done) where the words are the
+# platform's to give. `setup` then asks the live remote what its words actually
+# are and corrects the draft, so a renamed status is one command rather than an
+# afternoon in YAML. Editing this block by hand is for the cases the defaults do
+# not cover, not for getting started.
+#
+# Add `--scope <id>` to mirror one subtree instead of the whole board. Two
+# remotes may never cover the same work, so scopes may not overlap — mirroring
+# one board onto two trackers means a `scope:` on each.
+#
+# `lpm remote` lists what is declared; `lpm remote rm <name>` removes one. The
+# full guide is docs/remotes.md; docs/remote-capabilities.md is what each
+# platform can carry.
+# ---------------------------------------------------------------------------

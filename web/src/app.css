@@ -1,0 +1,215 @@
+/**
+ * Design tokens and the handful of element defaults every screen shares.
+ *
+ * Components style themselves; nothing here targets a feature. Colours are
+ * declared once as semantic names so a status chip, a node background and a
+ * Gantt bar can agree without knowing about each other.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', monospace;
+
+  --text-xs: 0.6875rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.875rem;
+  --text-lg: 1rem;
+  --text-xl: 1.375rem;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  --radius-sm: 4px;
+  --radius-md: 7px;
+  --radius-lg: 12px;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.08);
+  --shadow-md: 0 4px 14px rgb(0 0 0 / 0.12);
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.18);
+
+  --duration-fast: 120ms;
+
+  /* Surfaces, light. */
+  --surface-0: #f6f7f9;
+  --surface-1: #ffffff;
+  --surface-2: #eef0f4;
+  --surface-3: #e2e6ec;
+  --border: #a8aeb8;
+  --border-strong: #8b929c;
+  --ink: #16181d;
+  --ink-muted: #5c636e;
+  --ink-faint: #6b7280;
+
+  --accent: #2d5fd8;
+  --accent-ink: #ffffff;
+  --accent-soft: #e3ebff;
+
+  /* Semantic status tones: the same five everywhere. */
+  --tone-todo: #707580;
+  --tone-todo-soft: #eceef1;
+  --tone-active: #2f74d0;
+  --tone-active-soft: #dde9fa;
+  --tone-blocked: #cf3d3d;
+  --tone-blocked-soft: #fadddd;
+  --tone-review: #8b3cc1;
+  --tone-review-soft: #f0e2fb;
+  --tone-done: #2f9e5f;
+  --tone-done-soft: #ddf3e6;
+
+  --danger: #cf3d3d;
+  /* Text laid *on* --danger. Its own token because the red moves in dark mode
+     and the contrast has to move with it. */
+  --danger-ink: #ffffff;
+  --warn: #8b5a12;
+
+  /*
+   * The colour of "what you just clicked touches this". Deliberately outside
+   * the five status tones and outside the accent: an edge lit up because of the
+   * selection must not be mistakable for an edge that is red because the work
+   * is blocked, or for the accent that means "selected".
+   */
+  --highlight: #f2801e;
+  --highlight-soft: #fdeada;
+
+  /*
+   * Sync state — a second axis beside status, so it owns its own hues. A node's
+   * sync mark is a corner triangle, never a fill, and these four tokens are
+   * deliberately kept off the five status families (grey, blue, red, purple,
+   * green) and off danger/warn/highlight/accent.
+   */
+  --sync-ahead: #0d9488;
+  --sync-behind: #d97706;
+  --sync-conflicted: #db2777;
+  --sync-unlinked: #64748b;
+
+  /* How much a resizable pane grows the text inside it; see `ui/scale.ts`. */
+  --ui-scale: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-0: #14161a;
+    --surface-1: #1b1e24;
+    --surface-2: #22262e;
+    --surface-3: #2b3039;
+    --border: #555b66;
+    --border-strong: #6b727d;
+    --ink: #e7e9ee;
+    --ink-muted: #a0a7b4;
+    --ink-faint: #999faa;
+
+    --accent: #6b94f7;
+    --accent-ink: #0b0d11;
+    --accent-soft: #22304f;
+
+    --tone-todo: #999faa;
+    --tone-todo-soft: #272b33;
+    --tone-active: #4a90e2;
+    --tone-active-soft: #1c2c42;
+    --tone-blocked: #e05c5c;
+    --tone-blocked-soft: #3a2224;
+    --tone-review: #c08fee;
+    --tone-review-soft: #32243f;
+    --tone-done: #46b97a;
+    --tone-done-soft: #1d3327;
+
+    --danger: #e05c5c;
+    --danger-ink: #14161a;
+
+    --highlight: #ff9d3d;
+    --highlight-soft: #3c2a16;
+
+    --sync-ahead: #2dd4bf;
+    --sync-behind: #fbbf24;
+    --sync-conflicted: #f472b6;
+    --sync-unlinked: #94a3b8;
+
+    --warn: #f0a030;
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 4px 14px rgb(0 0 0 / 0.45);
+    --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.55);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/*
+ * A pane that spends the room it is given.
+ *
+ * Dragging a splitter makes a pane bigger, and a bigger pane full of 11px text
+ * is mostly empty space. So the two panes that resize redefine the type and
+ * spacing scale in terms of `--ui-scale`, which their splitter sets (see
+ * `lib/ui/scale.ts`). Everything below reads the tokens rather than hard-coded
+ * sizes, so this is all it takes — and a component that opts out simply does
+ * not sit inside one of these.
+ */
+.ui-scale {
+  --text-xs: calc(0.6875rem * var(--ui-scale));
+  --text-sm: calc(0.8125rem * var(--ui-scale));
+  --text-md: calc(0.875rem * var(--ui-scale));
+  --text-lg: calc(1rem * var(--ui-scale));
+  --text-xl: calc(1.375rem * var(--ui-scale));
+
+  --space-1: calc(0.25rem * var(--ui-scale));
+  --space-2: calc(0.5rem * var(--ui-scale));
+  --space-3: calc(0.75rem * var(--ui-scale));
+  --space-4: calc(1rem * var(--ui-scale));
+  --space-5: calc(1.5rem * var(--ui-scale));
+  --space-6: calc(2rem * var(--ui-scale));
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  color: var(--ink);
+  background: var(--surface-0);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Scrollbars that do not fight the dark theme. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
