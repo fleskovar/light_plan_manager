@@ -1,0 +1,95 @@
+# Publishes light-plan to npm when a version tag is pushed.
+#
+#   make version-patch          # bumps package.json, commits, tags vX.Y.Z
+#   git push --follow-tags      # this workflow takes it from there
+#
+# It runs the same targets a release from a laptop does — `make ci` (lockfile
+# install, typecheck, build, assets, both test suites) and `make dist` (pack and
+# check the tarball) — so the two cannot disagree about what is publishable.
+#
+# Authentication is npm trusted publishing (OIDC): no token is stored anywhere.
+# It needs the trusted publisher configured once on npmjs.com, naming this file
+# — see "Releasing" in README.md. Renaming this file breaks publishing until the
+# npmjs.com setting is changed to match.
+#
+# Run it by hand (Actions > Publish > Run workflow) for a dry run: everything
+# happens except the upload.
+name: Publish
+
+on:
+  push:
+    tags: ['v[0-9]*', '[0-9]*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+# Two tags pushed together publish one after the other, never at once.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      # No `registry-url`: it would make setup-node write an .npmrc reading
+      # NODE_AUTH_TOKEN (with a placeholder when none is set). Publishing is
+      # trusted publishing only — npm trades the OIDC token for a short-lived
+      # credential itself — so no token, secret or .npmrc belongs here.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+
+      # Trusted publishing needs npm 11.5.1 or newer. The major is pinned so a
+      # future npm cannot change how a release is made without anyone choosing it.
+      - name: Use npm 11
+        run: npm install -g npm@11
+
+      # A tag that disagrees with package.json would publish a version nobody
+      # tagged. `make version-patch` keeps them together; this catches a hand tag.
+      - name: Check the tag names the version in package.json
+        if: github.event_name == 'push'
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+
+      # npm refuses a version it already has, and would say so only after the
+      # whole verify had run. A tag pushed without a bump fails here in seconds.
+      - name: Check the version is not on npm yet
+        if: github.event_name == 'push'
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if npm view "light-plan@$version" version >/dev/null 2>&1; then
+            echo "::error::light-plan $version is already on npm. Bump the version (make version-patch) and tag again."
+            exit 1
+          fi
+
+      - name: Verify (typecheck, build, assets, both test suites)
+        run: make ci
+
+      - name: Pack and check the tarball
+        run: make dist
+
+      # The tarball `make dist` checked is the one published, never a fresh pack.
+      - name: Publish
+        if: github.event_name == 'push'
+        run: npm publish ./release/light-plan-$(node -p "require('./package.json').version").tgz
+
+      # A manual run stops here. `npm publish --dry-run` is no use for it: npm
+      # refuses even a dry run of a version it already has, and between releases
+      # package.json always names one.
+      - name: Dry run - what a tag would publish
+        if: github.event_name == 'workflow_dispatch'
+        run: echo "Dry run. A tag would publish release/light-plan-$(node -p "require('./package.json').version").tgz, verified and checked above."

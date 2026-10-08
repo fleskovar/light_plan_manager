@@ -3141,19 +3141,35 @@ mistake worth catching before publishing. Install the result anywhere with
 `npm install -g ./release/light-plan-<version>.tgz` (the `./` matters — without
 it npm reads the path as a GitHub repository).
 
-Publishing is `make publish CONFIRM=yes`; the flag is required so it cannot
-happen by a mistyped target, and it is checked before anything runs. It then
-runs `make verify` (typecheck, build, assets, both test suites) and `make dist`,
-and publishes only if both pass. A bare `npm publish` from the repository root is
-refused by `prepublishOnly`, because it would skip the build and the contents
-check. A release, start to finish:
+**A release is a pushed version tag.** The
+[Publish workflow](.github/workflows/publish.yml) takes it from there:
 
 ```bash
-npm login                                  # once per machine
 make version-patch                         # or -minor / -major: bumps, commits, tags
-make publish CONFIRM=yes                   # verifies, builds, publishes the tarball
-git push --follow-tags
+git push --follow-tags                     # the workflow verifies, packs and publishes
 ```
+
+It runs the same targets a release from a laptop does — `make ci` (lockfile
+install, typecheck, build, assets, both test suites), then `make dist` — and
+publishes the tarball `make dist` checked. Before any of that it refuses a tag
+that does not match the version in `package.json`, and a version npm already
+has. Starting it by hand (Actions → Publish → Run workflow) is a dry run:
+everything happens except the upload.
+
+It authenticates with npm **trusted publishing**, so no npm token is stored in
+GitHub. That needs one setting on npmjs.com, made once: in the package's
+settings, add a trusted publisher for GitHub Actions with owner `fleskovar`,
+repository `light_plan_manager` and workflow filename `publish.yml`. The filename has to
+match exactly; renaming the workflow breaks publishing until the setting is
+changed too. Builds published this way carry
+[provenance](https://docs.npmjs.com/generating-provenance-statements), which
+npm shows on the package page.
+
+To publish from a laptop instead, `make publish CONFIRM=yes` does the same
+steps locally (after `npm login`); the flag is required so it cannot happen by a
+mistyped target, and it is checked before anything runs. A bare `npm publish`
+from the repository root is refused by `prepublishOnly`, because it would skip
+the build and the contents check.
 
 ## Scope
 

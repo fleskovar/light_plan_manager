@@ -16,7 +16,7 @@ import {
 } from '../src/core/index.js';
 import { launchCommand } from '../src/cli/commands/mcp/config.js';
 import { createMcpServer } from '../src/mcp/index.js';
-import { cleanupBoards, makeBoard, reload } from './helpers.js';
+import { cleanupBoards, lpmArgs, makeBoard, reload } from './helpers.js';
 import { memoryConnector } from './support/memory-tracker.js';
 
 afterAll(cleanupBoards);
@@ -774,7 +774,7 @@ describe('mcp setup', () => {
       cwd: string;
       env?: Record<string, string>;
     };
-    expect(entry.args.slice(0, 1)).toEqual(['mcp']);
+    expect(lpmArgs(entry).slice(0, 1)).toEqual(['mcp']);
     expect(entry.env?.LPM_USER).toBe('Ada Lovelace');
     expect(entry.cwd).toBe(root);
   });

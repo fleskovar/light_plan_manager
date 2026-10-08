@@ -177,9 +177,13 @@ assets: $(CLI_ENTRY) ## Validate the shipped assets, the harness mappings and th
 verify: typecheck build assets test ## Everything a pull request should pass
 	@echo All checks passed.
 
+# The stamps are written after each `npm ci`, or verify would find them missing
+# and run a second, unpinned `npm install` over the lockfile install.
 ci: ## Reproducible install, then verify. What CI should run
 	@npm ci
+	@$(TOUCH) $(ROOT_MODULES)
 	@cd web && npm ci
+	@$(TOUCH) $(WEB_MODULES)
 	@$(MAKE) verify
 
 outdated: ## Show dependencies with newer releases

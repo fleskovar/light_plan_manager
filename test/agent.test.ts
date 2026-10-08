@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { lpmArgs } from './helpers.js';
 
 /**
  * `lpm agent` against the built CLI, because what it does *is* the filesystem:
@@ -68,8 +69,10 @@ describe('lpm agent', () => {
     expect(front).toMatch(/mcp__light-plan__next_tasks/);
     expect(read('.claude', 'skills', 'lpm', 'SKILL.md')).toContain('# Working a light-plan board');
 
-    const config = JSON.parse(read('.mcp.json')) as { mcpServers: Record<string, { args: string[] }> };
-    expect(config.mcpServers['light-plan']!.args).toEqual(['mcp']);
+    const config = JSON.parse(read('.mcp.json')) as {
+      mcpServers: Record<string, { command: string; args: string[] }>;
+    };
+    expect(lpmArgs(config.mcpServers['light-plan']!)).toEqual(['mcp']);
   });
 
   /** .github/agents/*.agent.md and .github/skills/<name>/SKILL.md, per the CLI config reference. */
@@ -224,10 +227,10 @@ describe('lpm agent', () => {
   it('forwards --user and --profile into the MCP entry', () => {
     lpm('agent', '--target', 'claude', '--project', '--user', 'Planner Bot', '--name', 'planner');
     const config = JSON.parse(read('.mcp.json')) as {
-      mcpServers: Record<string, { args: string[]; env?: Record<string, string> }>;
+      mcpServers: Record<string, { command: string; args: string[]; env?: Record<string, string> }>;
     };
     const entry = config.mcpServers['planner']!;
-    expect(entry.args).toEqual(['mcp']);
+    expect(lpmArgs(entry)).toEqual(['mcp']);
     expect(entry.env).toEqual({ LPM_USER: 'Planner Bot' });
   });
 

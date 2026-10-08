@@ -37,3 +37,17 @@ export function writeRawIssue(dir: string, content: string, fileName = ISSUE_FIL
 export function boardPath(paths: BoardPaths, ...segments: string[]): string {
   return path.join(paths.boardDir, ...segments);
 }
+
+/**
+ * The arguments an MCP host config passes to `lpm`, with the launcher removed.
+ *
+ * `lpm mcp setup` and `lpm agent` write `lpm mcp …` when `lpm` is on the PATH
+ * and `node <this checkout's CLI> mcp …` when it is not — both correct, and which
+ * one a test sees depends on the machine (a developer who ran `npm link` gets
+ * the first, a CI runner the second). Asserting on `args` directly made those
+ * tests pass on one and fail on the other; `launchCommand`'s own tests cover
+ * the choice itself.
+ */
+export function lpmArgs(entry: { command: string; args: string[] }): string[] {
+  return entry.command === 'lpm' ? entry.args : entry.args.slice(1);
+}
