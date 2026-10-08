@@ -1,4 +1,13 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import YAML from 'yaml';
@@ -8,7 +17,6 @@ import type { AssetFile } from '../agent/assets.js';
 import { ROLES, assetsDir, loadAssetFiles } from '../agent/assets.js';
 import { installFile, pointerBlock } from '../agent/install.js';
 import { placementsFor, ruleSchema } from '../agent/mapping.js';
-import { launchCommand } from '../mcp/config.js';
 
 /**
  * hcm bundles, rendered from `assets/` rather than kept beside it.
@@ -19,6 +27,10 @@ import { launchCommand } from '../mcp/config.js';
  * mapping holds, plus the manifest fields only a person can choose. What is not
  * a choice is filled in here: the version is the package's, so a bundle can
  * never claim to be a release it is not.
+ *
+ * What belongs to one bundle and to no harness — its MCP server file — ships in
+ * `assets/hcm/<name>/` and is copied into the bundle byte for byte, so the
+ * package carries as a file what hcm reads as a file.
  *
  * The bundles land in a folder this tool owns (`defaultBundleDir`), never in
  * the package itself: `hcm update` reads the registered folder again, and a
@@ -34,8 +46,6 @@ const bundleSchema = z
     flavors: z.record(z.string(), z.string()).default({}),
     /** Write the pointer block as `context/<name>.md`. */
     context: z.string().regex(/^\d\d-[a-z0-9-]+$/, 'must look like 10-name').optional(),
-    /** Write the `lpm mcp` entry as `mcp/<name>.json`. */
-    mcp: z.string().regex(/^[a-z][a-z0-9-]*$/, 'must be lower-kebab-case').optional(),
     files: z.array(ruleSchema).min(1),
   })
   .strict();
@@ -135,15 +145,39 @@ export interface Rendered {
  * there so a file deleted from `assets/` leaves the bundle too. A folder that
  * holds something other than a bundle is refused rather than emptied.
  */
-function renderBundle(bundle: Bundle, dir: string, assets: AssetFile[], onPath: boolean): Rendered {
+/** Every file under `dir`, relative to it, with forward slashes. */
+function filesUnder(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir, { recursive: true, encoding: 'utf8' })
+    .filter((entry) => statSync(path.join(dir, entry)).isFile())
+    .map((entry) => entry.split(path.sep).join('/'))
+    .sort();
+}
+
+/** What the render writes itself, so a bundle's own folder may not ship it. */
+function generatedPaths(bundle: Bundle): string[] {
+  return ['hcm.yaml', ...(bundle.context ? [`context/${bundle.context}.md`] : [])];
+}
+
+function renderBundle(bundle: Bundle, dir: string, assets: AssetFile[]): Rendered {
   const target = path.join(dir, bundle.name);
   if (existsSync(target) && readdirSync(target).length && !existsSync(path.join(target, 'hcm.yaml'))) {
     throw new BoardError(`${target} is not empty and holds no hcm bundle`, [
       'Pass --dir with a folder light-plan may write its bundles into.',
     ]);
   }
+  const own = path.join(bundlesDir(), bundle.name);
+  const shipped = filesUnder(own);
+  const clash = shipped.filter((file) => generatedPaths(bundle).includes(file));
+  if (clash.length) {
+    throw new BoardError(`assets/hcm/${bundle.name}/ ships a file the render writes itself`, [
+      ...clash.map((file) => `${file}: remove it; it is generated`),
+    ]);
+  }
+
   rmSync(target, { recursive: true, force: true });
   mkdirSync(target, { recursive: true });
+  if (shipped.length) cpSync(own, target, { recursive: true });
 
   const placing = {
     harness: { name: `hcm/${bundle.name}`, files: bundle.files },
@@ -172,20 +206,12 @@ function renderBundle(bundle: Bundle, dir: string, assets: AssetFile[], onPath: 
     '# Rendered by `lpm hcm init` from the light-plan package. Do not edit:\n' +
     "# change the package's assets/ and run the command again.\n";
   writeFileSync(path.join(target, 'hcm.yaml'), header + YAML.stringify(manifest, { lineWidth: 0 }));
-  let files = placements.length + 1;
+  let files = shipped.length + placements.length + 1;
 
   if (bundle.context) {
     const shared = placements.map((placement) => placement.asset).filter(inEveryRole);
     mkdirSync(path.join(target, 'context'), { recursive: true });
     writeFileSync(path.join(target, 'context', `${bundle.context}.md`), `${pointerBlock(shared)}\n`);
-    files += 1;
-  }
-  if (bundle.mcp) {
-    mkdirSync(path.join(target, 'mcp'), { recursive: true });
-    writeFileSync(
-      path.join(target, 'mcp', `${bundle.mcp}.json`),
-      `${JSON.stringify(launchCommand(onPath), null, 2)}\n`,
-    );
     files += 1;
   }
 
@@ -195,9 +221,8 @@ function renderBundle(bundle: Bundle, dir: string, assets: AssetFile[], onPath: 
 /**
  * Render every bundle into `dir`, which becomes an hcm *collection*: one
  * `hcm registry add <dir>` registers each bundle in it under its own name.
- * `onPath` decides how the MCP entry starts `lpm` (see `launchCommand`).
  */
-export function renderBundles(dir: string, options: { onPath: boolean }): Rendered[] {
+export function renderBundles(dir: string): Rendered[] {
   const assets = loadAssetFiles();
-  return loadBundles().map((bundle) => renderBundle(bundle, dir, assets, options.onPath));
+  return loadBundles().map((bundle) => renderBundle(bundle, dir, assets));
 }

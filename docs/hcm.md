@@ -16,7 +16,7 @@ or when you want `hcm update` and `hcm status` across many projects.
 | --- | --- |
 | `lpm hcm init` | Renders every bundle, then runs `hcm registry add` on them. Run it again after each upgrade of light-plan; the registry entry keeps its id. |
 | `lpm hcm init --dev` | The same, registered with `--dev`: hcm reads the rendered folder in place and keeps no copy, so `hcm update` lands an edit without a version bump. For working on `assets/` in a checkout. |
-| `lpm hcm build --dir <path>` | Renders the bundles into `<path>` and registers nothing. The MCP entry names `lpm`, so the result can be committed and published (`hcm registry add owner/repo/path#v1.2.0`). |
+| `lpm hcm build --dir <path>` | Renders the bundles into `<path>` and registers nothing. Nothing in a render depends on the machine, so the result can be committed and published (`hcm registry add owner/repo/path#v1.2.0`). |
 | `lpm hcm remove` | Runs `hcm registry remove` for each bundle. |
 
 `--dir` moves where `init` writes. The default is the per-user data folder:
@@ -39,9 +39,11 @@ npx --no lpm hcm init          # in a project that has light-plan as a dependenc
 
 `--no` stops npx from downloading the other `lpm` when this one is not
 installed. Both forms are safe for `hcm update` later, because `init` never
-registers the package folder (see the design below). When `lpm` is not on the
-PATH, the bundle's MCP entry starts the server with `npx -y light-plan mcp`
-instead, exactly as `lpm mcp setup` does.
+registers the package folder (see the design below).
+
+The bundle's MCP server file starts the server as `lpm mcp`, so the agents need
+`lpm` on their PATH whichever way `init` was run. `init` warns when it is not
+there: `npm install -g light-plan` fixes it.
 
 ## What is in the bundle
 
@@ -52,7 +54,7 @@ instead, exactly as `lpm mcp setup` does.
 | `subagents/<name>.md` | `assets/agents/<name>.md` — `description`, `tools` |
 | `skills/<name>/SKILL.md` | `assets/skills/<name>.md` — `description` |
 | `context/10-light-plan.md` | the pointer block `lpm agent` writes for Copilot, listing the assets every flavor installs |
-| `mcp/light-plan.json` | `launchCommand` — how to start `lpm mcp` on this machine |
+| `mcp/light-plan.json` | `assets/hcm/light-plan/mcp/light-plan.json`, copied byte for byte — the `light-plan` server, started as `lpm mcp` |
 | `hcm.yaml` | the mapping's `description`, `tags`, `flavors`; the package's `version`, `author`, `homepage` |
 
 Each asset's `roles` become its hcm `flavors`, so the roles of `lpm agent
@@ -72,6 +74,16 @@ person has to keep in step. Instead, a bundle mapping is the same list of copy
 rules as a harness mapping (`ruleSchema`, placed by `placementsFor`), plus the
 manifest fields a person chooses. Fields that are not a choice come from the
 package: the version, so the bundle cannot claim a different release.
+
+**What belongs to one bundle ships as a file.** A file that belongs to a bundle
+and to no harness sits in `assets/hcm/<name>/`, and the render copies it into
+the bundle byte for byte. The MCP server file is the one there now. It is a
+file, not generated, so it can be read in the package, and it names `lpm`
+rather than a path on one machine, as an hcm bundle should. Its name is the
+server name, `light-plan`, which is also the prefix of every MCP tool in the
+agents' `tools` lists (`mcp__light-plan__*`); `test/hcm.test.ts` holds the two
+together. The folder may not ship `hcm.yaml` or the context file, because the
+render writes those.
 
 **The bundle lives in a folder light-plan owns.** `hcm update` reads the
 registered folder again. A package run through npx lives in npm's cache, which
@@ -94,6 +106,8 @@ second bundle, add a mapping file.
   bundle already, because the rules select those directories.
 - **A new kind of asset** needs a rule in `assets/hcm/light-plan.yml`, the same
   as in each harness mapping. A rule that matches nothing is an error.
+- **A file only the bundle carries** — an MCP server, a settings fragment, a
+  command — goes in `assets/hcm/<name>/`, at the path it has in the bundle.
 - **A new bundle** is a file `assets/hcm/<name>.yml`. Its `name` must match the
   file name.
 

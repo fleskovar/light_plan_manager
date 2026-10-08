@@ -6,6 +6,7 @@ import YAML from 'yaml';
 import { afterAll, describe, expect, it } from 'vitest';
 import { ROLES, loadAssetFiles } from '../src/cli/commands/agent/assets.js';
 import { defaultBundleDir, loadBundles, renderBundles } from '../src/cli/commands/hcm/bundle.js';
+import { DEFAULT_SERVER_NAME } from '../src/cli/commands/mcp/config.js';
 
 /**
  * `lpm hcm`: the bundles are rendered from `assets/`, so what is worth testing
@@ -42,7 +43,7 @@ describe('lpm hcm', () => {
 
   it('renders every agent and skill at the package version, flavored by role', () => {
     const dir = tmp();
-    const [bundle] = renderBundles(dir, { onPath: true });
+    const [bundle] = renderBundles(dir);
     const root = path.join(dir, 'light-plan');
 
     expect(bundle!.version).toBe(pkg.version);
@@ -65,7 +66,7 @@ describe('lpm hcm', () => {
 
   it('points the context at what every flavor installs, and only that', () => {
     const dir = tmp();
-    renderBundles(dir, { onPath: true });
+    renderBundles(dir);
     const context = readFileSync(path.join(dir, 'light-plan', 'context', '10-light-plan.md'), 'utf8');
 
     expect(context.startsWith('## ')).toBe(true);
@@ -75,21 +76,32 @@ describe('lpm hcm', () => {
     }
   });
 
-  it('starts the MCP server by name when lpm is on the PATH', () => {
+  it('ships the MCP server file, copied byte for byte', () => {
     const dir = tmp();
-    renderBundles(dir, { onPath: true });
-    const entry = JSON.parse(readFileSync(path.join(dir, 'light-plan', 'mcp', 'light-plan.json'), 'utf8'));
-    expect(entry).toEqual({ command: 'lpm', args: ['mcp'] });
+    renderBundles(dir);
+    const shipped = readFileSync(new URL('../assets/hcm/light-plan/mcp/light-plan.json', import.meta.url));
+    const rendered = readFileSync(path.join(dir, 'light-plan', 'mcp', `${DEFAULT_SERVER_NAME}.json`));
+
+    expect(rendered.equals(shipped)).toBe(true);
+    expect(JSON.parse(rendered.toString('utf8'))).toEqual({ command: 'lpm', args: ['mcp'] });
+  });
+
+  it('names the MCP server the way the agents name its tools', () => {
+    const agents = loadAssetFiles().filter((asset) => asset.kind === 'agents');
+    const prefixes = new Set(
+      agents.flatMap((agent) => agent.front?.tools ?? []).flatMap((tool) => /^mcp__(.+?)__/.exec(tool)?.[1] ?? []),
+    );
+    expect([...prefixes]).toEqual([DEFAULT_SERVER_NAME]);
   });
 
   it('replaces an earlier render, so a deleted asset leaves the bundle', () => {
     const dir = tmp();
-    renderBundles(dir, { onPath: true });
+    renderBundles(dir);
     const stale = path.join(dir, 'light-plan', 'skills', 'gone', 'SKILL.md');
     mkdirSync(path.dirname(stale), { recursive: true });
     writeFileSync(stale, 'old');
 
-    renderBundles(dir, { onPath: true });
+    renderBundles(dir);
     expect(existsSync(stale)).toBe(false);
   });
 
@@ -98,7 +110,7 @@ describe('lpm hcm', () => {
     mkdirSync(path.join(dir, 'light-plan'));
     writeFileSync(path.join(dir, 'light-plan', 'notes.txt'), 'mine');
 
-    expect(() => renderBundles(dir, { onPath: true })).toThrow(/holds no hcm bundle/);
+    expect(() => renderBundles(dir)).toThrow(/holds no hcm bundle/);
     expect(readFileSync(path.join(dir, 'light-plan', 'notes.txt'), 'utf8')).toBe('mine');
   });
 
@@ -114,7 +126,7 @@ describe('lpm hcm', () => {
 
   it.skipIf(!hasHcm)('renders a bundle hcm validates, with no broken references', () => {
     const dir = tmp();
-    renderBundles(dir, { onPath: true });
+    renderBundles(dir);
     const shell = process.platform === 'win32';
     for (const args of [
       ['validate', path.join(dir, 'light-plan')],

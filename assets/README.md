@@ -18,7 +18,9 @@ patterns. **Adding an asset is a file; adding a harness is a file.**
 
 Three names are reserved and never copied: `harnesses/`, `hcm/` and this
 `README.md`. A file in `hcm/` is a bundle mapping — the same copy rules, plus
-the hcm manifest fields; see [`docs/hcm.md`](../docs/hcm.md).
+the hcm manifest fields — and a folder beside it (`hcm/light-plan/`) holds the
+files only that bundle carries, such as its MCP server file, copied as they are;
+see [`docs/hcm.md`](../docs/hcm.md).
 
 ## Adding an asset
 

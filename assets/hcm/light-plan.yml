@@ -9,9 +9,12 @@
 # Written by the code, not here, because they are not choices:
 #   version      the package's own version, so the two cannot drift
 #   author, homepage   from package.json
-#   mcp/<mcp>.json     how to start `lpm mcp` on this machine
 #   context/<context>.md   the pointer block `lpm agent` writes for Copilot,
 #                          listing what every flavor installs
+#
+# Copied byte for byte from the folder of the same name, light-plan/, because
+# they belong to this bundle and to no harness:
+#   mcp/light-plan.json    the light-plan MCP server, started as `lpm mcp`
 
 name: light-plan
 description: >-
@@ -28,7 +31,6 @@ flavors:
     Write epics, features and stories, sequence them and set the board up.
 
 context: 10-light-plan
-mcp: light-plan
 
 files:
   - from: agents/*.md

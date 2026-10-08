@@ -5,7 +5,7 @@ import { parseArgs } from 'node:util';
 import { BoardError } from '../../../core/index.js';
 import { bold, cyan, dim, err, green, out, yellow } from '../../ui.js';
 import { assetsDir } from '../agent/assets.js';
-import { isNpxCache, lpmOnPath } from '../mcp/config.js';
+import { lpmOnPath } from '../mcp/config.js';
 import type { Rendered } from './bundle.js';
 import { defaultBundleDir, loadBundles, renderBundles } from './bundle.js';
 
@@ -40,13 +40,15 @@ Options
                      it without a version bump
 
 The bundles are rendered from the agents and skills \`lpm agent\` installs
-(assets/hcm/*.yml says which go where), at this package's version, with an
-MCP entry that starts \`lpm mcp\` and a CLAUDE.md / AGENTS.md section pointing
-at the skills. Run init again after upgrading light-plan, then \`hcm update\`.
+(assets/hcm/*.yml says which go where), at this package's version, with the
+MCP server file assets/hcm/<bundle>/ ships (it starts \`lpm mcp\`) and a
+CLAUDE.md / AGENTS.md section pointing at the skills. Run init again after
+upgrading light-plan, then \`hcm update\`.
 
 Without a global install, run it from the package:
   npx light-plan hcm init                   from anywhere
   npx --no lpm hcm init                     in a project that depends on light-plan
+The MCP server is still started as \`lpm\`, so agents need it on their PATH.
 
 Then, in any project
   hcm install light-plan -t claude-code
@@ -85,9 +87,7 @@ function report(rendered: Rendered[]): void {
 
 function runBuild(dir: string | undefined): number {
   if (!dir) throw new BoardError('Pass --dir', ['`lpm hcm build` writes the bundles there.']);
-  // A published bundle is installed on other machines, so it names `lpm`
-  // rather than wherever this one happens to keep it.
-  const rendered = renderBundles(path.resolve(dir), { onPath: true });
+  const rendered = renderBundles(path.resolve(dir));
   out(bold('Rendered'));
   report(rendered);
   out();
@@ -106,8 +106,7 @@ function runInit(dir: string | undefined, dev: boolean): number {
   }
 
   const target = path.resolve(dir ?? defaultBundleDir());
-  const onPath = lpmOnPath();
-  const rendered = renderBundles(target, { onPath });
+  const rendered = renderBundles(target);
   out(bold('Rendered'));
   report(rendered);
   out();
@@ -126,10 +125,13 @@ function runInit(dir: string | undefined, dev: boolean): number {
     for (const bundle of rendered) out(`  ${cyan(`hcm install ${bundle.name} -t <harness>`)}`);
     out(dim('Projects that already have them: hcm update'));
   }
-  if (!onPath && isNpxCache(assetsDir())) {
+  // The bundle's MCP file starts the server as `lpm mcp`, by name, so it works
+  // on any machine that has light-plan installed — and on this one only if
+  // this one does. Running init through npx is exactly how that goes unnoticed.
+  if (!lpmOnPath()) {
     out();
-    out(dim('lpm is not on your PATH, so the MCP entry starts it with npx.'));
-    out(dim('`npm install -g light-plan`, then `lpm hcm init` again, to skip the download.'));
+    out(`${yellow('warn')} lpm is not on your PATH, so the light-plan MCP server will not start.`);
+    out(dim('  Install it where your agents run: npm install -g light-plan'));
   }
   return 0;
 }
