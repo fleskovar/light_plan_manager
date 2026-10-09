@@ -7,7 +7,7 @@
 #   make dev       rebuild the CLI and the web app as I edit them
 #   make test      run everything
 #   make dist      build a publishable tarball
-#   make publish   check, build and publish to npm (needs CONFIRM=yes)
+#   make publish   bump the patch, tag and push; GitHub Actions publishes to npm
 #
 # Two packages live here: the engine and CLI at the root, and the web app under
 # web/ with its own node_modules. Every target below knows about both, which is
@@ -201,27 +201,31 @@ dist: clean-release build ## Build a publishable tarball in release/ and check i
 dist-contents: ## List what the tarball would contain, without building one
 	@npm pack --dry-run
 
-# Deliberately awkward: publishing is public and cannot be undone, so it must
-# never happen because someone mistyped a target name. CONFIRM is checked before
-# anything else runs; then the full verify, then the tarball. The ./ matters:
-# npm reads a bare `release/x.tgz` as a GitHub repository.
-publish: ## Verify, build and publish the tarball to npm (needs CONFIRM=yes)
+# A release is a pushed version tag: .github/workflows/publish.yml verifies,
+# packs and publishes it. This bumps the patch (or releases a minor or major a
+# developer set and nobody has tagged yet), commits, tags and pushes both.
+publish: ## Bump the patch, commit, tag and push; GitHub Actions publishes to npm
+	@node scripts/release.mjs publish
+
+# The patch is make publish's; the minor and major are a developer's decision.
+# These commit the new version without tagging it, and make publish releases it.
+version-minor: ## Start the next minor version (commits, does not tag or publish)
+	@node scripts/release.mjs bump minor
+
+version-major: ## Start the next major version (commits, does not tag or publish)
+	@node scripts/release.mjs bump major
+
+# Publishing from a laptop rather than CI. Deliberately awkward: it cannot be
+# undone, so it must never happen because someone mistyped a target name.
+# CONFIRM is checked before anything else runs; then the full verify, then the
+# tarball. The ./ matters: npm reads a bare `release/x.tgz` as a GitHub repository.
+publish-local: ## Verify, build and publish this version from here (needs CONFIRM=yes)
 ifneq ($(CONFIRM),yes)
-	$(error This publishes light-plan $(VERSION) to the public npm registry, which cannot be undone. Re-run with: make publish CONFIRM=yes)
+	$(error This publishes light-plan $(VERSION) to the public npm registry, which cannot be undone. Re-run with: make publish-local CONFIRM=yes)
 endif
 	@$(MAKE) verify
 	@$(MAKE) dist
 	npm publish ./$(TARBALL)
-
-# `npm version` bumps package.json, commits and tags. Push with --follow-tags.
-version-patch: ## Bump the patch version, commit and tag it
-	npm version patch
-
-version-minor: ## Bump the minor version, commit and tag it
-	npm version minor
-
-version-major: ## Bump the major version, commit and tag it
-	npm version major
 
 # ---------------------------------------------------------------------------
 ##@ Housekeeping
@@ -245,5 +249,5 @@ fresh: clean-all setup ## Wipe everything and set up again
 .PHONY: help doctor setup dev dev-web ui site mcp demo link unlink \
         build build-core build-web build-viewer \
         test test-core test-web test-watch typecheck assets verify ci outdated \
-        dist dist-contents publish version-patch version-minor version-major \
+        dist dist-contents publish publish-local version-minor version-major \
         clean clean-release clean-demo clean-all fresh

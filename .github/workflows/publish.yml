@@ -1,7 +1,7 @@
 # Publishes light-plan to npm when a version tag is pushed.
 #
-#   make version-patch          # bumps package.json, commits, tags vX.Y.Z
-#   git push --follow-tags      # this workflow takes it from there
+#   make publish      # bumps the patch, commits, tags X.Y.Z and pushes both;
+#                     # this workflow takes it from there
 #
 # It runs the same targets a release from a laptop does — `make ci` (lockfile
 # install, typecheck, build, assets, both test suites) and `make dist` (pack and
@@ -55,7 +55,7 @@ jobs:
         run: npm install -g npm@11
 
       # A tag that disagrees with package.json would publish a version nobody
-      # tagged. `make version-patch` keeps them together; this catches a hand tag.
+      # tagged. `make publish` keeps them together; this catches a hand tag.
       - name: Check the tag names the version in package.json
         if: github.event_name == 'push'
         run: |
@@ -72,7 +72,7 @@ jobs:
         run: |
           version=$(node -p "require('./package.json').version")
           if npm view "light-plan@$version" version >/dev/null 2>&1; then
-            echo "::error::light-plan $version is already on npm. Bump the version (make version-patch) and tag again."
+            echo "::error::light-plan $version is already on npm. Run make publish to release the next patch."
             exit 1
           fi
 

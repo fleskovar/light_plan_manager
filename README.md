@@ -3194,8 +3194,8 @@ everything.
 | `make typecheck` | `tsc` over the engine, `svelte-check` over the app |
 | `make verify` | Typecheck, test and build: what a pull request should pass |
 | `make dist` | Build a publishable tarball in `release/` and check its contents |
-| `make publish CONFIRM=yes` | Verify, build the tarball and publish it to npm |
-| `make version-patch` | Bump the version, commit and tag it (also `-minor`, `-major`) |
+| `make publish` | Bump the patch version, commit, tag and push; GitHub Actions publishes it to npm |
+| `make version-minor` | Start the next minor version, committed and not tagged (also `-major`) |
 | `make outdated` | Dependencies with newer releases |
 | `make clean` / `make fresh` | Remove build output / wipe everything and set up again |
 
@@ -3238,13 +3238,23 @@ mistake worth catching before publishing. Install the result anywhere with
 `npm install -g ./release/light-plan-<version>.tgz` (the `./` matters — without
 it npm reads the path as a GitHub repository).
 
-**A release is a pushed version tag.** The
+**A release is a pushed version tag.** `make publish` makes one, and the
 [Publish workflow](.github/workflows/publish.yml) takes it from there:
 
 ```bash
-make version-patch                         # or -minor / -major: bumps, commits, tags
-git push --follow-tags                     # the workflow verifies, packs and publishes
+make publish          # 0.1.1 -> 0.1.2: bumps, commits, tags and pushes main
 ```
+
+It refuses a working tree with uncommitted changes, a branch other than `main`,
+and a `main` that is behind its upstream. The commit and the tag are pushed
+together (`git push --atomic`), and when the push is refused both are undone
+locally, so running it again is safe. Tags are the bare version (`0.1.2`).
+
+`make publish` only ever moves the last number. The major and minor are a
+developer's decision: `make version-minor` (or `-major`, or editing
+`package.json` by hand and committing it) starts `0.2.0` without tagging it, and
+the next `make publish` sees a version with no tag yet and releases it as it
+stands, rather than skipping straight to `0.2.1`.
 
 It runs the same targets a release from a laptop does — `make ci` (lockfile
 install, typecheck, build, assets, both test suites), then `make dist` — and
@@ -3262,7 +3272,7 @@ changed too. Builds published this way carry
 [provenance](https://docs.npmjs.com/generating-provenance-statements), which
 npm shows on the package page.
 
-To publish from a laptop instead, `make publish CONFIRM=yes` does the same
+To publish from a laptop instead, `make publish-local CONFIRM=yes` does the same
 steps locally (after `npm login`); the flag is required so it cannot happen by a
 mistyped target, and it is checked before anything runs. A bare `npm publish`
 from the repository root is refused by `prepublishOnly`, because it would skip
