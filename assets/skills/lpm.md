@@ -1,6 +1,6 @@
 ---
 name: lpm
-description: How to drive a light-plan board — the `lpm` CLI and the light-plan MCP server. Load this whenever a task involves a `.lpm` folder, the `lpm` command, a light-plan board, or the light-plan MCP tools (board_overview, next_tasks, create_document, …); when asked to read, populate, work or fix a board; or when a repository turns out to contain a `.lpm` directory and you need to know what it is. Start here, then load lpm-board-setup, lpm-planning, lpm-delivery or lpm-board-health for the specific job.
+description: How to drive a light-plan board — the `lpm` CLI and the light-plan MCP server. Load this whenever a task involves a `.lpm` folder, the `lpm` command, a light-plan board, or the light-plan MCP tools (board_overview, next_tasks, create_document, …); when asked to read, populate, work or fix a board; or when a repository turns out to contain a `.lpm` directory and you need to know what it is. Start here, then load lpm-board-setup, lpm-planning, lpm-delivery or lpm-board-health for the specific job, and lpm-writing before you write anything on the board.
 roles:
   - developer
   - pm
@@ -14,7 +14,7 @@ body). It is versioned with git, has no server and no database, and is driven
 three ways that all produce the same board: the `lpm` CLI, an MCP server for
 agents, and a web app (`lpm ui`).
 
-This skill is the orientation and the map. Five companions cover the jobs:
+This skill is the orientation and the map. Six companions cover the jobs:
 
 | Skill | Load it when |
 | --- | --- |
@@ -23,6 +23,7 @@ This skill is the orientation and the map. Five companions cover the jobs:
 | `lpm-templates` | the reusable pieces of plan in `.lpm/registry/` — **check these before creating anything** |
 | `lpm-delivery` | picking work up, recording progress, closing issues |
 | `lpm-board-health` | `lpm check`, repairing a board, "why is nobody offered work", publishing |
+| `lpm-writing` | how to write titles, bodies and comments: plain technical English for engineers. **Load it before you write anything on a board** |
 
 ## The first rule: the board defines its own vocabulary
 

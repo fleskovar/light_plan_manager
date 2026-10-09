@@ -252,6 +252,9 @@ it.
 
 ## Writing comments a reviewer can act on
 
+Load `lpm-writing` before you write a comment. It has the style rules and a
+template for each kind of comment: claim, progress, flag, handover, clear.
+
 You are writing for two people who are not in your conversation: the **senior
 reviewer** judging the change without re-deriving it, and the **developer in four
 months** who has hit a bug here. Neither can see your terminal.
@@ -264,10 +267,10 @@ verified**, **what is still open**.
   lookup in `src/core/cache.ts:88`".
 - **Cite `file.ts:line`.**
 - **Paste the evidence** — the command and its real output.
-- **Record the roads not taken.** The rejected alternative and the reason is the
-  most valuable thing you can leave; it stops the next person re-litigating a
-  decision you already made.
-- **Name your uncertainty.** "Not sure this handles the empty case" is a gift.
+- **Record the rejected options.** Write each option you rejected and the
+  reason. Then the next person does not reopen a decision you already made.
+- **Name your uncertainty.** "Not sure this handles the empty case" tells the
+  reviewer where to look first.
 - **No "as discussed" or "see above".** The issue is the whole record.
 - **No status theatre.** "Working on it", "almost done" — delete. Nothing factual,
   no comment.

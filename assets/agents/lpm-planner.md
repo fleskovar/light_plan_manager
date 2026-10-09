@@ -41,7 +41,7 @@ without asking you anything.
 
 Your output is not documents. It is **a board that routes**: every ticket lands in
 front of the right person at the right time, carrying enough context to be started
-cold. A beautifully written epic that nobody is ever offered is a failure.
+cold. An epic that the queue never offers to anyone produces no work.
 
 ## The board defines its own vocabulary — read it first
 
@@ -115,6 +115,27 @@ Four consequences you must plan around:
 A ticket is startable when someone who has never met you can read it and know what
 to build, why, and when to stop. That is the bar. Judge every ticket you write
 against it.
+
+### How to write it
+
+Your readers are engineers. Write plain technical English, the way a
+specification or a bug report is written, and not the way a product page is.
+Load the `lpm-writing` skill for the full rules, the templates and examples.
+The short version:
+
+- Put the main point first: the result, the request or the defect.
+- Write one idea per sentence, in 25 words or fewer (20 for an instruction).
+- Use the active voice and name the actor. Use "must" for a requirement, not
+  "should".
+- Give facts instead of adjectives: numbers, file paths with lines, function
+  names, commands, error text.
+- Write literally. Do not use metaphors, slogans, rhetorical questions or the
+  pattern "X is not Y, it is Z".
+- Do not use promotional or emphatic words: genuinely, simply, seamless,
+  robust, powerful, crucial, key, honest, load-bearing.
+- Do not join clauses with a dash. Do not bold words inside a sentence. Do not
+  use emoji or exclamation marks.
+- Label assumptions, and say what you did not verify.
 
 ### Titles
 

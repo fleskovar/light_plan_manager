@@ -292,6 +292,26 @@ for two readers who are not in this conversation:
 Neither of them can see your terminal. Write what the diff cannot say: **why**,
 **what you rejected**, **what you verified**, **what is still open**.
 
+### Style
+
+Your readers are engineers. Write plain technical English, the way a bug
+report or a change description is written. Load the `lpm-writing` skill for the
+full rules, the comment templates and examples. The short version:
+
+- Put the main point first: the result, the request or the defect.
+- Write one idea per sentence, in 25 words or fewer (20 for an instruction).
+- Use the active voice and name the actor. Use "must" for a requirement, not
+  "should".
+- Give facts instead of adjectives: numbers, file paths with lines, function
+  names, commands, error text.
+- Write literally. Do not use metaphors, slogans, rhetorical questions or the
+  pattern "X is not Y, it is Z".
+- Do not use promotional or emphatic words: genuinely, simply, seamless,
+  robust, powerful, crucial, key, honest, load-bearing.
+- Do not join clauses with a dash. Do not bold words inside a sentence. Do not
+  use emoji or exclamation marks.
+- Label assumptions, and say what you did not verify.
+
 ### Rules
 
 - **Specifics, not adjectives.** "Fixed the caching bug" is worthless. "`resolve()`
@@ -299,11 +319,11 @@ Neither of them can see your terminal. Write what the diff cannot say: **why**,
   before the lookup in `src/core/cache.ts:88`" is a review.
 - **Cite `file.ts:line`.** A reviewer should be able to click straight there.
 - **Paste the evidence.** The command and the real result, not a claim about it.
-- **Record the roads not taken.** The alternative you rejected and why is the
-  single most valuable thing you can leave; it is what stops the next person
-  re-litigating a decision you already made.
-- **Name the uncertainty.** "I am not sure this handles the empty case; worth a
-  look" is a gift to a reviewer. Confident prose over a shaky change is a trap.
+- **Record the rejected options.** Write each option you rejected and the
+  reason. Then the next person does not reopen a decision you already made.
+- **Name the uncertainty.** Write "I am not sure this handles the empty case."
+  It tells the reviewer where to look first. Do not describe an untested change
+  as if it were tested.
 - **Never say "as discussed" or "see above".** There is no above. The issue is the
   whole record.
 - **No status theatre.** "Working on it", "almost done", "great progress" — delete.

@@ -7,7 +7,8 @@ roles:
 
 # Planning work on a light-plan board
 
-Load the `lpm` skill first for the tool map and the routing mechanic. The
+Load the `lpm` skill first for the tool map and the routing mechanic, and
+`lpm-writing` for how to write the text. The
 `lpm-planner` agent in `.claude/agents/` applies this as a persona; this skill is
 the workflow reference.
 
@@ -69,6 +70,10 @@ lpm set LP-42 --body-file ./story.md
 Build **top-down**: the container first, then the leaves that carry the work.
 
 ## What makes a ticket startable
+
+Load `lpm-writing` before you write a title or a body. It defines the style:
+short sentences, facts instead of adjectives, no figurative or promotional
+language, and templates for each type.
 
 A ticket is ready when someone who has never met you can read it and know what to
 build, why, and when to stop.
