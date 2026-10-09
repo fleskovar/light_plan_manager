@@ -5,6 +5,7 @@ import type { ViewDocument } from '../../shared/index.js';
 import {
   DEFAULT_DRAWER_HEIGHT,
   DEFAULT_PANEL_WIDTH,
+  DEFAULT_QUEUE_WIDTH,
   VIEW_VERSION,
   emptyView,
 } from '../../shared/index.js';
@@ -99,7 +100,12 @@ const viewSchema = z.object({
   drawer: z
     .object({
       open: z.boolean().default(true),
-      tab: z.enum(['table', 'gantt', 'team', 'periods', 'queue', 'sync']).default('table'),
+      // `queue` was a tab before the queue became a panel of its own; a view
+      // saved on it opens on the table, and the panel shows the queue.
+      tab: z
+        .enum(['table', 'gantt', 'team', 'periods', 'queue', 'sync'])
+        .transform((tab) => (tab === 'queue' ? 'table' : tab))
+        .default('table'),
       height: z.number().min(0).default(DEFAULT_DRAWER_HEIGHT),
     })
     .default({ open: true, tab: 'table', height: DEFAULT_DRAWER_HEIGHT }),
@@ -110,6 +116,12 @@ const viewSchema = z.object({
       width: z.number().min(0).default(DEFAULT_PANEL_WIDTH),
     })
     .default({ open: false, pinned: false, width: DEFAULT_PANEL_WIDTH }),
+  queue: z
+    .object({
+      open: z.boolean().default(true),
+      width: z.number().min(0).default(DEFAULT_QUEUE_WIDTH),
+    })
+    .default({ open: true, width: DEFAULT_QUEUE_WIDTH }),
   // Levels the canvas draws as a badge on their children rather than as nodes.
   display: z.record(z.string(), z.enum(['node', 'badge'])).default({}),
   // Planning with the calendar, or straight off the queue.

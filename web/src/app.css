@@ -29,53 +29,67 @@
   --radius-md: 7px;
   --radius-lg: 12px;
 
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.08);
-  --shadow-md: 0 4px 14px rgb(0 0 0 / 0.12);
-  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.18);
-
   --duration-fast: 120ms;
 
-  /* Surfaces, light. */
-  --surface-0: #f6f7f9;
-  --surface-1: #ffffff;
-  --surface-2: #eef0f4;
-  --surface-3: #e2e6ec;
-  --border: #a8aeb8;
-  --border-strong: #8b929c;
-  --ink: #16181d;
-  --ink-muted: #5c636e;
-  --ink-faint: #6b7280;
+  /*
+   * Every colour is a `light-dark()` pair: the first for a light page, the
+   * second for a dark one. Which one applies is `color-scheme`, which follows
+   * the system unless the reader chose otherwise in Options ▸ Appearance —
+   * that writes `data-theme` on the root (see `lib/app/preferences.svelte.ts`).
+   * One declaration per token is the point: a palette written out twice, once
+   * per theme, is two palettes free to disagree.
+   */
 
-  --accent: #2d5fd8;
-  --accent-ink: #ffffff;
-  --accent-soft: #e3ebff;
+  --shadow-sm: 0 1px 2px light-dark(rgb(0 0 0 / 0.08), rgb(0 0 0 / 0.4));
+  --shadow-md: 0 4px 14px light-dark(rgb(0 0 0 / 0.12), rgb(0 0 0 / 0.45));
+  --shadow-lg: 0 12px 32px light-dark(rgb(0 0 0 / 0.18), rgb(0 0 0 / 0.55));
+
+  /* Surfaces. */
+  --surface-0: light-dark(#f6f7f9, #14161a);
+  --surface-1: light-dark(#ffffff, #1b1e24);
+  --surface-2: light-dark(#eef0f4, #22262e);
+  --surface-3: light-dark(#e2e6ec, #2b3039);
+  --border: light-dark(#a8aeb8, #555b66);
+  --border-strong: light-dark(#8b929c, #6b727d);
+  --ink: light-dark(#16181d, #e7e9ee);
+  --ink-muted: light-dark(#5c636e, #a0a7b4);
+  --ink-faint: light-dark(#6b7280, #999faa);
+
+  /*
+   * The accent marks selection and focus. It is one of the reader's choices
+   * (`data-accent`, below), and blue is the default.
+   */
+  --accent: light-dark(#2d5fd8, #6b94f7);
+  --accent-ink: light-dark(#ffffff, #0b0d11);
+  --accent-soft: light-dark(#e3ebff, #22304f);
 
   /* Semantic status tones: the same five everywhere. */
-  --tone-todo: #707580;
-  --tone-todo-soft: #eceef1;
-  --tone-active: #2f74d0;
-  --tone-active-soft: #dde9fa;
-  --tone-blocked: #cf3d3d;
-  --tone-blocked-soft: #fadddd;
-  --tone-review: #8b3cc1;
-  --tone-review-soft: #f0e2fb;
-  --tone-done: #2f9e5f;
-  --tone-done-soft: #ddf3e6;
+  --tone-todo: light-dark(#707580, #999faa);
+  --tone-todo-soft: light-dark(#eceef1, #272b33);
+  --tone-active: light-dark(#2f74d0, #4a90e2);
+  --tone-active-soft: light-dark(#dde9fa, #1c2c42);
+  --tone-blocked: light-dark(#cf3d3d, #e05c5c);
+  --tone-blocked-soft: light-dark(#fadddd, #3a2224);
+  --tone-review: light-dark(#8b3cc1, #c08fee);
+  --tone-review-soft: light-dark(#f0e2fb, #32243f);
+  --tone-done: light-dark(#2f9e5f, #46b97a);
+  --tone-done-soft: light-dark(#ddf3e6, #1d3327);
 
-  --danger: #cf3d3d;
+  --danger: light-dark(#cf3d3d, #e05c5c);
   /* Text laid *on* --danger. Its own token because the red moves in dark mode
      and the contrast has to move with it. */
-  --danger-ink: #ffffff;
-  --warn: #8b5a12;
+  --danger-ink: light-dark(#ffffff, #14161a);
+  --warn: light-dark(#8b5a12, #f0a030);
 
   /*
    * The colour of "what you just clicked touches this". Deliberately outside
    * the five status tones and outside the accent: an edge lit up because of the
    * selection must not be mistakable for an edge that is red because the work
-   * is blocked, or for the accent that means "selected".
+   * is blocked, or for the accent that means "selected". Which is also why no
+   * accent the reader can choose is orange.
    */
-  --highlight: #f2801e;
-  --highlight-soft: #fdeada;
+  --highlight: light-dark(#f2801e, #ff9d3d);
+  --highlight-soft: light-dark(#fdeada, #3c2a16);
 
   /*
    * Sync state — a second axis beside status, so it owns its own hues. A node's
@@ -83,59 +97,48 @@
    * deliberately kept off the five status families (grey, blue, red, purple,
    * green) and off danger/warn/highlight/accent.
    */
-  --sync-ahead: #0d9488;
-  --sync-behind: #d97706;
-  --sync-conflicted: #db2777;
-  --sync-unlinked: #64748b;
+  --sync-ahead: light-dark(#0d9488, #2dd4bf);
+  --sync-behind: light-dark(#d97706, #fbbf24);
+  --sync-conflicted: light-dark(#db2777, #f472b6);
+  --sync-unlinked: light-dark(#64748b, #94a3b8);
 
   /* How much a resizable pane grows the text inside it; see `ui/scale.ts`. */
   --ui-scale: 1;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --surface-0: #14161a;
-    --surface-1: #1b1e24;
-    --surface-2: #22262e;
-    --surface-3: #2b3039;
-    --border: #555b66;
-    --border-strong: #6b727d;
-    --ink: #e7e9ee;
-    --ink-muted: #a0a7b4;
-    --ink-faint: #999faa;
+/* Options ▸ Appearance ▸ Theme. Absent means "follow the system". */
+:root[data-theme='light'] {
+  color-scheme: light;
+}
 
-    --accent: #6b94f7;
-    --accent-ink: #0b0d11;
-    --accent-soft: #22304f;
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
 
-    --tone-todo: #999faa;
-    --tone-todo-soft: #272b33;
-    --tone-active: #4a90e2;
-    --tone-active-soft: #1c2c42;
-    --tone-blocked: #e05c5c;
-    --tone-blocked-soft: #3a2224;
-    --tone-review: #c08fee;
-    --tone-review-soft: #32243f;
-    --tone-done: #46b97a;
-    --tone-done-soft: #1d3327;
+/* Options ▸ Appearance ▸ Accent. Blue is the default declared above. */
+:root[data-accent='indigo'] {
+  --accent: light-dark(#5b45d6, #a294f9);
+  --accent-soft: light-dark(#ebe7ff, #2c2650);
+}
 
-    --danger: #e05c5c;
-    --danger-ink: #14161a;
+:root[data-accent='teal'] {
+  --accent: light-dark(#0b7a80, #3cc6c9);
+  --accent-soft: light-dark(#d9f2f2, #153537);
+}
 
-    --highlight: #ff9d3d;
-    --highlight-soft: #3c2a16;
+:root[data-accent='graphite'] {
+  --accent: light-dark(#3f4652, #c3c9d3);
+  --accent-soft: light-dark(#e6e8ec, #2b3039);
+}
 
-    --sync-ahead: #2dd4bf;
-    --sync-behind: #fbbf24;
-    --sync-conflicted: #f472b6;
-    --sync-unlinked: #94a3b8;
+/* Options ▸ Appearance ▸ Text size. Every size token is in rem, so this is all
+   it takes for the whole app — panes that scale their own contents included. */
+:root[data-text-size='small'] {
+  font-size: 87.5%;
+}
 
-    --warn: #f0a030;
-
-    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-    --shadow-md: 0 4px 14px rgb(0 0 0 / 0.45);
-    --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.55);
-  }
+:root[data-text-size='large'] {
+  font-size: 112.5%;
 }
 
 * {

@@ -4,7 +4,6 @@
   import { useWorkspace } from '$lib/workspace/workspace.svelte.js';
   import GanttView from './gantt/GanttView.svelte';
   import PeriodsView from './periods/PeriodsView.svelte';
-  import QueueView from './queue/QueueView.svelte';
   import RemoteView from './remote/RemoteView.svelte';
   import TableView from './table/TableView.svelte';
   import TeamView from './team/TeamView.svelte';
@@ -17,8 +16,9 @@
    * Gantt and Periods are the two halves of the timeline: one reads the plan on
    * a date scale, the other fills the increments and sprints that produce it.
    * A board that does not plan with dates — Options ▸ Planning, or simply a
-   * config with no period types — swaps both for the Queue, which asks the
-   * dependency graph the question the calendar was answering.
+   * config with no period types — drops both, and the queue down the left edge
+   * (`features/queue`) asks the dependency graph the question the calendar was
+   * answering.
    */
   const workspace = useWorkspace();
 
@@ -41,7 +41,7 @@
                 { id: 'periods' as const, label: 'Periods' },
                 { id: 'gantt' as const, label: 'Gantt' },
               ]
-            : [{ id: 'queue' as const, label: 'Queue' }]),
+            : []),
           { id: 'team' as const, label: 'Team', disabled: !workspace.config.hasResources },
           { id: 'sync' as const, label: 'Sync' },
         ],
@@ -86,8 +86,6 @@
       <PeriodsView />
     {:else if tab === 'gantt'}
       <GanttView />
-    {:else if tab === 'queue'}
-      <QueueView />
     {:else if tab === 'sync'}
       <RemoteView />
     {:else}

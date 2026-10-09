@@ -8,6 +8,7 @@
     useSvelteFlow,
   } from '@xyflow/svelte';
   import '@xyflow/svelte/dist/style.css';
+  import { usePreferences } from '$lib/app/preferences.svelte.js';
   import { useShell } from '$lib/app/shell.svelte.js';
   import { statusTone } from '$lib/board/selectors.js';
   import Button from '$lib/ui/Button.svelte';
@@ -46,6 +47,9 @@
 
   const workspace = useWorkspace();
   const shell = useShell();
+  // SvelteFlow draws its own controls and minimap, and has to be told the
+  // theme the reader chose rather than guess it from the system.
+  const preferences = usePreferences();
   const remote = useRemoteState();
   const flow = useSvelteFlow();
   const graph = new CanvasGraph(provideGraphSource(workspace));
@@ -163,6 +167,7 @@
     {nodeTypes}
     {edgeTypes}
     fitView
+    colorMode={preferences?.resolvedTheme ?? 'system'}
     onlyRenderVisibleElements
     minZoom={0.1}
     maxZoom={2}

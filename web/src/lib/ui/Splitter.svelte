@@ -3,6 +3,10 @@
    * A draggable divider. It reports the size it would like the pane below (or
    * beside) it to be and lets the parent own that number, so the size can be
    * persisted in the view without this component knowing what a view is.
+   *
+   * `pane` says which side of the divider the sized pane is on: `after` (below,
+   * or to the right — the drawer and the details panel) or `before` (to the
+   * left — the queue), which is what decides whether dragging right grows it.
    */
   interface Props {
     orientation?: 'horizontal' | 'vertical';
@@ -11,6 +15,7 @@
     max?: number;
     onresize: (size: number) => void;
     label?: string;
+    pane?: 'before' | 'after';
   }
 
   let {
@@ -20,11 +25,13 @@
     max = Infinity,
     onresize,
     label = 'Resize',
+    pane = 'after',
   }: Props = $props();
 
   let dragging = $state(false);
 
   const clamp = (value: number): number => Math.min(Math.max(value, min), max);
+  const sign = $derived(pane === 'after' ? 1 : -1);
 
   function start(event: PointerEvent): void {
     dragging = true;
@@ -36,7 +43,7 @@
     const move = (moved: PointerEvent): void => {
       const delta =
         orientation === 'horizontal' ? origin - moved.clientY : origin - moved.clientX;
-      onresize(clamp(initial + delta));
+      onresize(clamp(initial + sign * delta));
     };
     const stop = (): void => {
       dragging = false;
@@ -50,10 +57,10 @@
 
   function onkeydown(event: KeyboardEvent): void {
     const step = event.shiftKey ? 48 : 12;
-    const grow = orientation === 'horizontal' ? 'ArrowUp' : 'ArrowLeft';
-    const shrink = orientation === 'horizontal' ? 'ArrowDown' : 'ArrowRight';
-    if (event.key === grow) onresize(clamp(size + step));
-    else if (event.key === shrink) onresize(clamp(size - step));
+    const toward = orientation === 'horizontal' ? 'ArrowUp' : 'ArrowLeft';
+    const away = orientation === 'horizontal' ? 'ArrowDown' : 'ArrowRight';
+    if (event.key === toward) onresize(clamp(size + sign * step));
+    else if (event.key === away) onresize(clamp(size - sign * step));
     else return;
     event.preventDefault();
   }

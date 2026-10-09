@@ -2670,7 +2670,8 @@ explicit path wins: `lpm mcp --root`, `lpm mcp setup --root` and `lpm agent
 
 `lpm ui` opens the board in a browser: a left-to-right dependency graph, a
 resizable drawer with a table, the increments and sprints, a Gantt chart and the
-team roster, and a side panel for editing whatever is selected.
+team roster, a side panel for editing whatever is selected, and — for a view
+that works off the queue — the queue down the left edge.
 
 ```bash
 lpm ui                 # serve the board and open a browser
@@ -2868,6 +2869,11 @@ teammate who pulls your branch sees the same canvas you were looking at.
   chain six people are already on does not come back as "nothing to schedule".
   Both are `lpm upstream` [described above](#what-has-to-happen-first-upstream-work),
   reading the same rule.
+- **Options ▸ Appearance** — light or dark (or whatever the system says), the
+  accent colour that marks the selection, and the text size. The Options button
+  sits at the right end of the top bar, and on the welcome screen too. These are
+  yours rather than the view's: they are kept in this browser, apply to every
+  board and view you open in it, and never travel with a view to a teammate.
 - **Options ▸ DAG ▸ Hierarchy display** — how deep the canvas draws. A board four
   levels deep drawn as boxes inside boxes is a picture of the hierarchy, not of
   the work: the dependencies run between the stories at the bottom, and every
@@ -2882,7 +2888,7 @@ teammate who pulls your branch sees the same canvas you were looking at.
   *Sprints and increments* is the default and gives the drawer its Periods and
   Gantt tabs. *Queue* is for the way plenty of teams actually work — nobody
   plans a fortnight, work is taken off the top as the graph unblocks it — and
-  swaps both tabs for the Queue. Nothing about the board changes either way:
+  trades both tabs for the queue panel on the left. Nothing about the board changes either way:
   the same documents, the same dependencies, a different question in front of
   you. A board whose config declares no period types is always in the second
   mode, because there is nothing to plan with.
@@ -2973,15 +2979,18 @@ teammate who pulls your branch sees the same canvas you were looking at.
   nested in it, and *Clear all* deletes the whole timeline after a confirmation.
   Deleting periods never deletes work: the issues in them simply become
   unscheduled.
-- **Queue** — the same board for a team that does not plan in sprints. *Ready*
-  is every unstarted work unit with no unfinished blocker, in the order `lpm task
-  next` would offer them: priority first, then how much finishing one would
-  release. *In progress* is what is being worked on, *Blocked* says what each
-  waiting issue is waiting on rather than hiding it, and *Just finished* is the
-  tail. Drag a card between lanes, or press *Start* and *Finish* — either way it
-  is one status change. This is what the drawer offers instead of Periods and
-  Gantt when a view is set to work off the queue (Options ▸ Planning), and the
-  only thing it offers on a board whose config declares no periods at all.
+- **Queue** — the same board for a team that does not plan in sprints, as a
+  column down the left edge read top to bottom. *In progress* is the head of the
+  queue, what is being worked on. *Up next* is every unstarted work unit with no
+  unfinished blocker, numbered in the order `lpm task next` would offer them:
+  priority first, then how much finishing one would release. The first of them
+  is marked *Next*. *Waiting* says what each blocked issue is waiting on rather
+  than hiding it, and *Recently finished* is the tail, folded until you open it.
+  Drag a card between sections, or press *Start* and *Finish* — either way it is
+  one status change. The panel is there whenever a view is set to work off the
+  queue (Options ▸ Planning), which is always on a board whose config declares
+  no periods. ◂ folds it to a strip, its edge drags wider, and both are saved
+  with the view.
 - **Gantt** — the plan on a date scale, read at whichever level you want:
   *by period*, with the issues scheduled in each one nested underneath it, or
   *by hierarchy*, where every parent gets a bar covering the work beneath it

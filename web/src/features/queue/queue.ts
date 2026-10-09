@@ -15,7 +15,7 @@ import type { WorkingNodes } from '$lib/board/working.js';
 import type { NodeIndex } from '$lib/board/index.js';
 
 /**
- * Planning without a calendar.
+ * Planning without a calendar: the model behind the queue panel.
  *
  * Not every team runs sprints. Plenty of boards are a dependency graph and a
  * queue: you take the next thing nothing is blocking, you finish it, something
@@ -34,7 +34,7 @@ import type { NodeIndex } from '$lib/board/index.js';
  * Work units only, exactly like `nextTasks` in the engine: a feature is not a
  * thing you pick up, it is the name of the stories you do, and what is inside an
  * `atomic` story is that story's checklist rather than its own card. Nothing
- * here writes; the view turns a drop into one status change.
+ * here writes; the panel turns a drop into one status change.
  */
 export type Lane = 'ready' | 'active' | 'blocked';
 
@@ -159,6 +159,78 @@ export function buildQueue(
       .slice(0, options.doneLimit ?? DONE_LIMIT),
     total: units.length,
   };
+}
+
+/**
+ * The queue as it is read: one column, top to bottom.
+ *
+ * What is being worked on comes first, because it is the head of the queue —
+ * the work that has already been taken off it. Then what comes next, in the
+ * order it will be offered, which is the part of the panel people read for.
+ * Then what is waiting, saying what it waits on, and last the tail of finished
+ * work, folded because it is history rather than queue.
+ */
+export type SectionId = 'now' | 'next' | 'waiting' | 'done';
+
+export interface QueueSection {
+  id: SectionId;
+  label: string;
+  hint: string;
+  cards: QueueCard[];
+  /** The lane a card dropped here moves into, or null where a drop means nothing. */
+  dropsInto: 'ready' | 'active' | 'done' | null;
+  /** Whether the position in the queue is worth a number: only the line itself. */
+  numbered: boolean;
+  /** Folded until somebody opens it. */
+  folded: boolean;
+  empty: string;
+}
+
+export function queueSections(queue: QueueBoard): QueueSection[] {
+  return [
+    {
+      id: 'now',
+      label: 'In progress',
+      hint: 'Being worked on',
+      cards: queue.active,
+      dropsInto: 'active',
+      numbered: false,
+      folded: false,
+      empty: 'Nothing started. Drag an issue here to start it.',
+    },
+    {
+      id: 'next',
+      label: 'Up next',
+      hint: 'Ready to start, in the order the queue offers it',
+      cards: queue.ready,
+      dropsInto: 'ready',
+      numbered: true,
+      folded: false,
+      empty: queue.total ? 'Nothing ready.' : 'No issues yet.',
+    },
+    {
+      id: 'waiting',
+      label: 'Waiting',
+      hint: 'Blocked by unfinished work',
+      cards: queue.blocked,
+      // A blocked issue is blocked by the graph, not by its status: no drop
+      // can put something here, only finishing what it waits on takes it out.
+      dropsInto: null,
+      numbered: false,
+      folded: false,
+      empty: 'Nothing blocked.',
+    },
+    {
+      id: 'done',
+      label: 'Recently finished',
+      hint: 'The tail of the queue, newest first',
+      cards: queue.done,
+      dropsInto: 'done',
+      numbered: false,
+      folded: true,
+      empty: 'Nothing finished yet.',
+    },
+  ];
 }
 
 /** The titles of the issues above this one, outermost first. */

@@ -2,7 +2,10 @@
   import type { BoardSnapshot, ViewMode, ViewSummary } from '$shared';
   import { ApiError, api } from '$lib/api/client.js';
   import { goToView } from '$lib/app/router.svelte.js';
+  import { appearanceEntries } from '$lib/app/options.js';
+  import { usePreferences } from '$lib/app/preferences.svelte.js';
   import Button from '$lib/ui/Button.svelte';
+  import MenuButton from '$lib/ui/menu/MenuButton.svelte';
   import Digest from '$features/welcome/Digest.svelte';
   import ViewCard from '$features/welcome/ViewCard.svelte';
 
@@ -17,6 +20,10 @@
   let newName = $state('');
   let newMode = $state<ViewMode>('board');
   let creating = $state(false);
+
+  // No view is open here, so Options is only about how the app looks.
+  const preferences = usePreferences();
+  const options = $derived(preferences ? appearanceEntries(preferences) : []);
 
   async function load(): Promise<void> {
     loading = true;
@@ -63,6 +70,12 @@
 </script>
 
 <main>
+  {#if options.length}
+    <div class="options">
+      <MenuButton entries={options} title="Appearance">Options ▾</MenuButton>
+    </div>
+  {/if}
+
   {#if error}
     <div class="error">
       <strong>{error.message}</strong>
@@ -202,6 +215,12 @@
    * does not fall back to auto-placement — the tiles would all land in the same
    * cell, stacked on top of each other.
    */
+  .options {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: calc(-1 * var(--space-2));
+  }
+
   .mosaic {
     display: grid;
     gap: var(--space-4);

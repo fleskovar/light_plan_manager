@@ -9,6 +9,7 @@ import {
   listComments,
 } from '../src/core/index.js';
 import { startBoardServer } from '../src/server/index.js';
+import { parseView } from '../src/server/views/schema.js';
 import { applyChanges } from '../src/sync/apply.js';
 import type {
   BoardSnapshot,
@@ -727,5 +728,23 @@ describe('http api', () => {
       body: JSON.stringify({ reason: 'blocked', comment: 'x' }),
     });
     expect(missing.status).toBe(404);
+  });
+});
+
+describe('view files', () => {
+  it('opens a view saved on the queue tab, now that the queue is a panel of its own', () => {
+    const view = parseView({ id: 'old', name: 'Old', drawer: { open: true, tab: 'queue', height: 300 } }, 'old');
+    expect(view.drawer.tab).toBe('table');
+    expect(view.drawer.height).toBe(300);
+  });
+
+  it('gives a view written before the queue panel existed one, open', () => {
+    const view = parseView({ id: 'old', name: 'Old' }, 'old');
+    expect(view.queue).toEqual({ open: true, width: 300 });
+  });
+
+  it('keeps the queue panel as somebody left it', () => {
+    const view = parseView({ id: 'v', name: 'V', queue: { open: false, width: 410 } }, 'v');
+    expect(view.queue).toEqual({ open: false, width: 410 });
   });
 });

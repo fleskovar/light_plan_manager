@@ -16,6 +16,7 @@
   import { Workspace, provideWorkspace } from '$lib/workspace/workspace.svelte.js';
   import CommandBar from '$features/commandbar/CommandBar.svelte';
   import Drawer from '$features/drawer/Drawer.svelte';
+  import QueuePanel from '$features/queue/QueuePanel.svelte';
   import { RemoteState, provideRemoteState } from '$features/drawer/remote/remote.svelte.js';
   import { ConnectionsState, provideConnectionsState } from '$features/drawer/remote/connections.svelte.js';
   import { GitState, provideGitState } from '$features/drawer/remote/git.svelte.js';
@@ -114,6 +115,21 @@
   const drawerHeight = $derived(paneFit(workspace.doc.drawer.height, stackHeight, MIN_CANVAS));
 
   /**
+   * The queue down the left edge, offered while the view works off the queue.
+   * Its width is a wish bounded the same way the drawer's height is: whatever
+   * the details panel on the other side has taken, the canvas keeps
+   * `MIN_CANVAS_WIDTH` between them.
+   */
+  const MIN_CANVAS_WIDTH = 320;
+  const MIN_QUEUE = 220;
+  let middleWidth = $state(0);
+  const queueOffered = $derived(workspace.mode === 'board' && workspace.planning === 'queue');
+  const panelShown = $derived(workspace.doc.panel.open || workspace.doc.panel.pinned);
+  const queueAvailable = $derived(middleWidth - (panelShown ? workspace.doc.panel.width : 0));
+  const queueRoom = $derived(Math.max(queueAvailable - MIN_CANVAS_WIDTH, MIN_QUEUE));
+  const queueWidth = $derived(paneFit(workspace.doc.queue.width, queueAvailable, MIN_CANVAS_WIDTH));
+
+  /**
    * What the reveal button says it will show. Taken from the tab that is
    * actually open rather than a written-out list, which went stale the moment
    * the Sync tab was added and said "Table · Periods · Gantt · Team" over a
@@ -123,7 +139,6 @@
     table: 'Table',
     periods: 'Periods',
     gantt: 'Gantt',
-    queue: 'Queue',
     team: 'Team',
     sync: 'Sync',
   };
@@ -243,7 +258,37 @@
   <div class="shell">
     <CommandBar />
 
-    <div class="middle">
+    <div class="middle" bind:clientWidth={middleWidth}>
+      {#if queueOffered}
+        {#if workspace.doc.queue.open}
+          <QueuePanel width={queueWidth} />
+          <Splitter
+            orientation="vertical"
+            pane="before"
+            size={queueWidth}
+            min={MIN_QUEUE}
+            max={queueRoom}
+            label="Resize the queue"
+            onresize={(width) => {
+              workspace.doc.queue.width = width;
+              workspace.scheduleSave();
+            }}
+          />
+        {:else}
+          <button
+            class="reveal side start"
+            type="button"
+            title="Show the queue"
+            onclick={() => {
+              workspace.doc.queue.open = true;
+              workspace.scheduleSave();
+            }}
+          >
+            Queue
+          </button>
+        {/if}
+      {/if}
+
       <div class="stack" bind:clientHeight={stackHeight}>
         <SvelteFlowProvider>
           <Canvas bind:arrange />
@@ -286,7 +331,7 @@
         {/if}
       </div>
 
-      {#if workspace.doc.panel.open || workspace.doc.panel.pinned}
+      {#if panelShown}
         <Splitter
           orientation="vertical"
           size={workspace.doc.panel.width}
@@ -411,6 +456,11 @@
     border-left: 1px solid var(--border);
     writing-mode: vertical-rl;
     padding: var(--space-3) var(--space-1);
+  }
+
+  .reveal.side.start {
+    border-left: none;
+    border-right: 1px solid var(--border);
   }
 
   .loading,

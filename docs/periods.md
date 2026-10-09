@@ -307,7 +307,7 @@ take `dryRun`.
 | Rule | Engine | Browser |
 | --- | --- | --- |
 | Stance, running, overdue | `src/shared/period-stance.ts` (single copy; both adapt) | same function |
-| Ranking by bucket | `src/core/board/tasks.ts` (`scheduleRank`) | `web/src/features/drawer/queue/` |
+| Ranking by bucket | `src/core/board/tasks.ts` (`scheduleRank`) | `web/src/features/queue/` |
 | Start now | `src/shared/plans.ts` (`planStartNow`) | the same function |
 | Complete / carry over | `src/shared/plans.ts` | the same functions |
 

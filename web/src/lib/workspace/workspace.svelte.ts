@@ -161,11 +161,12 @@ export class Workspace {
     const view = this.doc;
     view.planning = planning;
     // The drawer remembers a tab that the other mode does not offer; sending it
-    // somewhere that exists is friendlier than opening on an empty pane.
-    if (planning === 'queue' && (view.drawer.tab === 'periods' || view.drawer.tab === 'gantt')) {
-      view.drawer.tab = 'queue';
+    // somewhere that exists is friendlier than opening on an empty pane. And
+    // choosing the queue is asking to see it, so its panel opens.
+    if (planning === 'queue') {
+      if (view.drawer.tab === 'periods' || view.drawer.tab === 'gantt') view.drawer.tab = 'table';
+      view.queue.open = true;
     }
-    if (planning === 'periods' && view.drawer.tab === 'queue') view.drawer.tab = 'periods';
     this.scheduleSave();
   }
 

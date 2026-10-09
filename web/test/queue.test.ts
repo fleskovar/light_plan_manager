@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { IssueDto } from '$shared';
-import { buildQueue, laneStatus, wouldRelease } from '$features/drawer/queue/queue.js';
+import { emptyView, type BoardSnapshot, type IssueDto } from '$shared';
+import { Workspace } from '$lib/workspace/workspace.svelte.js';
+import { buildQueue, laneStatus, queueSections, wouldRelease } from '$features/queue/queue.js';
 import { atomicConfig, board, config, issue } from './fixtures.js';
 
 /**
@@ -230,5 +231,76 @@ describe('a dependency on a spike gates the work that waits for it', () => {
     const queue = buildQueue(nodes, config);
     expect(ids(queue.ready)).toEqual(['R']);
     expect(ids(queue.blocked)).toEqual(['B1']);
+  });
+});
+
+describe('queueSections', () => {
+  it('reads top to bottom: what is moving, what is next, what waits, what finished', () => {
+    const sections = queueSections(buildQueue(sample(), config));
+    expect(sections.map((section) => [section.id, ids(section.cards)])).toEqual([
+      ['now', ['S2']],
+      ['next', ['S5']],
+      ['waiting', ['S3', 'S4']],
+      ['done', ['S1']],
+    ]);
+  });
+
+  it('numbers only the line itself, and folds only the finished tail', () => {
+    const sections = queueSections(buildQueue(sample(), config));
+    expect(sections.filter((section) => section.numbered).map((section) => section.id)).toEqual(['next']);
+    expect(sections.filter((section) => section.folded).map((section) => section.id)).toEqual(['done']);
+  });
+
+  it('takes no drop where only the graph decides', () => {
+    const sections = queueSections(buildQueue(sample(), config));
+    expect(Object.fromEntries(sections.map((section) => [section.id, section.dropsInto]))).toEqual({
+      now: 'active',
+      next: 'ready',
+      waiting: null,
+      done: 'done',
+    });
+  });
+
+  it('tells an empty board from a queue with nothing ready', () => {
+    const empty = queueSections(buildQueue(board(), config));
+    expect(empty.find((section) => section.id === 'next')?.empty).toBe('No issues yet.');
+    const stuck = queueSections(
+      buildQueue(board(issue('A', 'user_story', null, { status: 'in_progress' })), config),
+    );
+    expect(stuck.find((section) => section.id === 'next')?.empty).toBe('Nothing ready.');
+  });
+});
+
+describe('choosing the queue', () => {
+  function workspaceOn(tab: 'periods' | 'gantt' | 'team'): Workspace {
+    const workspace = new Workspace();
+    workspace.snapshot = {
+      config,
+      issues: [],
+      periods: [],
+      resources: [],
+      squads: [],
+      templates: [],
+      problems: [],
+      readAt: new Date().toISOString(),
+    } satisfies BoardSnapshot;
+    const view = emptyView('test', 'Test');
+    workspace.view = { ...view, drawer: { ...view.drawer, tab }, queue: { ...view.queue, open: false } };
+    return workspace;
+  }
+
+  it('opens the queue panel, because choosing it is asking to see it', () => {
+    const workspace = workspaceOn('team');
+    workspace.setPlanning('queue');
+    expect(workspace.doc.queue.open).toBe(true);
+    expect(workspace.doc.drawer.tab).toBe('team');
+    workspace.dispose();
+  });
+
+  it('moves the drawer off a calendar tab the queue does not offer', () => {
+    const workspace = workspaceOn('gantt');
+    workspace.setPlanning('queue');
+    expect(workspace.doc.drawer.tab).toBe('table');
+    workspace.dispose();
   });
 });

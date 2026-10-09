@@ -1,7 +1,11 @@
 <script lang="ts">
   import { useShell } from '$lib/app/shell.svelte.js';
   import { goHome } from '$lib/app/router.svelte.js';
+  import { appearanceEntries } from '$lib/app/options.js';
+  import { usePreferences } from '$lib/app/preferences.svelte.js';
   import Button from '$lib/ui/Button.svelte';
+  import MenuButton from '$lib/ui/menu/MenuButton.svelte';
+  import type { MenuEntry } from '$lib/ui/menu/types.js';
   import { createNode } from '$lib/workspace/mutations.js';
   import { useWorkspace } from '$lib/workspace/workspace.svelte.js';
 
@@ -16,6 +20,7 @@
    */
   const workspace = useWorkspace();
   const shell = useShell();
+  const preferences = usePreferences();
 
   let newOpen = $state(false);
 
@@ -45,40 +50,40 @@
   }
 
   /**
-   * Everything about *how this view is drawn*, as opposed to what is on it.
-   * The menu machinery is the canvas's, submenus and all, so this stays a
-   * description rather than a second dropdown implementation.
+   * The Options menu: how the app looks to whoever is reading it, then
+   * everything about *how this view is drawn*, as opposed to what is on it.
+   * The first half is this browser's and the second is saved with the view,
+   * and the headings say which is which.
    */
-  function openOptions(event: MouseEvent): void {
-    const button = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    shell.openMenuAt({ x: button.left, y: button.bottom + 4 }, [
-      {
-        label: 'DAG',
-        items: [
-          {
-            label: 'Hierarchy display…',
-            onSelect: () => shell.openHierarchy(),
-          },
-        ],
-      },
-      {
-        label: 'Planning',
-        items: [
-          {
-            label: 'Sprints and increments',
-            hint: workspace.planning === 'periods' ? '✓' : undefined,
-            disabled: !workspace.config.hasPeriods,
-            onSelect: () => workspace.setPlanning('periods'),
-          },
-          {
-            label: 'Queue',
-            hint: workspace.planning === 'queue' ? '✓' : undefined,
-            onSelect: () => workspace.setPlanning('queue'),
-          },
-        ],
-      },
-    ]);
-  }
+  const options = $derived<MenuEntry[]>([
+    ...(preferences ? [...appearanceEntries(preferences), { separator: true } as const] : []),
+    { heading: 'This view' },
+    {
+      label: 'DAG',
+      items: [
+        {
+          label: 'Hierarchy display…',
+          onSelect: () => shell.openHierarchy(),
+        },
+      ],
+    },
+    {
+      label: 'Planning',
+      items: [
+        {
+          label: 'Sprints and increments',
+          hint: workspace.planning === 'periods' ? '✓' : undefined,
+          disabled: !workspace.config.hasPeriods,
+          onSelect: () => workspace.setPlanning('periods'),
+        },
+        {
+          label: 'Queue',
+          hint: workspace.planning === 'queue' ? '✓' : undefined,
+          onSelect: () => workspace.setPlanning('queue'),
+        },
+      ],
+    },
+  ]);
 </script>
 
 <header class="bar">
@@ -88,8 +93,6 @@
     <strong>{workspace.doc.name}</strong>
     <span class="board">{workspace.config.boardName}</span>
   </div>
-
-  <Button size="sm" onclick={openOptions} title="View options">Options ▾</Button>
 
   <div class="menu">
     <Button size="sm" onclick={() => (newOpen = !newOpen)}>New ▾</Button>
@@ -115,6 +118,8 @@
   <span class="spacer"></span>
 
   <span class="status" class:dirty={workspace.dirty}>{statusLabel}</span>
+
+  <MenuButton entries={options} title="Appearance and view options">Options ▾</MenuButton>
 </header>
 
 <style>

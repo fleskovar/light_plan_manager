@@ -25,7 +25,11 @@ export interface NodeLayout {
   height?: number;
 }
 
-export type DrawerTab = 'table' | 'gantt' | 'team' | 'periods' | 'queue' | 'sync';
+/**
+ * The drawer's tabs. The queue used to be one of them and is now a panel of its
+ * own (`QueuePanelState`); a view file saved on that tab is read as `table`.
+ */
+export type DrawerTab = 'table' | 'gantt' | 'team' | 'periods' | 'sync';
 
 export interface DrawerState {
   open: boolean;
@@ -42,12 +46,24 @@ export interface PanelState {
 }
 
 /**
+ * The queue down the left edge, offered while a view works off the queue. It
+ * is a column rather than a tab because a queue is read top to bottom: what is
+ * being worked on, then what comes next, in order.
+ */
+export interface QueuePanelState {
+  open: boolean;
+  /** Width in pixels, set by dragging the splitter beside it. */
+  width: number;
+}
+
+/**
  * The sizes a new view opens its panes at. Exported because they are also the
  * baseline the app scales a pane's contents from: a drawer at this height is
  * "normal size", and everything above it grows.
  */
 export const DEFAULT_DRAWER_HEIGHT = 320;
 export const DEFAULT_PANEL_WIDTH = 352;
+export const DEFAULT_QUEUE_WIDTH = 300;
 
 /**
  * How the canvas draws one level of the hierarchy.
@@ -95,6 +111,7 @@ export interface ViewDocument {
   changes: Change[];
   drawer: DrawerState;
   panel: PanelState;
+  queue: QueuePanelState;
   /** Issue type -> how the canvas draws it. A type that is absent is a node. */
   display: Record<string, TypeDisplay>;
   /** Whether this view plans with periods or works straight from the queue. */
@@ -125,6 +142,7 @@ export function emptyView(id: string, name: string, now = new Date().toISOString
     changes: [],
     drawer: { open: true, tab: 'table', height: DEFAULT_DRAWER_HEIGHT },
     panel: { open: false, pinned: false, width: DEFAULT_PANEL_WIDTH },
+    queue: { open: true, width: DEFAULT_QUEUE_WIDTH },
     display: {},
     planning: 'periods',
     mode: 'board',
