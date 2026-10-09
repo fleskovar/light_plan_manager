@@ -5,6 +5,7 @@ import { buildBoard } from '../board/load.js';
 import { parseConfigText } from '../config/schema.js';
 import { BoardError } from '../errors.js';
 import { installContextTemplates } from '../instructions/instructions.js';
+import type { BoardConfig } from '../model/types.js';
 import { hasPeriods, hasResources } from '../model/types.js';
 import { gitInit, isGitRepo } from '../storage/git.js';
 import { ensureLocalIgnored } from '../storage/local.js';
@@ -12,6 +13,7 @@ import type { BoardPaths } from '../storage/paths.js';
 import { LPM_DIR, boardPathsFor } from '../storage/paths.js';
 import { writeState } from '../storage/state.js';
 import { writeBoardIndex } from './board-index.js';
+import { createPeriod } from './create.js';
 
 export const BUILTIN_TEMPLATES = ['scrum', 'kanban', 'blank'] as const;
 export type BuiltinTemplate = (typeof BUILTIN_TEMPLATES)[number];
@@ -83,6 +85,13 @@ export interface InitOptions {
   prefix?: string;
   /** Make `.lpm` its own git repo and ignore it in the surrounding repo. */
   git?: boolean;
+  /**
+   * Seed the standing omni periods on a board with a timeline (default true).
+   * Pass false for a board that will be planned period by period from day one.
+   */
+  omni?: boolean;
+  /** `YYYY-MM-DD` the omni periods start on; today when omitted. */
+  today?: string;
 }
 
 export interface InitResult {
@@ -93,6 +102,8 @@ export interface InitResult {
   gitignoreUpdated: boolean;
   /** Context templates written into `.lpm/templates/context`, by name. */
   contextTemplates: string[];
+  /** The omni periods seeded, outermost first; empty when none were. */
+  omniPeriods: { id: string; title: string }[];
 }
 
 export function initBoard(options: InitOptions): InitResult {
@@ -150,6 +161,9 @@ export function initBoard(options: InitOptions): InitResult {
   // and a reader is never left guessing whether the board has one.
   writeBoardIndex(buildBoard(paths, config));
 
+  const omniPeriods =
+    hasPeriods(config) && options.omni !== false ? seedOmniPeriods(paths, config, options.today) : [];
+
   let gitInitialized = false;
   let gitignoreUpdated = false;
   if (options.git !== false) {
@@ -159,5 +173,73 @@ export function initBoard(options: InitOptions): InitResult {
     if (isGitRepo(root)) gitignoreUpdated = ensureGitignoreEntry(root);
   }
 
-  return { paths, template: name, prefix, gitInitialized, gitignoreUpdated, contextTemplates };
+  return { paths, template: name, prefix, gitInitialized, gitignoreUpdated, contextTemplates, omniPeriods };
+}
+
+/** How long the omni chain runs. A year on, `lpm period <id> --start-now` renews it. */
+const OMNI_SPAN_DAYS = 365;
+
+const OMNI_BODY = `## What this is
+
+A standing period \`lpm init\` created so a board that does not plan by the
+calendar still has a running timebox. While this chain is the board's whole
+timeline, every new issue nobody scheduled lands here (\`default_period\` in
+\`.lpm/config.yml\`), so nothing is left unscheduled.
+
+## Planning for real
+
+Create your own increments and sprints whenever you want them. From the first
+one on, new issues arrive unscheduled for you to place, and this chain stops
+catching them. Move the work you want into your periods, then delete the chain
+(\`lpm rm <outermost id>\` unschedules whatever is still in it) and remove
+\`default_period\` from the config.
+`;
+
+function addDays(date: string, days: number): string {
+  const next = new Date(`${date}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next.toISOString().slice(0, 10);
+}
+
+/**
+ * One period per level of `period_hierarchy`, each inside the one above, and
+ * `default_period` pointed at the innermost — so on a simple project the
+ * timeline is set up and nobody has to think about it. The config line goes in
+ * beside `period_prefix` rather than at the end, so it sits with the timeline
+ * settings a reader would look for it under.
+ */
+function seedOmniPeriods(
+  paths: BoardPaths,
+  config: BoardConfig,
+  today = new Date().toISOString().slice(0, 10),
+): { id: string; title: string }[] {
+  const ends = addDays(today, OMNI_SPAN_DAYS - 1);
+  const seeded: { id: string; title: string }[] = [];
+  for (const level of config.period_hierarchy) {
+    const type = level[0]!;
+    const label = config.period_types[type]?.label ?? type;
+    // A fresh handle each time: the second level's parent is the document the
+    // first create has just written, and a handle is a photograph of a moment.
+    const period = createPeriod(buildBoard(paths, config), {
+      type,
+      title: `Omni ${label}`,
+      starts: today,
+      ends,
+      parentId: seeded.at(-1)?.id,
+      body: OMNI_BODY,
+    });
+    seeded.push({ id: period.id, title: period.title });
+  }
+
+  const innermost = seeded.at(-1)!.id;
+  const line =
+    '# The catch-all every new issue is scheduled in while the omni periods are\n' +
+    '# the whole timeline. Delete it once you plan in periods of your own.\n' +
+    `default_period: ${innermost}`;
+  const text = readFileSync(paths.configPath, 'utf8');
+  const updated = /^period_prefix:.*$/m.test(text)
+    ? text.replace(/^period_prefix:.*$/m, (match) => `${match}\n\n${line}`)
+    : `${text}\n${line}\n`;
+  writeFileSync(paths.configPath, updated, 'utf8');
+  return seeded;
 }

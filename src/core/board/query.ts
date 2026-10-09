@@ -250,6 +250,24 @@ export function periodOf(board: LoadedBoard, issue: Issue): Period | null {
   return issue.period ? findPeriod(board, issue.period) : null;
 }
 
+/**
+ * The period a new issue is scheduled in when nobody named one, or null.
+ *
+ * `default_period` names the innermost of the standing chain `lpm init` seeds
+ * (an omni increment holding an omni sprint), so a board that never plans by
+ * the calendar still has every ticket in the running sprint. It catches only
+ * while that chain is the **whole** timeline: the moment somebody builds a
+ * period of their own, they are planning, and new work arrives unscheduled for
+ * them to place — ranking it beside their sprint would undo the plan.
+ * @see docs/periods.md
+ */
+export function defaultPeriodFor(board: LoadedBoard): string | null {
+  const id = board.config.default_period;
+  if (!id || !findPeriod(board, id)) return null;
+  const chain = new Set(periodChain(board, id).map((period) => period.id));
+  return board.periods.every((period) => chain.has(period.id)) ? id : null;
+}
+
 export type { PeriodStance } from '../../shared/period-stance.js';
 
 /** Adapt a `LoadedBoard` to the minimal shape `periodStance` needs. */

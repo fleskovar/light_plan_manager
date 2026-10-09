@@ -206,6 +206,13 @@ export interface BoardConfig {
   period_types: Record<string, TypeDef>;
   /** Normalized period hierarchy, same shape as `hierarchy`. */
   period_hierarchy: string[][];
+  /**
+   * The catch-all period a new issue is scheduled in when nobody named one —
+   * the innermost of the standing chain `lpm init` seeds. Empty when unset.
+   * It only catches while it is the board's whole timeline: read it through
+   * `defaultPeriodFor`, never directly. @see docs/periods.md
+   */
+  default_period: string;
 
   /** Prefix for resource ids. Distinct from the other two prefixes. */
   resource_prefix: string;

@@ -241,6 +241,18 @@ Unblocks when: <what has to be true for this to go on>.
 failure' but does not say how many times or whether to retry a 4xx; I need a
 number and a rule" is a flag somebody can answer in thirty seconds.
 
+**Flag early, and only for a real stop.** Flag the moment you know more effort
+will not fix it. Do not flag after an hour of guessing. And do not flag for these:
+
+- **An ordering.** If this issue truly cannot start before another one is done,
+  that is a dependency. Comment, and ask the planner for `link_issues`.
+- **A hard problem you can solve.** A failing test or a tricky bug is the work.
+- **Work that is done.** Close it; anything left over is a new issue.
+- **A change of plan.** If you no longer hold the issue, hand it back (below).
+
+On a board with a **Human Supervisor** resource, that person answers flags. Write
+the comment so they can answer it in one reply.
+
 **Do not clear your own flag to get past it.** `clear_flag` is the plan owner's
 tool and you do not have it — that asymmetry is the design, not an oversight. If
 the answer arrives while you are still holding the issue, comment with it and ask

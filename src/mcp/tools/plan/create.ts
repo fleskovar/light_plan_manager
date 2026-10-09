@@ -27,7 +27,14 @@ export function registerCreateTools(server: McpServer, context: BoardContext): v
         body: z.string().optional().describe("Markdown body; replaces the type's template"),
         status: z.string().optional().describe('Issues only'),
         assignee: z.string().optional().describe('Issues only; a resource id or name'),
-        period: z.string().optional().describe('Issues only; a period id'),
+        period: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(
+            "Issues only; a period id. Omit it and the issue lands in the board's catch-all " +
+              'period while that is the whole timeline; null keeps it unscheduled.',
+          ),
         dependsOn: z.array(z.string()).optional().describe('Issues only; ids that block this'),
         relatedFiles: z
           .array(z.string())

@@ -74,7 +74,10 @@ export function createMcpServer(paths: BoardPaths, options: McpOptions = {}): Mc
         'Three collections: issues (what gets built, nested by scope), periods (when — ' +
         'sprints and increments) and resources (who — people and the generic pools work can ' +
         'wait in). An issue at any level can be scheduled into any period and assigned to ' +
-        'any resource.\n\n' +
+        'any resource. A new board usually runs one standing omni sprint that every new ' +
+        'issue lands in, so do not create periods unless calendar planning is asked for. ' +
+        'If the roster is empty, ask for (or create) a human supervisor and an AI agent ' +
+        'resource before planning, so work can be assigned to whoever will do it.\n\n' +
         'Before you write anything, call list_templates. The registry holds reusable pieces of ' +
         'plan this team has already worked out — a feature with its standard stories, the steps ' +
         'a particular kind of change has to go through. If one covers what you are about to ' +
@@ -86,7 +89,10 @@ export function createMcpServer(paths: BoardPaths, options: McpOptions = {}): Mc
         'To do the work: next_tasks, start_task, then add_comment as you go and finish_task ' +
         'when it is done. Comments are the trail you leave for whoever picks the issue up ' +
         'next, human or agent — say what you tried and what you found, not just that you ' +
-        'finished.\n\n' +
+        'finished. When more effort will not move an issue — missing access, an undecided ' +
+        'question, a requirement you can read two ways — call flag_issue with a comment that ' +
+        'says what stopped and what would unblock it, instead of guessing or moving on. ' +
+        'flagged_issues lists what has stopped; only the plan owner clears a flag.\n\n' +
         'If this board mirrors a remote tracker, remote_status reports the drift between the ' +
         'two and remote_preview shows what a sync would do without doing it — both are safe. ' +
         'remote_sync is the only tool that writes to a system outside this checkout; it is ' +

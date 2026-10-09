@@ -453,6 +453,9 @@ describe('planPull', () => {
       title: 'Remote programme',
       body: 'body',
       status: 'backlog',
+      // Stated even when the tracker has none, so the board's catch-all
+      // period can never claim an issue the tracker holds unscheduled.
+      period: null,
     });
     expect(plan.links).toEqual([{ kind: 'record', tempId: 'new:1', remoteId: '101' }]);
 

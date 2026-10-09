@@ -6,11 +6,16 @@ import { ISSUE_FILE, initBoard, loadBoard } from '../src/core/index.js';
 
 const created: string[] = [];
 
-/** A throwaway board on disk. Registered for cleanup by `cleanupBoards()`. */
-export function makeBoard(template = 'scrum', prefix = 'LP'): BoardPaths {
+/**
+ * A throwaway board on disk. Registered for cleanup by `cleanupBoards()`.
+ *
+ * Without the omni periods `lpm init` seeds by default, so a test states its
+ * own timeline; pass `{ omni: true }` to get the board a person would.
+ */
+export function makeBoard(template = 'scrum', prefix = 'LP', options: { omni?: boolean } = {}): BoardPaths {
   const root = mkdtempSync(path.join(os.tmpdir(), 'lpm-test-'));
   created.push(root);
-  return initBoard({ root, template, prefix, git: false }).paths;
+  return initBoard({ root, template, prefix, git: false, omni: options.omni ?? false, today: '2026-08-10' }).paths;
 }
 
 export function cleanupBoards(): void {

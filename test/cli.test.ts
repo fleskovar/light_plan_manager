@@ -48,7 +48,7 @@ function lpmIn(dir: string, env: Record<string, string>, ...args: string[]): Run
 }
 
 function init(...args: string[]): Run {
-  return lpm('init', '--no-git', ...args);
+  return lpm('init', '--no-git', '--no-omni', ...args);
 }
 
 describe('lpm', () => {
@@ -109,6 +109,15 @@ describe('lpm init', () => {
     init();
     const config = readFileSync(path.join(cwd, '.lpm', 'config.yml'), 'utf8');
     expect(config).toMatch(/^key_prefix: [A-Z][A-Z0-9]*$/m);
+  });
+
+  it('seeds the omni periods by default, and new issues land in them', () => {
+    // Without the `init` helper's --no-omni: this is the board a person gets.
+    const created = lpm('init', '--no-git', '--prefix', 'LP');
+    expect(created.stdout).toContain('TL-1 Omni Product Increment > TL-2 Omni Sprint');
+
+    expect(lpm('new', 'program', '-t', 'Platform').stdout).toContain('scheduled in TL-2');
+    expect(lpm('new', 'program', '-t', 'Later', '--period', 'none').stdout).not.toContain('scheduled');
   });
 });
 
@@ -871,7 +880,7 @@ describe('lpm ui', () => {
    * tool falling over.
    */
   it('reports a port already in use, and exits 1 without a stack', async () => {
-    lpm('init', '--template', 'scrum', '--no-git');
+    lpm('init', '--template', 'scrum', '--no-git', '--no-omni');
 
     const { createServer } = await import('node:net');
     const blocker = createServer();

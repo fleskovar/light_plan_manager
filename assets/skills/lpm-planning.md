@@ -281,6 +281,20 @@ context, their area or their review.
 Coverage connects a person to a pool, is one hop, does not chain, and is CLI-only:
 `lpm link RS-1 --covers RS-4`.
 
+**Split the work by who can do it.** A board worked by people and agents needs a
+**Human Supervisor** and an **AI Agent** on the roster. If they are not there,
+create them first (see `lpm-board-setup`). Then:
+
+| Assign to | When the work is |
+| --- | --- |
+| AI Agent | Implementation an agent can finish alone: stories, bugs, tests, sub-tasks, spikes |
+| Human Supervisor | A decision, an approval, a `review` gate, anything needing credentials or access an agent does not have |
+
+If a story needs a human answer before an agent can build it, write two issues.
+Assign the decision to the supervisor, assign the build to the agent, and make
+the build depend on the decision. An agent should never be offered work it can
+only flag.
+
 ```
 team_load { period: "TL-8" }
 ```
@@ -290,6 +304,13 @@ Read three things: `uncovered` (pools nobody can serve — always fix), the
 against `capacity`. It is a **load report, not a scheduler**.
 
 ## Scheduling
+
+**A simple project is not scheduled at all.** `lpm init` seeds an omni chain
+(`Omni Product Increment` > `Omni Sprint`) and `default_period`, so every new
+issue lands in the running omni sprint while that chain is the whole timeline.
+Create increments and sprints only when somebody asks for calendar planning.
+From the first one, new issues arrive unscheduled, so place them, move what the
+omni sprint holds, and delete the omni increment when it is empty.
 
 ```
 update_document { id: "LP-42", period: "TL-8" }
@@ -375,6 +396,13 @@ lpm flag clear LP-42 --comment "..."
 
 Clearing is the plan owner's, not the implementer's — it means "carry on", and it
 is a claim that the thing that stopped the work has actually been dealt with.
+
+**You can raise one too.** `flag_issue` on an issue nobody has started is how a
+planner says "do not start this yet" and is obeyed: the queue stops offering a
+flagged issue in any column. Use it when the reason is outside the board (a
+pending decision, a vendor, a scope review). When the reason is another issue,
+use `link_issues` instead, because a dependency clears itself when that work
+lands.
 
 ## End-to-end: a brief becomes a sprint
 

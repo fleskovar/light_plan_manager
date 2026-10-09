@@ -37,7 +37,7 @@ function lpm(...args: string[]): { status: number; all: string } {
 
 /** program > epic > feature > two stories, LP-5 blocked by LP-4. */
 function seed(): void {
-  lpm('init', '--no-git', '--template', 'scrum', '--prefix', 'LP');
+  lpm('init', '--no-git', '--no-omni', '--template', 'scrum', '--prefix', 'LP');
   lpm('new', 'program', '-t', 'Platform');
   lpm('new', 'epic', '-t', 'Checkout', '-p', 'LP-1');
   lpm('new', 'feature', '-t', 'Guest flow', '-p', 'LP-2');

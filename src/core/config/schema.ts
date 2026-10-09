@@ -118,6 +118,7 @@ const rawConfigSchema = z.object({
   period_prefix: z.string().regex(PREFIX_RE, PREFIX_MESSAGE).optional(),
   period_types: typeMapSchema.optional(),
   period_hierarchy: hierarchySchema.optional(),
+  default_period: z.string().optional(),
 
   resource_prefix: z.string().regex(PREFIX_RE, PREFIX_MESSAGE).optional(),
   resource_types: typeMapSchema.optional(),
@@ -416,6 +417,17 @@ function checkSemantics(raw: RawConfig, hierarchies: Record<DeclaredKind, string
     checkTypeFlag('generic', 'resource', 'period', raw.period_types ?? {}, errors);
     checkTypeFlag('atomic', 'issue', 'period', raw.period_types ?? {}, errors);
   }
+  // The catch-all period new issues fall into (`lpm init` writes it). Only the
+  // shape is checked here — whether the document exists is the board's
+  // business, and `lpm check` reports one that does not.
+  if (raw.default_period !== undefined) {
+    const prefix = raw.period_prefix ?? '';
+    if (!usesPeriods) {
+      errors.push('default_period: names a period, but the config declares no period_types');
+    } else if (!raw.default_period.startsWith(`${prefix}-`)) {
+      errors.push(`default_period: "${raw.default_period}" is not a period id (${prefix}-<n>)`);
+    }
+  }
   const usesResources = checkOptionalNamespace('resource', raw, hierarchies.resource, errors);
   if (usesResources) {
     checkTypeFlag('atomic', 'issue', 'resource', raw.resource_types ?? {}, errors);
@@ -511,6 +523,7 @@ export function parseConfigText(text: string): ConfigResult {
       period_prefix: raw.period_prefix ?? '',
       period_types: raw.period_types ?? {},
       period_hierarchy: hierarchies.period,
+      default_period: raw.default_period ?? '',
       resource_prefix: raw.resource_prefix ?? '',
       resource_types: raw.resource_types ?? {},
       resource_hierarchy: hierarchies.resource,

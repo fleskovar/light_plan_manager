@@ -15,6 +15,17 @@ export function checkPeriods(board: LoadedBoard, problems: Problem[]): void {
     return;
   }
 
+  // A warning, not an error: a board whose catch-all was deleted is a board
+  // that plans by hand now, and new issues simply arrive unscheduled.
+  const fallback = board.config.default_period;
+  if (fallback && hasPeriods(board.config) && !board.periodsById.has(fallback)) {
+    problems.push({
+      level: 'warn',
+      path: displayPath(board.paths, board.paths.configPath),
+      message: `default_period "${fallback}" is not in the timeline; new issues arrive unscheduled — remove the key or point it at a period`,
+    });
+  }
+
   for (const period of board.periods) {
     const where = at(board, period);
 

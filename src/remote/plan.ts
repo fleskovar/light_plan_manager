@@ -1617,7 +1617,10 @@ export function planPull(
     if (fields.body !== undefined) patch.body = fields.body;
     if (fields.status !== undefined) patch.status = fields.status;
     if (fields.assignee !== undefined) patch.assignee = fields.assignee;
-    if (fields.period !== undefined) patch.period = fields.period;
+    // Always stated, never left to the board: an issue the tracker holds
+    // unscheduled must not fall into the board's catch-all period, or the
+    // first push would try to file it in a sprint the tracker never had.
+    patch.period = fields.period ?? null;
     if (fields.attributes !== undefined) patch.attributes = fields.attributes;
     const parentRef = parentRefOf(record);
     if (parentRef !== null) patch.parentId = parentRef;

@@ -62,7 +62,7 @@ function bareRepo(): string {
 /** A project folder with a board in it, `.lpm` its own repository. */
 function newBoard(): BoardPaths {
   const root = tempDir('lpm-gitsync-');
-  return initBoard({ root, template: 'scrum', prefix: 'LP', git: true }).paths;
+  return initBoard({ root, template: 'scrum', prefix: 'LP', git: true, omni: false }).paths;
 }
 
 /** Ada sets the board up on `remote`; Bob joins it from a second project. */

@@ -213,6 +213,18 @@ Unblocks when: <what has to be true for this to go on>.
 many times, or whether a 4xx counts; I need a number and a rule" is answerable in
 thirty seconds.
 
+**Flag early, and only for a real stop.** Flag the moment you know more effort
+will not fix it. Do not flag after an hour of guessing. And do not flag for these:
+
+- **An ordering.** If this issue truly cannot start before another one is done,
+  that is a dependency. Comment, and ask the planner for `link_issues`.
+- **A hard problem you can solve.** A failing test or a tricky bug is the work.
+- **Work that is done.** Close it; anything left over is a new issue.
+- **A change of plan.** If you no longer hold the issue, hand it back (below).
+
+On a board with a **Human Supervisor** resource, that person answers flags. Write
+the comment so they can answer it in one reply.
+
 **Clearing is the plan owner's call.** `clear_flag` / `lpm flag clear` means
 "carry on", and it is a claim that the thing that stopped the work has been dealt
 with — so it belongs to whoever dealt with it. Do not clear your own to get past

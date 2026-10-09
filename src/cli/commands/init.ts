@@ -22,9 +22,16 @@ Options
                               config YAML  (default: scrum)
       --prefix <PREFIX>       Issue id prefix, e.g. LP  (default: from the folder name)
       --no-git                Skip making .lpm its own git repo
+      --no-omni               Skip the standing omni periods (see below)
 
 By default .lpm becomes an independent git repository and is added to the
 surrounding repo's .gitignore, so the board has its own history and remote.
+
+On a template with a timeline, init also creates one standing "omni" period
+per level (an Omni Product Increment holding an Omni Sprint on scrum) and points
+default_period at the innermost. Until you create a period of your own, every
+new issue is scheduled there, so a simple project never has to plan sprints.
+From your first own period on, new issues arrive unscheduled for you to place.
 
 ${BOARD_ENV_VAR} is ignored here: init always creates the board in this folder.`;
 
@@ -44,6 +51,7 @@ export function run(args: string[]): number {
       template: { type: 'string', short: 't' },
       prefix: { type: 'string' },
       'no-git': { type: 'boolean' },
+      'no-omni': { type: 'boolean' },
     },
   });
 
@@ -52,6 +60,7 @@ export function run(args: string[]): number {
     template: values.template,
     prefix: values.prefix,
     git: !values['no-git'],
+    omni: !values['no-omni'],
   });
 
   const rootType = loadConfig(result.paths).config?.hierarchy[0]?.[0] ?? 'task';
@@ -62,6 +71,10 @@ export function run(args: string[]): number {
   out(`  ${pad('prefix', 11)}${result.prefix}`);
   if (result.gitInitialized) out(`  ${pad('git', 11)}.lpm is now its own git repository`);
   if (result.gitignoreUpdated) out(`  ${pad('gitignore', 11)}added .lpm/ to the surrounding repo`);
+  if (result.omniPeriods.length) {
+    const chain = result.omniPeriods.map((period) => `${period.id} ${period.title}`).join(' > ');
+    out(`  ${pad('timeline', 11)}${chain}  ${dim('(new issues land here until you plan your own)')}`);
+  }
   if (result.contextTemplates.length) {
     out(`  ${pad('briefs', 11)}${result.contextTemplates.length} context templates in .lpm/templates/context`);
   }

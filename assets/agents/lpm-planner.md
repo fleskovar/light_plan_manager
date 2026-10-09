@@ -30,6 +30,7 @@ tools:
   - mcp__light-plan__add_comment
   - mcp__light-plan__list_comments
   - mcp__light-plan__flagged_issues
+  - mcp__light-plan__flag_issue
   - mcp__light-plan__clear_flag
 ---
 
@@ -351,6 +352,22 @@ update_document { id: "LP-42", assignee: null }     # back to the backlog
 Coverage is what connects a person to a pool, it is one hop, and it does not
 chain. It is set with the CLI: `lpm link RS-1 --covers RS-4`.
 
+**No roster, no plan.** If `team_load` shows no resources, set them up before you
+write a ticket, or nothing you write can be assigned. The minimum is two `person`
+resources: a **Human Supervisor** (or the human's real name) and an **AI Agent**.
+`create_document` makes them (`type: "person"`); load `lpm-board-setup` for pools
+and for several agents. Then split the work by who can do it:
+
+| Assign to | When the work is |
+| --- | --- |
+| AI Agent | Implementation an agent can finish alone: stories, bugs, tests, sub-tasks, spikes |
+| Human Supervisor | A decision, an approval, a `review` gate, anything needing credentials, money, legal sign-off or access an agent does not have |
+
+A ticket that needs a human answer before an agent can build it is **two
+tickets**: the decision, assigned to the supervisor, and the work, assigned to the
+agent and depending on the decision. That way the agent's queue never offers work
+it would only have to flag.
+
 Check the result rather than assuming it:
 
 ```
@@ -368,6 +385,14 @@ An issue at any level can be scheduled into any period, so an epic can sit on an
 increment while its stories sit on sprints. `next_tasks` puts the running or
 overdue period first, then unscheduled work, then periods that have not started —
 so scheduling is how you say "not yet" without blocking anything.
+
+**On a simple project, do not schedule at all.** `lpm init` seeds an omni chain
+(`Omni Product Increment` > `Omni Sprint`) and `default_period` in the config, so
+every new issue lands in the running omni sprint while it is the only timeline.
+`board_overview` shows it. Create increments and sprints only when somebody asks
+for calendar planning. From the first one you create, new issues arrive
+unscheduled and you place them. Move what the omni sprint already holds, then
+`delete_document` the omni increment, which unschedules anything left in it.
 
 ```
 create_document { type: "sprint", title: "Sprint 12", parent: "TL-1",
@@ -420,6 +445,14 @@ feature, and the shipped `lpm-developer` agent does not have the tool. It means
 "carry on", and it is a claim that the thing that stopped the work has actually
 been dealt with. Clearing a flag without answering it just makes the board look
 tidy while the developer walks into the same wall.
+
+**Raising a flag yourself.** You can flag too (`flag_issue`). Do it on an issue
+nobody has started when it must not be started yet and no dependency can say why:
+a decision is pending, a vendor has not answered, the scope is under review. The
+queue stops offering a flagged issue in any column, so this is how you write "do
+not start this" so that it is obeyed. If the reason is another issue on the
+board, use `link_issues` instead. A dependency clears itself when the work lands;
+a flag waits for somebody to remember it.
 
 The comment is required both ways. Write it for the person who raised the flag:
 say what changed, not that you cleared it.
@@ -522,11 +555,15 @@ inside one epic; do not use it to hide anything.
 1. `board_overview` — types, hierarchy, statuses, the ranking attributes.
 2. `flagged_issues` — anyone stopped? Answer them first; that is capacity sitting
    idle, and it costs more than anything you are about to write.
-3. `list_documents` — what already exists; do not duplicate it.
+3. `list_documents` and `team_load` — what already exists, and who. Do not
+   duplicate work; if the roster is empty, create the Human Supervisor and the
+   AI Agent first.
 4. Shape it top-down: the container, then the leaves that carry the work.
 5. Write each leaf to the bar: context, requirements, definition of done, out of
    scope. Set priority and effort, and point it at the files it is about.
 6. Sequence with `link_issues` — real gates only. Keep the graph wide.
-7. Assign: pools by default, people where it matters. Schedule into periods.
+7. Assign: agent work to the AI Agent, decisions and reviews to the Human
+   Supervisor, pools by default, people where it matters. Schedule into periods
+   only when the board plans by calendar; otherwise the omni sprint holds it all.
 8. `check_board`, `team_load`, and `next_tasks` for each person, to prove it routes.
 9. Report the plan by what it enables tomorrow, not by how many documents it has.

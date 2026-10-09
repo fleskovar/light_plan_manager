@@ -60,6 +60,12 @@ They are structurally identical: nested folders, one markdown document each, one
 id namespace apiece (`LP-1`, `TL-1`, `RS-1`). Periods and resources are optional —
 a board that declares no period types simply has no `timeline/`.
 
+**You do not have to plan sprints.** `lpm init` seeds an omni chain (`TL-1 Omni
+Product Increment` > `TL-2 Omni Sprint`), and `default_period` in the config
+schedules every new issue into it while it is the only timeline. Do not create
+increments or sprints unless somebody asks for calendar planning. Once a period
+of your own exists, new issues arrive unscheduled for you to place.
+
 **A folder is named after its id and nothing else** — `board/LP-1/LP-2/_issue.md`.
 The titles are in `.lpm/INDEX.md`, a generated outline of the whole board with a
 link to every document, nested the way the folders are. Read it to get your
@@ -232,6 +238,57 @@ new type belongs at.
 
 Reach for the one that matches the intent; the engine enforces the difference.
 
+## Flags: saying the work stopped
+
+A **flag** is a red mark on an issue that says "this is not moving, and a person
+has to look at it". It is not a status. The issue keeps its column and its
+assignee, every container above it shows "stopped inside", and the queue stops
+offering it to anybody until the flag is cleared.
+
+```
+flag_issue { id: "LP-42", reason: "blocked", comment: "<what stopped, what you tried, what would unblock it>" }
+flagged_issues                                   # everything stopped, board-wide
+clear_flag { id: "LP-42", comment: "<what changed>" }   # plan owner only
+```
+
+```bash
+lpm flag LP-42 --reason help --comment "..."
+lpm flag --comment "..."                         # the issue you have in flight
+lpm flag list
+lpm flag clear LP-42 --comment "..."
+```
+
+| Reason | Use it when |
+| --- | --- |
+| `blocked` (default) | Something outside this issue must happen first: access, an outage, another team |
+| `help` | A person must answer: a decision, an ambiguous requirement, a review |
+| `paused` | The work is set down on purpose; the timing is wrong, not the work |
+
+**Flag when** more effort from you will not fix the problem. Examples: a
+credential you do not have, a decision nobody has made, a requirement you can
+read two ways, a test environment that is down, an approach that would change
+something the ticket did not ask you to change. Flag as soon as you know. Do not
+flag after an hour of guessing.
+
+**Do not flag** for these:
+
+- **An ordering you can write down.** If B cannot start until A is done, that is
+  `depends_on` (`link_issues`), not a flag. The queue already holds B back.
+- **Work you finished.** Close it; follow-up work is a new issue.
+- **A problem you can solve.** A failing test or a hard bug is the job, not a
+  reason to stop.
+- **Work you no longer want.** Unassign it, or hand it back with a comment.
+
+The comment is required and is the whole value of the flag. Write it for somebody
+who has read none of your session: what stopped, what you tried, the exact
+question or access you need, and what has to be true to go on. A planner may also
+flag an issue nobody has started, to say "do not start this yet"; the queue
+respects that too.
+
+**Only the plan owner clears a flag.** On a board with a "Human Supervisor"
+resource, that is who answers it. An implementer never clears their own flag to
+get past it; finishing the issue clears it automatically.
+
 ## The web app, in one paragraph
 
 `lpm ui` serves a local editor: a dependency canvas, a drawer (table, periods,
@@ -261,7 +318,9 @@ Run this before doing anything on an unfamiliar board:
    ranking attributes, whether periods and resources exist at all.
 2. `list_documents { workUnitsOnly: true, limit: 50 }` — the shape of what is there.
 3. `lpm check` / `check_board` — is it currently valid?
-4. `team_load` — who exists, and is anything uncovered or unowned?
+4. `team_load` — who exists, and is anything uncovered or unowned? A board with
+   no roster cannot route work. Seed a **Human Supervisor** and an **AI Agent**
+   before you plan (see `lpm-board-setup`).
 5. `lpm me` — do you have an identity, and does work route to it?
 
 Then, before doing any single issue: `get_instructions { id }`.

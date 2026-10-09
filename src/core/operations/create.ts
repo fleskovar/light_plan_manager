@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import type { LoadedBoard } from '../board/load.js';
 import { DEFAULT_CAPACITY } from '../board/load.js';
+import { defaultPeriodFor } from '../board/query.js';
 import { BoardError } from '../errors.js';
 import type { Issue, ParamDefs, Period, Resource, Squad, Template } from '../model/types.js';
 import { hasPeriods, hasResources, hasSquads, isFolderTemplate } from '../model/types.js';
@@ -35,8 +36,13 @@ export interface NewIssueInput {
   status?: string;
   /** Parent issue id; omit to create at the board root. */
   parentId?: string;
-  /** Period to schedule the issue in. */
-  period?: string;
+  /**
+   * Period to schedule the issue in. Omitted, the board's catch-all period
+   * applies while it is the whole timeline (`defaultPeriodFor`); `null` keeps
+   * the issue unscheduled regardless — a pull mirrors exactly what the tracker
+   * holds, and `lpm new --period none` asks for nothing.
+   */
+  period?: string | null;
   /** Resource to assign the issue to — a person or a pool, by id or name. */
   assignee?: string;
   dependsOn?: string[];
@@ -63,7 +69,8 @@ function createIssueUnderLock(board: LoadedBoard, input: NewIssueInput): Issue {
   const status = input.status ?? board.config.default_status;
   requireStatus(board, status);
 
-  if (input.period) requirePeriod(board, input.period);
+  const period = input.period === undefined ? defaultPeriodFor(board) : input.period;
+  if (period) requirePeriod(board, period);
   const assignee = input.assignee ? requireResource(board, input.assignee).id : null;
   const dependsOn = resolveLinkTargets(board, input.dependsOn ?? []);
   const relatesTo = resolveLinkTargets(board, input.relatesTo ?? []);
@@ -80,7 +87,7 @@ function createIssueUnderLock(board: LoadedBoard, input: NewIssueInput): Issue {
     title,
     status,
     assignee,
-    period: input.period ?? null,
+    period: period ?? null,
     // A new issue is never flagged: nobody has started it yet.
     flag: null,
     depends_on: dependsOn,
@@ -119,6 +126,8 @@ export interface NewPeriodInput {
   /** Id of the squad that owns this period. */
   squad?: string;
   attributes?: Record<string, unknown>;
+  /** Replaces the type's body template. */
+  body?: string;
   author?: string;
 }
 
@@ -183,7 +192,7 @@ function createPeriodUnderLock(board: LoadedBoard, input: NewPeriodInput): Perio
     updated: timestamp,
     author: input.author ?? gitIdentity(board.paths.lpmDir),
     attributes,
-    body: typeDef.body,
+    body: input.body ?? typeDef.body,
     dir,
     file: path.join(dir, documentFileName('period')),
     parentId: parent ? parent.id : null,

@@ -32,7 +32,9 @@ Options (all)
 
 Options (issues)
   -s, --status <id>        Starting status (default: the board's default_status)
-      --period <id>        Schedule the issue in a period
+      --period <id>        Schedule the issue in a period (default: the board's
+                           default_period while it is the whole timeline;
+                           "none" leaves the issue unscheduled)
       --assignee <id>      Assign to a person or a pool, by id or name
       --depends-on <ids>   Issues this one is blocked by; comma-separated, repeatable
       --relates-to <ids>   Non-blocking associations
@@ -249,7 +251,7 @@ export function run(args: string[]): number {
     title,
     status: values.status,
     parentId: values.parent,
-    period: values.period,
+    period: values.period === 'none' ? null : values.period,
     assignee: values.assignee,
     dependsOn,
     relatesTo,

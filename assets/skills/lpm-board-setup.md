@@ -17,12 +17,23 @@ lpm init --template kanban --prefix ACME
 lpm init --template blank             # types you define yourself
 lpm init --template ./our-config.yml  # your own config as the starting point
 lpm init --no-git                     # skip the nested git repo
+lpm init --no-omni                    # skip the standing omni periods (below)
 ```
 
 Three built-ins ship: **scrum** (program > epic > feature > story/bug/test/review/
 research > sub-task, with sprints and increments and a roster), **kanban**
 (flatter), **blank** (minimal). `lpm init` validates the config before writing
 anything.
+
+On a template with a timeline, `lpm init` also seeds the **omni periods**: one
+standing period per level (`TL-1 Omni Product Increment` > `TL-2 Omni Sprint` on
+scrum), and `default_period: TL-2` in the config. Every new issue lands in that
+sprint until somebody builds a period of their own. So a simple project needs no
+calendar at all — see [The timeline](#the-timeline-optional).
+
+**A new board is not finished until it has a roster.** Before any ticket is
+written, seed the people who will do the work. The minimum is a human supervisor
+and an AI agent — see [Start with a supervisor and an agent](#start-with-a-supervisor-and-an-agent).
 
 **`.lpm` becomes its own git repository** nested inside the project and added to
 the surrounding repo's `.gitignore` — deliberately not a submodule. The board has
@@ -219,6 +230,34 @@ ever works a date out for you: it learns dates only from period documents, and i
 never levels or schedules on your behalf. A period containing today is "now", and
 when periods nest only the innermost running one counts.
 
+### The omni periods: no calendar needed
+
+`lpm init` seeds one standing period per level, running for a year, and points
+`default_period` at the innermost:
+
+```text
+TL-1  Omni Product Increment
+└─ TL-2  Omni Sprint          <- default_period: every new issue lands here
+```
+
+While this chain is the board's **whole** timeline, any issue created without a
+period is scheduled in `TL-2`. This applies to every front end (CLI, web, MCP).
+So on a simple project, do not create increments or sprints at all. The running
+sprint holds the whole board, and the queue, the Periods tab and the Gantt work
+from day one.
+
+- **Opt one issue out** with `--period none` (`period: null` over MCP).
+- **Plan for real** by creating your own increment or sprint. From that moment,
+  new issues arrive unscheduled for you to place, and the omni chain stops
+  catching them. What it already holds stays there: move it with
+  `lpm move <id> --period <id>`.
+- **Retire it** when it is empty or unwanted: `lpm rm TL-1` deletes the chain and
+  unschedules what is left. Then remove the `default_period` line from the config
+  (`lpm check` warns while it names a missing period).
+- **Renew it** after a year with `lpm period TL-2 --start-now`.
+
+Full rules: `docs/periods.md`, "The omni periods".
+
 ## The roster (optional)
 
 Same all-or-nothing rule. Two kinds of resource, and the distinction is
@@ -252,6 +291,49 @@ lpm team                                          # who is carrying what
 Capacity is full-time equivalents: `1` a person, `0.5` part-time, `3` a pool of
 three. `lpm team` reports demand against it and **never levels it** — the
 judgement stays yours.
+
+### Start with a supervisor and an agent
+
+A board where a human and one or more agents share the work needs both of them
+on the roster. If they are not there, there is nothing to assign tickets to:
+work for the agent and decisions for the human end up in the same unassigned
+pile, and nobody's queue is right. So when you set up a new board, create these
+two resources before you write any ticket:
+
+| Resource | Type | Gets |
+| --- | --- | --- |
+| **Human Supervisor** | `person` | Decisions, approvals, `review` gates, anything that needs credentials or access an agent does not have, and the flags agents raise |
+| **AI Agent** | `person` | Implementation work an agent can do alone: stories, bugs, tests, sub-tasks, research spikes |
+
+```bash
+lpm new person -t "Human Supervisor" --set email=jane@example.com
+lpm new person -t "AI Agent" --set discipline=implementation
+lpm me "Human Supervisor"                       # the human at this checkout
+lpm mcp setup --user "AI Agent"                 # the identity the agent works as
+```
+
+Use the human's real name instead of "Human Supervisor" if you know it. What
+matters is that one resource stands for the person who answers questions, and
+one stands for the agent.
+
+For **several agents**, make "AI Agent" a pool and give each agent its own
+identity that covers it. Work parked on the pool goes to whichever agent asks
+first:
+
+```bash
+lpm new role -t "AI Agent" --capacity 3                    # RS-2, a pool of three
+lpm new person -t "Agent: frontend"                        # RS-3
+lpm link RS-3 --covers RS-2
+lpm mcp setup --name frontend --user "Agent: frontend"
+```
+
+Then, while you plan, assign with the split in mind. A ticket that needs a human
+decision before an agent can start is two tickets: the decision (assigned to the
+supervisor) and the work (assigned to the agent), with the work depending on the
+decision. A `review` issue's `reviewer` is the supervisor.
+
+The `blank` template has no roster. Add the `resource_*` keys from the scrum
+template to its config first.
 
 ## Setting up a developer
 
@@ -323,10 +405,29 @@ scope:
 The MCP SDK is an *optional* dependency — installed by default, but if the
 project was installed with `--no-optional`, `lpm mcp` says what to install.
 
-## End-to-end: a new board for a team of four
+## End-to-end: a simple project, one human and an agent
 
 ```bash
-lpm init --template scrum --prefix ACME
+lpm init --prefix ACME              # seeds TL-1 Omni Product Increment > TL-2 Omni Sprint
+
+# the roster: who decides, and who builds
+lpm new person -t "Human Supervisor"   # RS-1
+lpm new person -t "AI Agent"           # RS-2
+lpm me RS-1
+lpm mcp setup --user "AI Agent" --file .mcp.json
+
+lpm check
+cd .lpm && git add -A && git commit -m "Board scaffold: supervisor, agent, omni periods"
+```
+
+No sprints to plan: every ticket the agent or you create lands in `TL-2`.
+
+## End-to-end: a new board for a team of four
+
+This team plans by the calendar from day one, so it skips the omni periods.
+
+```bash
+lpm init --template scrum --prefix ACME --no-omni
 
 # people and a pool
 lpm new person -t "Alice Smith"
@@ -334,6 +435,9 @@ lpm new person -t "Bob Jones"
 lpm new role -t "Web developer" --capacity 2
 lpm link RS-1 --covers RS-3
 lpm link RS-2 --covers RS-3
+
+# the agent the team works with, supervised by Alice
+lpm new person -t "AI Agent"          # RS-4
 
 # the calendar
 lpm new increment -t "PI-1" --starts 2026-08-03 --ends 2026-10-24
@@ -346,6 +450,7 @@ lpm team
 # route each developer, and each agent
 lpm profile --init ./profiles/alice.yml --user "Alice Smith"
 lpm mcp setup --name planner --user "Planner Bot" --file .mcp.json
+lpm mcp setup --name agent --user "AI Agent" --file .mcp.json
 
 # commit the board's own repo
 cd .lpm && git add -A && git commit -m "Board scaffold: roster, PI-1, Sprint 1"

@@ -9,6 +9,7 @@ period is running right now?** — and about the two answers offered when one
 stops running with work still in it.
 
 - [The two controls](#the-two-controls)
+- [The omni periods](#the-omni-periods)
 - [The `active` switch](#the-active-switch)
 - [What "running" changes](#what-running-changes)
 - [Restarting a period](#restarting-a-period)
@@ -39,6 +40,49 @@ So there are two controls, and they run in parallel:
 They are not alternatives to choose between at board level. A board can run
 entirely on dates, entirely on switches, or on dates with one sprint switched
 off this week — that last one is the case the switch was added for.
+
+## The omni periods
+
+A board that never plans by the calendar still needs a running timebox, or every
+ticket is "unscheduled" and the Periods and Gantt views have nothing to show. So
+`lpm init` seeds one standing period per level of `period_hierarchy`, each
+nested in the one above (`Omni Product Increment` > `Omni Sprint` on Scrum,
+`Omni Delivery Cycle` on Kanban), dated from that day for a year, and writes
+`default_period` naming the innermost into `.lpm/config.yml`. `--no-omni` skips
+both. They are ordinary period documents: nothing else in the engine knows they
+are special.
+
+`default_period` is the only rule they add, and it is applied in `createIssue`,
+so the CLI, the web push and the MCP tools all get it:
+
+| The new issue's `period` | What it gets |
+| --- | --- |
+| A period id | That period |
+| `null` (`--period none`, a pushed `period: null`) | Nothing — unscheduled |
+| Not given | `defaultPeriodFor(board)` |
+
+`defaultPeriodFor` (`src/core/board/query.ts`) answers the default period only
+while **every period on the board is that period or one of its ancestors**. The
+first period somebody builds outside the chain means they are planning, so new
+work arrives unscheduled for them to place: ranking it in bucket 1 beside their
+sprint would undo the plan. What the chain already holds stays there, because
+moving scheduled work is the planner's decision, not the engine's.
+
+Three consequences:
+
+- **A pull never takes the default.** `planPull` always states `period` on a
+  create (`null` when the tracker has none). Otherwise an unscheduled tracker
+  issue would land in the omni sprint, and the next push would try to file it in
+  a sprint the tracker never had.
+- **Deleting the chain is the way out.** `lpm rm TL-1` removes both periods and
+  unschedules whatever they still hold. A `default_period` naming a missing
+  period is a `lpm check` warning and is otherwise ignored.
+- **A year on, the omni sprint has ended.** Ended work still ranks first, and
+  `lpm period TL-2 --start-now` renews the chain for another year.
+
+The web app does not mirror the default in its working copy, so a node created
+there shows as unscheduled until the push lands. That is cosmetic: the
+default cannot refuse anything, so the canvas never queues work that cannot land.
 
 ## The `active` switch
 

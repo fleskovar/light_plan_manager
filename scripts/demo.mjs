@@ -26,8 +26,9 @@ function lpm(...args) {
   return result.stdout;
 }
 
-// --no-git keeps the throwaway board out of this repository's git setup.
-lpm('init', '--template', 'scrum', '--prefix', P, '--no-git');
+// --no-git keeps the throwaway board out of this repository's git setup;
+// --no-omni because the demo plans a dated timeline of its own below.
+lpm('init', '--template', 'scrum', '--prefix', P, '--no-git', '--no-omni');
 lpm('new', 'program', '-t', 'Payments platform');
 lpm('new', 'epic', '-t', 'Checkout revamp', '-p', `${P}-1`);
 lpm('new', 'feature', '-t', 'Guest flow', '-p', `${P}-2`);

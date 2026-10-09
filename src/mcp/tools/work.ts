@@ -276,6 +276,9 @@ export function registerWorkTools(server: McpServer, context: BoardContext): voi
         'silently moving on to something else. The comment is required and is the whole point: ' +
         'say what you tried, what stopped you, and what would let the work resume. Someone who ' +
         'has not read your session has to be able to act on it. ' +
+        'Do not flag an ordering: if this cannot start until another issue is done, that is ' +
+        '`link_issues`, and the queue already holds it back. A planner may flag an issue nobody ' +
+        'has started to say "do not start this yet"; the queue stops offering it. ' +
         'Clearing a flag is the plan owner\'s call, not yours — call `clear_flag` only if you ' +
         'are the one who was asked to unblock it.',
       inputSchema: {

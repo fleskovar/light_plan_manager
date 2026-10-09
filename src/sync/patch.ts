@@ -92,7 +92,9 @@ export function createNode(
       title,
       parentId,
       status: patch.status,
-      period: (laterPeriod ? undefined : patch.period) ?? undefined,
+      // `null` is a decision (unscheduled, even on a board with a catch-all
+      // period); absent leaves the choice to `createIssue`.
+      period: laterPeriod ? undefined : patch.period,
       assignee: (laterAssignee ? undefined : patch.assignee) ?? undefined,
       dependsOn: dependsOn.now,
       relatesTo: relatesTo.now,

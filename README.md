@@ -34,7 +34,10 @@ Scrum template (`--template kanban` or `--template blank` for the others) and
 takes the issue-id prefix from the folder name (`--prefix LP` to choose your
 own). It also makes `.lpm` a git repository of its own and adds it to your
 project's `.gitignore`, so the board keeps its own history (`--no-git` skips
-that).
+that). On a template with a timeline it also creates a standing **Omni Product
+Increment** holding an **Omni Sprint**, and every new issue lands in that sprint
+until you create a period of your own, so a simple project never has to plan
+sprints at all ([the omni periods](#the-omni-periods); `--no-omni` skips them).
 
 `lpm ui` starts a local server on `http://localhost:4571` and opens the editor
 in your browser. What you change there is held as a draft until you press
@@ -381,6 +384,33 @@ lpm move LP-4 --period TL-2     # schedule
 lpm move LP-4 --period none     # unschedule
 lpm move TL-3 --parent TL-4     # re-parent a period
 ```
+
+### The omni periods
+
+A project that does not plan by the calendar should not have to invent sprints
+before it can work. So `lpm init` seeds one standing period per level of
+`period_hierarchy` — `TL-1 Omni Product Increment` holding `TL-2 Omni Sprint` on
+the Scrum template, `CY-1 Omni Delivery Cycle` on Kanban — each running for a
+year from the day the board was made, and writes `default_period: TL-2` into the
+config. Every new issue nobody scheduled lands there, from the CLI, the web app
+or an agent alike, so the running sprint holds the whole board.
+
+The catch-all stops the moment you plan for real. As soon as the timeline holds
+a period that is not part of the omni chain, new issues arrive unscheduled for
+you to place, because ranking them beside your sprint would undo the plan. What
+the chain already caught stays there until you move it. When you are done with
+it, `lpm rm TL-1` deletes the chain and unschedules what is left, and the
+`default_period` line can go.
+
+```bash
+lpm new user_story -t "Fix login" -p LP-3                 # scheduled in TL-2
+lpm new user_story -t "Someday" -p LP-3 --period none     # left unscheduled
+lpm period TL-2 --start-now                               # a year on: renew it
+```
+
+A pull from a tracker never uses the catch-all: an issue the tracker holds
+unscheduled arrives unscheduled. The full rules are in
+[docs/periods.md](docs/periods.md#the-omni-periods).
 
 ### Which period is running
 
@@ -1384,6 +1414,7 @@ issue_types:
 
 # --- time hierarchy (optional, same shape) ---
 period_prefix: TL        # period ids: TL-1, TL-2, ... must differ from key_prefix
+default_period: TL-2     # optional: where unscheduled new issues land (lpm init writes it)
 
 period_hierarchy:
   - increment
