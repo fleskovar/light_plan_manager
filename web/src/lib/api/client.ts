@@ -2,6 +2,7 @@ import type {
   ApiErrorBody,
   BoardSnapshot,
   CommentDto,
+  CurrentUserDto,
   GitDisableRequest,
   GitSetupRequest,
   GitSyncRequest,
@@ -159,6 +160,8 @@ export interface PushResponse {
 export const api = {
   /** Which board, and whether `lpm ui --experimental` turned the tracker remotes on. */
   serverInfo: (): Promise<ServerInfoDto> => request('/api/health'),
+
+  me: (): Promise<CurrentUserDto> => request('/api/me'),
 
   board: (): Promise<BoardSnapshot> => request('/api/board'),
 

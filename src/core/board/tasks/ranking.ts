@@ -11,6 +11,7 @@ import type { BlockingLookup, UpstreamEntry } from '../../../shared/blocking.js'
 import { blockerIds, upstreamWork } from '../../../shared/blocking.js';
 import type { CohesionLookup } from '../../../shared/cohesion.js';
 import { progressComparator } from '../../../shared/cohesion.js';
+import { routeWork } from '../../../shared/routing.js';
 import type { LoadedBoard } from '../load.js';
 import { isGenericResource, periodOf, periodStance, workUnits } from '../query.js';
 import type { ResolvedScope } from '../scope.js';
@@ -342,14 +343,16 @@ function routeFor(
   resource: Resource,
   options: TaskOptions,
 ): { route: TaskRoute; pool: Resource | null } | null {
-  if (!issue.assignee) {
-    return options.includeUnassigned ? { route: 'unassigned', pool: null } : null;
-  }
-  if (issue.assignee === resource.id) return { route: 'direct', pool: null };
-  if (!resource.covers.includes(issue.assignee)) return null;
-
-  const pool = board.resourcesById.get(issue.assignee) ?? null;
-  return pool && isGenericResource(board, pool) ? { route: 'pool', pool } : null;
+  // The rule itself is shared with the queue panel; this only adapts the board.
+  // @see src/shared/routing.ts
+  const isPool = (id: string): boolean => {
+    const pool = board.resourcesById.get(id);
+    return pool !== undefined && isGenericResource(board, pool);
+  };
+  const route = routeWork(issue.assignee, resource, isPool, options.includeUnassigned);
+  if (!route) return null;
+  const pool = route === 'pool' ? (board.resourcesById.get(issue.assignee!) ?? null) : null;
+  return { route, pool };
 }
 
 /**

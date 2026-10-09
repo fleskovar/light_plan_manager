@@ -1,13 +1,12 @@
 <script lang="ts">
-  import type { ResourceDto } from '$shared';
+  import type { NodePatch, ResourceDto } from '$shared';
   import { nodesOfKind } from '$lib/board/selectors.js';
-  import AttributeField from '$lib/ui/fields/AttributeField.svelte';
   import Button from '$lib/ui/Button.svelte';
   import Modal from '$lib/ui/Modal.svelte';
-  import TypeIcon from '$lib/ui/TypeIcon.svelte';
   import { conversionOptions } from '$features/canvas/menus.js';
   import { editNode } from '$lib/workspace/mutations.js';
   import { useWorkspace } from '$lib/workspace/workspace.svelte.js';
+  import ResourceForm from './ResourceForm.svelte';
   import { coverageOptions } from './roster.js';
 
   /**
@@ -19,6 +18,9 @@
    * from, the attributes the board declares) belongs to a form you open on
    * purpose. Coverage in particular was the thing you could not do from a card
    * at all, and it is the reason this dialog exists.
+   *
+   * Every edit here lands on the board as it is made. A resource that does not
+   * exist yet is `NewResourceDialog`'s, which creates nothing until asked.
    */
   interface Props {
     id: string;
@@ -32,8 +34,17 @@
   const resource = $derived(
     workspace.node(id)?.kind === 'resource' ? (workspace.node(id) as ResourceDto) : null,
   );
-  const type = $derived(resource ? workspace.config.types[resource.type] : undefined);
-  const conversions = $derived(resource ? conversionOptions(workspace, resource) : []);
+  const types = $derived.by(() => {
+    if (!resource) return [];
+    const current = workspace.config.types[resource.type];
+    return [
+      { value: resource.type, label: current?.label ?? resource.type },
+      ...conversionOptions(workspace, resource).map((option) => ({
+        value: option.type,
+        label: option.label,
+      })),
+    ];
+  });
   const coverage = $derived(resource ? coverageOptions(workspace.nodes, resource) : null);
 
   /** Only offered when the board's roster actually nests, e.g. people in teams. */
@@ -43,8 +54,14 @@
       : [],
   );
 
-  function edit(patch: Record<string, unknown>): void {
+  function edit(patch: NodePatch): void {
     editNode(workspace, id, patch);
+  }
+
+  function retype(type: string): void {
+    if (!resource) return;
+    const option = conversionOptions(workspace, resource).find((entry) => entry.type === type);
+    if (option) edit({ type: option.type, parentId: option.parentId });
   }
 
   /** A pool this resource can take work from. Stored on this document. */
@@ -70,126 +87,18 @@
 
 <Modal title={resource ? `Edit ${resource.title}` : 'Edit resource'} {onclose}>
   {#if resource}
-    <div class="fields">
-      <label>
-        <span>Name</span>
-        <input
-          value={resource.title}
-          onchange={(event) => edit({ title: event.currentTarget.value })}
-        />
-      </label>
-
-      <label>
-        <span>Type</span>
-        <select
-          value={resource.type}
-          onchange={(event) => {
-            const option = conversions.find((entry) => entry.type === event.currentTarget.value);
-            if (option) edit({ type: option.type, parentId: option.parentId });
-          }}
-        >
-          <option value={resource.type}>{type?.label ?? resource.type}</option>
-          {#each conversions as option (option.type)}
-            <option value={option.type}>{option.label}</option>
-          {/each}
-        </select>
-      </label>
-
-      {#if parents.length}
-        <label>
-          <span>Team</span>
-          <select
-            value={resource.parentId ?? ''}
-            onchange={(event) => edit({ parentId: event.currentTarget.value || null })}
-          >
-            <option value="">Unattached</option>
-            {#each parents as parent (parent.id)}
-              <option value={parent.id}>{parent.title}</option>
-            {/each}
-          </select>
-        </label>
-      {/if}
-
-      <label>
-        <span>Capacity</span>
-        <input
-          type="number"
-          min="0"
-          step="0.5"
-          value={resource.capacity}
-          onchange={(event) => edit({ capacity: Number(event.currentTarget.value) || 0 })}
-        />
-      </label>
-    </div>
-
-    {#if coverage?.pools.length}
-      <h4>Covers</h4>
-      <p class="note">Pools this {type?.label ?? 'resource'} can pick work up from.</p>
-      <ul class="checks">
-        {#each coverage.pools as pool (pool.id)}
-          <li>
-            <label>
-              <input
-                type="checkbox"
-                checked={resource.covers.includes(pool.id)}
-                onchange={(event) => toggleCover(pool.id, event.currentTarget.checked)}
-              />
-              <span class="icon"><TypeIcon type={pool.type} depth={pool.depth} /></span>
-              {pool.title}
-              <span class="muted">{workspace.config.types[pool.type]?.label ?? pool.type}</span>
-            </label>
-          </li>
-        {/each}
-      </ul>
-    {/if}
-
-    {#if resource.generic}
-      <h4>Covered by</h4>
-      {#if coverage?.coverers.length}
-        <p class="note">Who can take work from this pool.</p>
-        <ul class="checks">
-          {#each coverage.coverers as coverer (coverer.id)}
-            <li>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={coverer.covers.includes(id)}
-                  onchange={(event) => toggleCoverer(coverer, event.currentTarget.checked)}
-                />
-                <span class="icon"><TypeIcon type={coverer.type} depth={coverer.depth} /></span>
-                {coverer.title}
-              </label>
-            </li>
-          {/each}
-        </ul>
-      {:else}
-        <p class="note">Add a person to the team to cover this pool.</p>
-      {/if}
-    {/if}
-
-    {#if type?.attributes.length}
-      <h4>Attributes</h4>
-      <div class="fields">
-        {#each type.attributes as attribute (attribute.name)}
-          <label>
-            <span title={attribute.description}>{attribute.name.replace(/_/g, ' ')}</span>
-            <AttributeField
-              {attribute}
-              value={resource.attributes[attribute.name]}
-              onchange={(value) => edit({ attributes: { [attribute.name]: value } })}
-            />
-          </label>
-        {/each}
-      </div>
-    {/if}
-
-    <h4>Notes</h4>
-    <textarea
-      class="body"
-      rows="6"
-      value={resource.body}
-      onchange={(event) => edit({ body: event.currentTarget.value })}
-    ></textarea>
+    <ResourceForm
+      {resource}
+      config={workspace.config}
+      {types}
+      {parents}
+      {coverage}
+      covering={(coverer) => coverer.covers.includes(id)}
+      onedit={edit}
+      ontype={retype}
+      oncover={toggleCover}
+      oncoverer={toggleCoverer}
+    />
   {:else}
     <p class="note">That resource is no longer on the board.</p>
   {/if}
@@ -200,91 +109,9 @@
 </Modal>
 
 <style>
-  .fields {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  label {
-    display: grid;
-    grid-template-columns: 6rem 1fr;
-    align-items: center;
-    gap: var(--space-2);
-    font-size: var(--text-sm);
-  }
-
-  .fields label > span:first-child {
-    color: var(--ink-muted);
-    font-size: var(--text-xs);
-    text-transform: capitalize;
-  }
-
-  .fields input,
-  .fields select {
-    width: 100%;
-    padding: 0.25rem 0.4rem;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface-0);
-    font-size: var(--text-sm);
-  }
-
-  h4 {
-    margin: var(--space-4) 0 var(--space-1);
-    font-size: var(--text-xs);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--ink-muted);
-  }
-
   .note {
-    margin: 0 0 var(--space-2);
-    color: var(--ink-muted);
-    font-size: var(--text-xs);
-  }
-
-  .checks {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
-    gap: var(--space-1);
     margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .checks label {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: 0.15rem 0.3rem;
-    border-radius: var(--radius-sm);
-  }
-
-  .checks label:hover {
-    background: var(--surface-2);
-  }
-
-  .icon {
-    display: inline-flex;
     color: var(--ink-muted);
-  }
-
-  .muted {
-    margin-left: auto;
-    color: var(--ink-faint);
     font-size: var(--text-xs);
-  }
-
-  .body {
-    width: 100%;
-    padding: var(--space-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface-0);
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    line-height: 1.6;
-    resize: vertical;
   }
 </style>

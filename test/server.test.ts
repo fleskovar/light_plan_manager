@@ -3,10 +3,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { BoardPaths } from '../src/core/index.js';
 import {
   createIssue,
+  createResource,
   findIssue,
   findPeriod,
   findResource,
   listComments,
+  setCurrentUser,
 } from '../src/core/index.js';
 import { startBoardServer } from '../src/server/index.js';
 import { parseView } from '../src/server/views/schema.js';
@@ -14,6 +16,7 @@ import { applyChanges } from '../src/sync/apply.js';
 import type {
   BoardSnapshot,
   Change,
+  CurrentUserDto,
   NodePatch,
   ServerInfoDto,
   ViewDocument,
@@ -746,5 +749,30 @@ describe('view files', () => {
   it('keeps the queue panel as somebody left it', () => {
     const view = parseView({ id: 'v', name: 'V', queue: { open: false, width: 410 } }, 'v');
     expect(view.queue).toEqual({ open: false, width: 410 });
+  });
+});
+
+describe('GET /api/me', () => {
+  it('answers who this checkout says is working, and nobody until somebody is set', async () => {
+    // The answer reads LPM_USER first, so a developer's own shell must not
+    // decide this test.
+    const saved = process.env.LPM_USER;
+    delete process.env.LPM_USER;
+    const paths = seed();
+    const running = await startBoardServer(paths, { port: 0, serveApp: false });
+    try {
+      const me = async (): Promise<CurrentUserDto> =>
+        (await (await fetch(`${running.url}/api/me`)).json()) as CurrentUserDto;
+
+      expect(await me()).toEqual({ id: null, ref: null });
+
+      const alice = createResource(reload(paths), { type: 'person', title: 'Alice' });
+      setCurrentUser(reload(paths), alice.id);
+      expect((await me()).id).toBe(alice.id);
+    } finally {
+      running.server.close();
+      if (saved === undefined) delete process.env.LPM_USER;
+      else process.env.LPM_USER = saved;
+    }
   });
 });

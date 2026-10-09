@@ -2670,8 +2670,8 @@ explicit path wins: `lpm mcp --root`, `lpm mcp setup --root` and `lpm agent
 
 `lpm ui` opens the board in a browser: a left-to-right dependency graph, a
 resizable drawer with a table, the increments and sprints, a Gantt chart and the
-team roster, a side panel for editing whatever is selected, and — for a view
-that works off the queue — the queue down the left edge.
+team roster, a side panel for editing whatever is selected, and the work queue
+down the left edge.
 
 ```bash
 lpm ui                 # serve the board and open a browser
@@ -2888,7 +2888,7 @@ teammate who pulls your branch sees the same canvas you were looking at.
   *Sprints and increments* is the default and gives the drawer its Periods and
   Gantt tabs. *Queue* is for the way plenty of teams actually work — nobody
   plans a fortnight, work is taken off the top as the graph unblocks it — and
-  trades both tabs for the queue panel on the left. Nothing about the board changes either way:
+  drops both tabs, leaving the queue panel on the left to plan by. Nothing about the board changes either way:
   the same documents, the same dependencies, a different question in front of
   you. A board whose config declares no period types is always in the second
   mode, because there is nothing to plan with.
@@ -2979,17 +2979,29 @@ teammate who pulls your branch sees the same canvas you were looking at.
   nested in it, and *Clear all* deletes the whole timeline after a confirmation.
   Deleting periods never deletes work: the issues in them simply become
   unscheduled.
-- **Queue** — the same board for a team that does not plan in sprints, as a
-  column down the left edge read top to bottom. *In progress* is the head of the
+- **Queue** — what to pick up next, as a column down the left edge read top to
+  bottom, whether or not the team plans in sprints. *In progress* is the head of the
   queue, what is being worked on. *Up next* is every unstarted work unit with no
   unfinished blocker, numbered in the order `lpm task next` would offer them:
   priority first, then how much finishing one would release. The first of them
   is marked *Next*. *Waiting* says what each blocked issue is waiting on rather
   than hiding it, and *Recently finished* is the tail, folded until you open it.
   Drag a card between sections, or press *Start* and *Finish* — either way it is
-  one status change. The panel is there whenever a view is set to work off the
-  queue (Options ▸ Planning), which is always on a board whose config declares
-  no periods. ◂ folds it to a strip, its edge drags wider, and both are saved
+  one status change. Every board view has it; choosing Options ▸ Planning ▸
+  Queue opens it if it was folded.
+
+  **Queue for** at the top narrows it to one person or role, including *Me*
+  when `lpm user` (or `LPM_USER`, or your profile) names somebody on the roster.
+  It shows exactly what `lpm task next --user` would offer them — their own
+  work, work parked in the pools they cover, nothing from a sprint owned by a
+  squad they are not in — with their in-progress and recently finished work,
+  and a line weighing their open effort against their capacity. Work in a pool
+  is shown beside it rather than added to it, because everyone who covers that
+  pool is offered the same work. Picking a role shows what is parked in it.
+  A flagged issue waits rather than being offered, as it does at the terminal.
+  *Start* in somebody's queue assigns the work to them, as `lpm task start`
+  does. Like the rest of the editor it ignores a profile's scope; the whole
+  board is readable here. ◂ folds it to a strip, its edge drags wider, and both are saved
   with the view.
 - **Gantt** — the plan on a date scale, read at whichever level you want:
   *by period*, with the issues scheduled in each one nested underneath it, or

@@ -39,17 +39,9 @@
   function add(): void {
     const type = newType || resourceTypes[0]?.name;
     if (!type) return;
-    const id = createNode(workspace, {
-      nodeKind: 'resource',
-      type,
-      title: 'New member',
-      parentId: null,
-      member: false,
-    });
-    workspace.selection.set([id]);
-    // Straight into the editor: a resource is worth nothing until it has a name
-    // and, usually, a pool it covers.
-    shell.editResource(id);
+    // Straight into the form: a resource is worth nothing until it has a name
+    // and, usually, a pool it covers. The form creates it, not this button.
+    shell.newResource(type);
   }
 
   function remove(id: string): void {

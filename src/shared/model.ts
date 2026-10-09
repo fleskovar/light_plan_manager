@@ -297,3 +297,17 @@ export interface ServerInfoDto {
   root: string;
   experimental: boolean;
 }
+
+/**
+ * What `GET /api/me` answers: who this checkout says is working — the same
+ * identity `lpm task next` uses (`LPM_USER`, then the profile, then
+ * `.lpm/local.json`). Like `ServerInfoDto` it belongs to the running server and
+ * never to a snapshot, because `lpm export` publishes snapshots and a published
+ * board must not carry whoever happened to export it.
+ */
+export interface CurrentUserDto {
+  /** The roster resource the reference names, or null when it names nobody. */
+  id: string | null;
+  /** The reference as written, or null when no user is set. */
+  ref: string | null;
+}

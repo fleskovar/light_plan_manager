@@ -15,6 +15,7 @@ import type {
   Template,
   TemplateNode,
 } from '../model/types.js';
+import { owningSquad } from '../../shared/routing.js';
 import type { DocStamp } from '../storage/atomic.js';
 import { stampOf } from '../storage/atomic.js';
 import type { BoardPaths } from '../storage/paths.js';
@@ -222,15 +223,9 @@ export function buildBoard(paths: BoardPaths, config: BoardConfig, options?: { c
   // squad inheritance before the board is assembled.
   const periodLookup = new Map(periodResult.nodes.map((p): [string, typeof p] => [p.id, p]));
   for (const period of periodResult.nodes) {
-    // Walk up the parent chain: first squad we find wins.
-    let squadId: string | null = null;
-    const seen = new Set<string>();
-    let cur: typeof period | undefined = period;
-    while (cur && !seen.has(cur.id)) {
-      seen.add(cur.id);
-      if (cur.squad !== null) { squadId = cur.squad; break; }
-      cur = cur.parentId ? periodLookup.get(cur.parentId) : undefined;
-    }
+    // Walk up the parent chain: first squad we find wins. Shared with the
+    // queue panel, which asks the same question of the working copy.
+    const squadId = owningSquad(period.id, (id) => periodLookup.get(id));
     if (squadId) {
       const squad = squadResult.nodes.find((s) => s.id === squadId);
       if (squad) periodSquadMembers.set(period.id, new Set(squad.members));

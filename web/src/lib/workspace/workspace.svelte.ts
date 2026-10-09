@@ -13,7 +13,7 @@ import type {
   ViewDocument,
   ViewMode,
 } from '$shared';
-import { appendChange, isTempId, summarizePushFailures, tempId } from '$shared';
+import { appendChange, completeView, isTempId, summarizePushFailures, tempId } from '$shared';
 import { ApiError, api } from '$lib/api/client.js';
 import type { WorkingNodes } from '$lib/board/working.js';
 import { applyChange, replay } from '$lib/board/working.js';
@@ -85,6 +85,21 @@ export class Workspace {
    * nobody clicked.
    */
   onPushed: (() => void) | null = null;
+
+  /**
+   * The roster resource this checkout says is working — `lpm task next`'s
+   * "me" — or null when none is set or it names nobody on the roster. Read
+   * once when a view opens, best effort: a server too old to answer just
+   * means the queue offers no "Me" entry.
+   */
+  me = $state<string | null>(null);
+
+  /**
+   * Every id a push has allocated this session, temporary → real. A dialog
+   * opened on an unpushed document holds the temporary id, and the push that
+   * follows every edit retires it; `resolve` is how the dialog keeps up.
+   */
+  #allocated = $state<Record<string, string>>({});
 
   #saveTimer: ReturnType<typeof setTimeout> | null = null;
   #pushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -196,6 +211,12 @@ export class Workspace {
     return this.nodes[id];
   }
 
+  /** The id a document goes by now: a pushed temporary id becomes its real one. */
+  resolve(id: string): string {
+    if (this.nodes[id]) return id;
+    return this.#allocated[id] ?? id;
+  }
+
   // -- loading -------------------------------------------------------------
 
   async open(viewId: string): Promise<void> {
@@ -203,7 +224,7 @@ export class Workspace {
     try {
       const [snapshot, view] = await Promise.all([api.board(), api.loadView(viewId)]);
       this.snapshot = snapshot;
-      this.view = view;
+      this.view = completeView(view);
       this.#rebuild();
       this.#reportBoardProblems(snapshot);
     } catch (error) {
@@ -215,6 +236,10 @@ export class Workspace {
     // There is no manual Pull button to press instead, so the poll starts on
     // its own the moment the board is open — see the class comment.
     this.#startAutoPull();
+    void api
+      .me()
+      .then((user) => (this.me = user.id))
+      .catch(() => {});
   }
 
   /** Re-read the board, keeping unpushed work laid over the new snapshot. */
@@ -366,7 +391,12 @@ export class Workspace {
     return tempId(this.#tempSequence);
   }
 
-  /** Restart the counter above anything a reopened view already holds. */
+  /**
+   * Restart the counter above anything a reopened view already holds.
+   *
+   * Never below where it was: a temporary id names one document for the whole
+   * session, so `resolve` cannot confuse a pushed `new:1` with a later one.
+   */
   #seedTempIds(): void {
     const numberOf = (id: string): number =>
       isTempId(id) ? Number.parseInt(id.slice('new:'.length), 10) || 0 : 0;
@@ -374,7 +404,7 @@ export class Workspace {
       ...Object.keys(this.nodes).map(numberOf),
       ...this.pending.map((change) => numberOf(change.id)),
     ];
-    this.#tempSequence = Math.max(0, ...used);
+    this.#tempSequence = Math.max(this.#tempSequence, ...used);
   }
 
   // -- the view ------------------------------------------------------------
@@ -485,11 +515,17 @@ export class Workspace {
     try {
       const result = await api.push($state.snapshot(view) as ViewDocument);
       this.snapshot = result.board;
-      this.view = { ...result.view, members: this.#remap(view.members, result.idMap) };
+      this.view = completeView({
+        ...result.view,
+        members: this.#remap(view.members, result.idMap),
+      });
       this.doc.layout = Object.fromEntries(
         Object.entries(view.layout).map(([id, layout]) => [result.idMap[id] ?? id, layout]),
       );
       this.selection.set(this.#remap(this.selection.ids, result.idMap));
+      if (Object.keys(result.idMap).length) {
+        this.#allocated = { ...this.#allocated, ...result.idMap };
+      }
       this.#rebuild();
 
       if (result.failures.length) {

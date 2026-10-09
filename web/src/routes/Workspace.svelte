@@ -21,6 +21,7 @@
   import { ConnectionsState, provideConnectionsState } from '$features/drawer/remote/connections.svelte.js';
   import { GitState, provideGitState } from '$features/drawer/remote/git.svelte.js';
   import ResourceDialog from '$features/drawer/team/ResourceDialog.svelte';
+  import NewResourceDialog from '$features/drawer/team/NewResourceDialog.svelte';
   import BreakdownDialog from '$features/panel/BreakdownDialog.svelte';
   import SidePanel from '$features/panel/SidePanel.svelte';
   import Canvas from '$features/canvas/Canvas.svelte';
@@ -115,7 +116,9 @@
   const drawerHeight = $derived(paneFit(workspace.doc.drawer.height, stackHeight, MIN_CANVAS));
 
   /**
-   * The queue down the left edge, offered while the view works off the queue.
+   * The queue down the left edge, on every board view whichever way it plans:
+   * "what is next?" is a fair question in the middle of a sprint too. A
+   * registry view has none, because a template is not work anybody picks up.
    * Its width is a wish bounded the same way the drawer's height is: whatever
    * the details panel on the other side has taken, the canvas keeps
    * `MIN_CANVAS_WIDTH` between them.
@@ -123,7 +126,7 @@
   const MIN_CANVAS_WIDTH = 320;
   const MIN_QUEUE = 220;
   let middleWidth = $state(0);
-  const queueOffered = $derived(workspace.mode === 'board' && workspace.planning === 'queue');
+  const queueOffered = $derived(workspace.mode === 'board');
   const panelShown = $derived(workspace.doc.panel.open || workspace.doc.panel.pinned);
   const queueAvailable = $derived(middleWidth - (panelShown ? workspace.doc.panel.width : 0));
   const queueRoom = $derived(Math.max(queueAvailable - MIN_CANVAS_WIDTH, MIN_QUEUE));
@@ -371,12 +374,29 @@
     <HierarchyDialog onclose={() => shell.closeHierarchy()} />
   {/if}
 
+  <!-- A dialog opened on a document nobody has pushed yet holds its temporary
+       id, and the push that follows every edit allocates a real one; `resolve`
+       is what keeps the dialog on the same document across that. -->
   {#if shell.breakdownTarget}
-    <BreakdownDialog id={shell.breakdownTarget} onclose={() => shell.closeBreakdown()} />
+    <BreakdownDialog
+      id={workspace.resolve(shell.breakdownTarget)}
+      onclose={() => shell.closeBreakdown()}
+    />
   {/if}
 
   {#if shell.resourceTarget}
-    <ResourceDialog id={shell.resourceTarget} onclose={() => shell.closeResource()} />
+    <ResourceDialog
+      id={workspace.resolve(shell.resourceTarget)}
+      onclose={() => shell.closeResource()}
+    />
+  {:else if shell.newResourceType}
+    <NewResourceDialog
+      type={shell.newResourceType}
+      onclose={(created) => {
+        shell.closeResource();
+        if (created) workspace.selection.set([created]);
+      }}
+    />
   {/if}
 
   {#if shell.reparentRequest}

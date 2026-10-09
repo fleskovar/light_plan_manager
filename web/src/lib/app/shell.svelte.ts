@@ -36,6 +36,8 @@ export class Shell {
   hierarchyOpen = $state(false);
   /** The resource whose card's pencil was clicked. */
   resourceTarget = $state<string | null>(null);
+  /** The type of a resource being added, which does not exist until it is created. */
+  newResourceType = $state<string | null>(null);
   reparentRequest = $state<ReparentRequest | null>(null);
   confirmation = $state<Confirmation | null>(null);
   /**
@@ -47,6 +49,13 @@ export class Shell {
    * pointer comes up.
    */
   periodDropTarget = $state<string | null>(null);
+  /**
+   * Whose queue the queue panel shows: a resource id, or null for everybody's.
+   * Here rather than in the panel so folding the panel does not forget it, and
+   * not in the view, because it is a way of reading and nothing a teammate
+   * should inherit on pull.
+   */
+  queueFor = $state<string | null>(null);
 
   openMenu(event: MouseEvent, entries: MenuEntry[]): void {
     event.preventDefault();
@@ -84,11 +93,18 @@ export class Shell {
   }
 
   editResource(id: string): void {
+    this.newResourceType = null;
     this.resourceTarget = id;
+  }
+
+  newResource(type: string): void {
+    this.resourceTarget = null;
+    this.newResourceType = type;
   }
 
   closeResource(): void {
     this.resourceTarget = null;
+    this.newResourceType = null;
   }
 
   askReparent(request: ReparentRequest): void {

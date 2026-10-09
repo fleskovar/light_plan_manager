@@ -1,4 +1,5 @@
-import type { ConfigDto, IssueDto, NodeDto, StatusDto } from '$shared';
+import { owningSquad, routeWork, type WorkRoute } from '$shared';
+import type { ConfigDto, IssueDto, NodeDto, PeriodDto, ResourceDto, StatusDto } from '$shared';
 import {
   blockersOf,
   cohesionOrder,
@@ -47,6 +48,64 @@ export interface QueueCard {
   effort: number;
   /** Ancestor titles, outermost first: the feature a story belongs to. */
   lineage: string[];
+  /**
+   * How the work reaches the resource the queue is narrowed to — assigned to
+   * it, or parked in a pool it covers. Null on everybody's queue.
+   */
+  route: WorkRoute | null;
+  /** The pool the work is parked in, when `route` is `pool`. */
+  pool: ResourceDto | null;
+}
+
+/**
+ * How much open work one resource's queue holds, against what it can take.
+ *
+ * Assigned and pooled effort are reported side by side and never added, for
+ * the reason the Team view gives: work in a pool is offered to everyone who
+ * covers it, so counting it against each of them would report the same story
+ * several times over.
+ */
+export interface Workload {
+  resource: ResourceDto;
+  /** Open effort assigned to the resource directly. */
+  assigned: number;
+  /** Open effort waiting in the pools it covers. */
+  pooled: number;
+  /** How many open issues those are, for a board that measures no effort. */
+  assignedIssues: number;
+  pooledIssues: number;
+  capacity: number;
+}
+
+/** One entry in the queue's "whose queue?" picker. */
+export interface AudienceOption {
+  /** A resource id, or null for everybody's queue. */
+  id: string | null;
+  label: string;
+  group: 'everyone' | 'me' | 'people' | 'roles';
+}
+
+/**
+ * Whose queue the panel can show: everybody's, then the current user's, then
+ * each person and each pool (a role — "a QA engineer") by name. A pool's queue
+ * is the work parked in it, which is what anybody covering it would be offered.
+ */
+export function audienceOptions(nodes: WorkingNodes, me: string | null): AudienceOption[] {
+  const resources = Object.values(nodes)
+    .filter((node): node is ResourceDto => node.kind === 'resource')
+    .sort((a, b) => a.title.localeCompare(b.title));
+  const self = me ? resources.find((resource) => resource.id === me) : undefined;
+  const entry = (resource: ResourceDto, group: AudienceOption['group']): AudienceOption => ({
+    id: resource.id,
+    label: group === 'me' ? `Me — ${resource.title}` : resource.title,
+    group,
+  });
+  return [
+    { id: null, label: 'Everyone', group: 'everyone' },
+    ...(self ? [entry(self, 'me')] : []),
+    ...resources.filter((r) => !r.generic && r !== self).map((r) => entry(r, 'people')),
+    ...resources.filter((r) => r.generic && r !== self).map((r) => entry(r, 'roles')),
+  ];
 }
 
 export interface QueueBoard {
@@ -57,12 +116,22 @@ export interface QueueBoard {
   done: QueueCard[];
   /** Every issue the queue could offer, before the search narrowed it. */
   total: number;
+  /** The resource the queue is narrowed to, or null for everybody's. */
+  forResource: ResourceDto | null;
+  /** That resource's open work, or null for everybody's queue. */
+  workload: Workload | null;
 }
 
 export interface QueueOptions {
   search?: string;
   /** How many finished issues to keep. The rest are history, not a queue. */
   doneLimit?: number;
+  /**
+   * Narrow the queue to one person or pool: what `lpm task next --user` would
+   * offer it, what it has in progress, and what it finished. Absent, or naming
+   * nobody on the roster, is everybody's queue.
+   */
+  resourceId?: string | null;
 }
 
 export const DONE_LIMIT = 8;
@@ -94,16 +163,38 @@ export function buildQueue(
   const needle = options.search?.trim().toLowerCase() ?? '';
   const dependents = dependentsIndex(nodes, index);
   const units = workUnitsOf(nodes, config, index);
+  const focus = resourceNamed(nodes, options.resourceId);
+  const routing = focus ? routingFor(nodes, focus) : null;
 
-  const card = (issue: IssueDto): QueueCard => ({
-    issue,
-    blockedBy: blockersOf(nodes, config, issue, index),
-    unblocks: (dependents[issue.id] ?? []).length,
-    effort: issueEffort(config, issue),
-    lineage: lineageOf(nodes, issue),
-  });
+  const card = (issue: IssueDto): QueueCard => {
+    const route = routing?.route(issue) ?? null;
+    const pool = route === 'pool' ? (nodes[issue.assignee ?? ''] as ResourceDto) : null;
+    return {
+      issue,
+      blockedBy: blockersOf(nodes, config, issue, index),
+      unblocks: (dependents[issue.id] ?? []).length,
+      effort: issueEffort(config, issue),
+      lineage: lineageOf(nodes, issue),
+      route,
+      pool,
+    };
+  };
 
-  const cards = units.filter((issue) => !needle || matches(issue, needle)).map(card);
+  /*
+   * Narrowed to one resource, each section asks the engine's question for it:
+   * in progress and finished are *its own* work (`currentTasks`,
+   * `previousTasks`), and what is offered or waiting is whatever routes to it
+   * — directly or through a pool — inside a sprint its squad may work in.
+   */
+  const mine = (issue: IssueDto): boolean => !focus || issue.assignee === focus.id;
+  const routed = (issue: IssueDto): boolean => !routing || routing.offered(issue);
+
+  const cards = units
+    .filter((issue) => !needle || matches(issue, needle))
+    .filter((issue) =>
+      isTerminal(config, issue) || isActive(config, issue) ? mine(issue) : routed(issue),
+    )
+    .map(card);
 
   // Stay inside the feature that is already moving, exactly as the engine's
   // queue does: below the priority somebody set by hand, above the heuristics.
@@ -143,12 +234,16 @@ export function buildQueue(
     return false;
   };
 
-  const ready = waiting.filter((entry) => !entry.blockedBy.length && !parked(entry.issue));
+  // A flag withholds work whatever column it sits in, as `candidatesFor` does:
+  // it says the work has stopped and needs a person. It is listed as waiting
+  // rather than dropped, so the queue says why it is not offering it.
+  const held = (entry: QueueCard): boolean => entry.blockedBy.length > 0 || !!entry.issue.flag;
+  const ready = waiting.filter((entry) => !held(entry) && !parked(entry.issue));
 
   return {
     ready: ready.sort(byQueueOrder),
     active: active.sort(byQueueOrder),
-    blocked: waiting.filter((entry) => entry.blockedBy.length).sort(byQueueOrder),
+    blocked: waiting.filter(held).sort(byQueueOrder),
     done: cards
       .filter((entry) => isTerminal(config, entry.issue))
       .sort((a, b) =>
@@ -158,7 +253,88 @@ export function buildQueue(
       )
       .slice(0, options.doneLimit ?? DONE_LIMIT),
     total: units.length,
+    forResource: focus,
+    workload: focus && routing ? workloadOf(units, config, focus, routing) : null,
   };
+}
+
+/**
+ * Who starting a card in a narrowed queue should assign it to, or null to
+ * leave the assignee alone.
+ *
+ * Starting work from somebody's queue means *they* are taking it, which is what
+ * `lpm task start` writes too: work parked in a pool they cover becomes theirs,
+ * or it would leave their queue the moment it started. A pool's own queue has
+ * nobody to hand the work to, so it stays where it is.
+ */
+export function claimantFor(issue: IssueDto, forResource: ResourceDto | null): string | null {
+  if (!forResource || forResource.generic || issue.assignee === forResource.id) return null;
+  return forResource.id;
+}
+
+function resourceNamed(nodes: WorkingNodes, id: string | null | undefined): ResourceDto | null {
+  const node = id ? nodes[id] : undefined;
+  return node?.kind === 'resource' ? node : null;
+}
+
+interface Routing {
+  /** How work reaches the resource, ignoring whether it is ready. */
+  route(issue: IssueDto): WorkRoute | null;
+  /** Whether the queue would offer it to the resource at all. */
+  offered(issue: IssueDto): boolean;
+}
+
+/**
+ * The engine's routing rule over the working copy: `routeWork` for whose work
+ * it is, and the squad owning its sprint for whether this resource may take it.
+ * @see src/shared/routing.ts
+ */
+function routingFor(nodes: WorkingNodes, resource: ResourceDto): Routing {
+  const isPool = (id: string): boolean => {
+    const node = nodes[id];
+    return node?.kind === 'resource' && node.generic;
+  };
+  const periodOf = (id: string): PeriodDto | undefined => {
+    const node = nodes[id];
+    return node?.kind === 'period' ? node : undefined;
+  };
+  const squadAdmits = (issue: IssueDto): boolean => {
+    if (!issue.period) return true;
+    const squadId = owningSquad(issue.period, periodOf);
+    const squad = squadId ? nodes[squadId] : undefined;
+    // A squad the board no longer has filters nothing, exactly as in the engine.
+    return squad?.kind !== 'squad' || squad.members.includes(resource.id);
+  };
+  const route = (issue: IssueDto): WorkRoute | null => routeWork(issue.assignee, resource, isPool);
+  return { route, offered: (issue) => route(issue) !== null && squadAdmits(issue) };
+}
+
+function workloadOf(
+  units: IssueDto[],
+  config: ConfigDto,
+  resource: ResourceDto,
+  routing: Routing,
+): Workload {
+  const workload: Workload = {
+    resource,
+    assigned: 0,
+    pooled: 0,
+    assignedIssues: 0,
+    pooledIssues: 0,
+    capacity: resource.capacity,
+  };
+  for (const issue of units) {
+    if (isTerminal(config, issue)) continue;
+    const route = routing.route(issue);
+    if (route === 'direct') {
+      workload.assigned += issueEffort(config, issue);
+      workload.assignedIssues += 1;
+    } else if (route === 'pool' && routing.offered(issue)) {
+      workload.pooled += issueEffort(config, issue);
+      workload.pooledIssues += 1;
+    }
+  }
+  return workload;
 }
 
 /**
@@ -187,6 +363,7 @@ export interface QueueSection {
 }
 
 export function queueSections(queue: QueueBoard): QueueSection[] {
+  const whose = queue.forResource ? ` for ${queue.forResource.title}` : '';
   return [
     {
       id: 'now',
@@ -196,7 +373,9 @@ export function queueSections(queue: QueueBoard): QueueSection[] {
       dropsInto: 'active',
       numbered: false,
       folded: false,
-      empty: 'Nothing started. Drag an issue here to start it.',
+      empty: queue.forResource
+        ? `${queue.forResource.title} has nothing in progress.`
+        : 'Nothing started. Drag an issue here to start it.',
     },
     {
       id: 'next',
@@ -206,19 +385,19 @@ export function queueSections(queue: QueueBoard): QueueSection[] {
       dropsInto: 'ready',
       numbered: true,
       folded: false,
-      empty: queue.total ? 'Nothing ready.' : 'No issues yet.',
+      empty: queue.total ? `Nothing ready${whose}.` : 'No issues yet.',
     },
     {
       id: 'waiting',
       label: 'Waiting',
-      hint: 'Blocked by unfinished work',
+      hint: 'Blocked by unfinished work, or flagged',
       cards: queue.blocked,
       // A blocked issue is blocked by the graph, not by its status: no drop
       // can put something here, only finishing what it waits on takes it out.
       dropsInto: null,
       numbered: false,
       folded: false,
-      empty: 'Nothing blocked.',
+      empty: `Nothing waiting${whose}.`,
     },
     {
       id: 'done',

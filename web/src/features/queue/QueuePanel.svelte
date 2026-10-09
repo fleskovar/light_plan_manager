@@ -1,14 +1,25 @@
 <script lang="ts">
-  import { DEFAULT_QUEUE_WIDTH, type IssueDto } from '$shared';
+  import { DEFAULT_QUEUE_WIDTH, flagLabel, type IssueDto } from '$shared';
+  import { useShell } from '$lib/app/shell.svelte.js';
   import StatusChip from '$lib/ui/StatusChip.svelte';
   import TypeIcon from '$lib/ui/TypeIcon.svelte';
   import { paneScale } from '$lib/ui/scale.js';
-  import { setStatus } from '$lib/workspace/mutations.js';
+  import { assign, setStatus } from '$lib/workspace/mutations.js';
   import { useWorkspace } from '$lib/workspace/workspace.svelte.js';
-  import { buildQueue, laneStatus, queueSections, type QueueCard, type QueueSection, type SectionId } from './queue.js';
+  import {
+    audienceOptions,
+    buildQueue,
+    claimantFor,
+    laneStatus,
+    queueSections,
+    type QueueCard,
+    type QueueSection,
+    type SectionId,
+  } from './queue.js';
 
   /**
-   * The queue, down the left edge, for a team that does not plan in sprints.
+   * The queue, down the left edge: what to pick up next, whether or not the
+   * team plans in sprints.
    *
    * One column read top to bottom, the way a queue is: what is being worked
    * on, then what comes next — numbered, because the order *is* the point —
@@ -17,6 +28,11 @@
    * than scanning a grid. `lpm task next` in the terminal answers the same
    * question with the same ordering; this is that answer with somewhere to put
    * your hands. Dropping a card into a section is one status change.
+   *
+   * The picker at the top narrows it to one person or role: exactly what
+   * `lpm task next --user` would offer them, plus what they have in progress
+   * and how much open work is routed to them — so a lead can read anybody's
+   * queue, their own included, without switching identity.
    */
   interface Props {
     /** The width the workspace fitted this panel to; it scales the contents. */
@@ -26,13 +42,32 @@
   let { width }: Props = $props();
 
   const workspace = useWorkspace();
+  const shell = useShell();
+
+  const AUDIENCE_GROUPS = [
+    ['people', 'People'],
+    ['roles', 'Roles'],
+  ] as const;
 
   let search = $state('');
   let hovering = $state<SectionId | null>(null);
   /** Sections somebody opened or closed. Absent means the section's default. */
   let toggled = $state<Partial<Record<SectionId, boolean>>>({});
 
-  const queue = $derived(buildQueue(workspace.nodes, workspace.config, { search }, workspace.index));
+  const audience = $derived(audienceOptions(workspace.nodes, workspace.me));
+  // A remembered choice the board no longer has (a resource deleted, a view
+  // switched) falls back to everybody's queue rather than to an empty one.
+  const queueFor = $derived(
+    audience.some((option) => option.id === shell.queueFor) ? shell.queueFor : null,
+  );
+  const queue = $derived(
+    buildQueue(
+      workspace.nodes,
+      workspace.config,
+      { search, resourceId: queueFor },
+      workspace.index,
+    ),
+  );
   const sections = $derived(queueSections(queue));
 
   const isFolded = (section: QueueSection): boolean => toggled[section.id] ?? section.folded;
@@ -52,8 +87,22 @@
 
   function move(issue: IssueDto, lane: 'active' | 'done'): void {
     const status = laneStatus(workspace.config, lane);
-    if (status) setStatus(workspace, [issue.id], status);
+    if (!status) return;
+    const claimant = lane === 'active' ? claimantFor(issue, queue.forResource) : null;
+    if (claimant) assign(workspace, [issue.id], claimant);
+    setStatus(workspace, [issue.id], status);
   }
+
+  /** Who a card belongs to, said only where the picker does not already say it. */
+  function ownerOf(card: QueueCard): string | null {
+    if (card.route === 'pool' && card.pool) return `via ${card.pool.title}`;
+    if (queue.forResource) return null;
+    if (!card.issue.assignee) return 'unassigned';
+    return workspace.node(card.issue.assignee)?.title ?? card.issue.assignee;
+  }
+
+  const amount = (effort: number, issues: number): string =>
+    workspace.config.effortAttribute ? `${effort}` : `${issues} ${issues === 1 ? 'issue' : 'issues'}`;
 
   function collapse(): void {
     workspace.doc.queue.open = false;
@@ -80,6 +129,47 @@
   </header>
 
   <div class="filter">
+    {#if audience.length > 1}
+      <label class="audience">
+        <span>Queue for</span>
+        <select
+          value={queueFor ?? ''}
+          onchange={(event) => (shell.queueFor = event.currentTarget.value || null)}
+        >
+          {#each audience.filter((option) => option.group === 'everyone' || option.group === 'me') as option (option.id)}
+            <option value={option.id ?? ''}>{option.label}</option>
+          {/each}
+          {#each AUDIENCE_GROUPS as [group, label] (group)}
+            {@const members = audience.filter((option) => option.group === group)}
+            {#if members.length}
+              <optgroup {label}>
+                {#each members as option (option.id)}
+                  <option value={option.id}>{option.label}</option>
+                {/each}
+              </optgroup>
+            {/if}
+          {/each}
+        </select>
+      </label>
+    {/if}
+
+    {#if queue.workload}
+      {@const load = queue.workload}
+      {@const measured = !!workspace.config.effortAttribute && load.capacity > 0}
+      <div class="workload" class:over={measured && load.assigned > load.capacity}>
+        <span>
+          <strong>{amount(load.assigned, load.assignedIssues)}</strong> assigned
+          {#if load.pooledIssues}· {amount(load.pooled, load.pooledIssues)} in pools{/if}
+          {#if measured}· capacity {load.capacity}{/if}
+        </span>
+        {#if measured}
+          <span class="meter" title="{Math.round((load.assigned / load.capacity) * 100)}% of capacity assigned">
+            <span class="fill" style="width: {Math.min(100, (load.assigned / load.capacity) * 100)}%"></span>
+          </span>
+        {/if}
+      </div>
+    {/if}
+
     <input bind:value={search} placeholder="Filter by title, id or type" aria-label="Filter the queue" />
   </div>
 
@@ -116,6 +206,7 @@
             <ol class="cards">
               {#each section.cards as card, position (card.issue.id)}
                 {@const first = section.numbered && position === 0}
+                {@const owner = ownerOf(card)}
                 <li
                   class="card"
                   class:first
@@ -146,16 +237,23 @@
                         {#if first}<span class="next-tag">Next</span>{/if}
                       </span>
                       <span class="title">{card.issue.title}</span>
-                      {#if card.lineage.length}
-                        <span class="lineage" title={card.lineage.join(' › ')}>
-                          {card.lineage[card.lineage.length - 1]}
+                      {#if card.lineage.length || owner}
+                        <span class="meta">
+                          {#if owner}<span class="owner">{owner}</span>{/if}
+                          {#if card.lineage.length}
+                            <span class="lineage" title={card.lineage.join(' › ')}>
+                              {card.lineage[card.lineage.length - 1]}
+                            </span>
+                          {/if}
                         </span>
                       {/if}
                     </button>
 
                     {#if section.id !== 'done'}
                       <div class="foot">
-                        {#if section.id === 'waiting'}
+                        {#if section.id === 'waiting' && card.issue.flag}
+                          <span class="blockers">⚑ {flagLabel(card.issue.flag)}</span>
+                        {:else if section.id === 'waiting'}
                           <span
                             class="blockers"
                             title={card.blockedBy.map((blocker) => blocker.title).join(', ')}
@@ -250,6 +348,66 @@
   .filter {
     flex: none;
     padding: var(--space-2) var(--space-3);
+  }
+
+  .filter {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .audience {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-xs);
+    color: var(--ink-muted);
+  }
+
+  .audience select {
+    flex: 1;
+    min-width: 0;
+    padding: 0.2rem 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-1);
+    font-size: var(--text-sm);
+  }
+
+  .workload {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    color: var(--ink-muted);
+    font-size: var(--text-xs);
+  }
+
+  .workload strong {
+    color: var(--ink);
+  }
+
+  .meter {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--surface-3);
+    overflow: hidden;
+  }
+
+  .fill {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+  }
+
+  .workload.over .fill {
+    background: var(--danger);
+  }
+
+  .workload.over strong {
+    color: var(--danger);
   }
 
   .filter input {
@@ -539,7 +697,23 @@
     line-clamp: 1;
   }
 
+  .meta {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .owner {
+    flex: none;
+    color: var(--ink-muted);
+    font-size: var(--text-xs);
+    font-weight: 600;
+  }
+
   .lineage {
+    min-width: 0;
     max-width: 100%;
     color: var(--ink-faint);
     font-size: var(--text-xs);

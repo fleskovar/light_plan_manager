@@ -46,8 +46,8 @@ export interface PanelState {
 }
 
 /**
- * The queue down the left edge, offered while a view works off the queue. It
- * is a column rather than a tab because a queue is read top to bottom: what is
+ * The queue down the left edge of every board view. It is a column rather than
+ * a tab because a queue is read top to bottom: what is
  * being worked on, then what comes next, in order.
  */
 export interface QueuePanelState {
@@ -147,6 +147,18 @@ export function emptyView(id: string, name: string, now = new Date().toISOString
     planning: 'periods',
     mode: 'board',
   };
+}
+
+/**
+ * A view as the app needs it, whatever server sent it.
+ *
+ * The server fills every default on the way in, but the editor can be talking
+ * to a server built before a field existed — `npm run dev:web` against an older
+ * `lpm ui --api-only`, or a `dist/` nobody rebuilt — and a pane whose state is
+ * simply absent would take the whole screen down with it.
+ */
+export function completeView(view: ViewDocument): ViewDocument {
+  return view.queue ? view : { ...view, queue: { open: true, width: DEFAULT_QUEUE_WIDTH } };
 }
 
 export function summarize(view: ViewDocument): ViewSummary {

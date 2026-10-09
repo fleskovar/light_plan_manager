@@ -1,8 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { emptyView, type BoardSnapshot, type IssueDto } from '$shared';
+import {
+  completeView,
+  emptyView,
+  type BoardSnapshot,
+  type IssueDto,
+  type SquadDto,
+  type ViewDocument,
+} from '$shared';
 import { Workspace } from '$lib/workspace/workspace.svelte.js';
-import { buildQueue, laneStatus, queueSections, wouldRelease } from '$features/queue/queue.js';
-import { atomicConfig, board, config, issue } from './fixtures.js';
+import {
+  audienceOptions,
+  buildQueue,
+  claimantFor,
+  laneStatus,
+  queueSections,
+  wouldRelease,
+} from '$features/queue/queue.js';
+import { atomicConfig, board, config, issue, period, resource } from './fixtures.js';
 
 /**
  * A feature with four stories in a chain, plus one nobody is waiting on.
@@ -302,5 +316,150 @@ describe('choosing the queue', () => {
     workspace.setPlanning('queue');
     expect(workspace.doc.drawer.tab).toBe('table');
     workspace.dispose();
+  });
+});
+
+describe('completeView', () => {
+  it('gives a view from a server that predates the queue panel one, open', () => {
+    const { queue: _absent, ...older } = emptyView('old', 'Old');
+    expect(completeView(older as ViewDocument).queue).toEqual({ open: true, width: 300 });
+  });
+
+  it('leaves a queue panel somebody arranged alone', () => {
+    const view = { ...emptyView('v', 'V'), queue: { open: false, width: 410 } };
+    expect(completeView(view)).toBe(view);
+  });
+});
+
+describe('a queue for one person or role', () => {
+  /**
+   *   Alice — person, covers the QA pool       Bob — person
+   *   QA    — pool (a role)                     SQ  — squad of Bob alone, owning sprint SP
+   *
+   *   A1  Alice, ready, 3 points        A2  Alice, in progress     A3  Alice, done
+   *   AF  Alice, flagged                Q1  QA pool, 2 points      QS  QA pool, in SP
+   *   B1  Bob, ready                    U1  nobody
+   */
+  const roster = () => {
+    const squad: SquadDto = {
+      kind: 'squad',
+      id: 'SQ',
+      type: 'squad',
+      title: 'Platform',
+      body: '',
+      parentId: null,
+      depth: 0,
+      attributes: {},
+      members: ['BOB'],
+    };
+    return board(
+      resource('ALICE', 'person', { title: 'Alice', covers: ['QA'], capacity: 4 }),
+      resource('BOB', 'person', { title: 'Bob' }),
+      resource('QA', 'role', { title: 'QA engineer' }),
+      squad,
+      { ...period('SP', '2026-10-01', '2026-10-14'), squad: 'SQ' },
+      issue('F', 'feature', null),
+      issue('A1', 'user_story', 'F', { assignee: 'ALICE', attributes: { story_points: 3 } }),
+      issue('A2', 'user_story', 'F', { assignee: 'ALICE', status: 'in_progress', attributes: { story_points: 1 } }),
+      issue('A3', 'user_story', 'F', { assignee: 'ALICE', status: 'done' }),
+      issue('AF', 'user_story', 'F', { assignee: 'ALICE', flag: 'paused' }),
+      issue('Q1', 'user_story', 'F', { assignee: 'QA', attributes: { story_points: 2 } }),
+      issue('QS', 'user_story', 'F', { assignee: 'QA', period: 'SP', attributes: { story_points: 5 } }),
+      issue('B1', 'user_story', 'F', { assignee: 'BOB', status: 'in_progress' }),
+      issue('U1', 'user_story', 'F'),
+    );
+  };
+
+  const sorted = (cards: { issue: { id: string } }[]): string[] => ids(cards).sort();
+
+  it('offers what routes to them: their own work, and the pools they cover', () => {
+    const queue = buildQueue(roster(), config, { resourceId: 'ALICE' });
+    expect(sorted(queue.ready)).toEqual(['A1', 'Q1']);
+    expect(ids(queue.active)).toEqual(['A2']);
+    expect(ids(queue.done)).toEqual(['A3']);
+  });
+
+  it("leaves out other people's work, unassigned work, and a sprint their squad does not own", () => {
+    const queue = buildQueue(roster(), config, { resourceId: 'ALICE' });
+    const shown = [...queue.ready, ...queue.active, ...queue.blocked, ...queue.done].map((card) => card.issue.id);
+    expect(shown).not.toContain('B1');
+    expect(shown).not.toContain('U1');
+    expect(shown).not.toContain('QS');
+  });
+
+  it('holds flagged work back as waiting, as the engine does', () => {
+    const queue = buildQueue(roster(), config, { resourceId: 'ALICE' });
+    expect(ids(queue.blocked)).toEqual(['AF']);
+    expect(ids(queue.ready)).not.toContain('AF');
+  });
+
+  it('says how each card reaches them', () => {
+    const queue = buildQueue(roster(), config, { resourceId: 'ALICE' });
+    const byId = Object.fromEntries(queue.ready.map((card) => [card.issue.id, card]));
+    expect(byId.A1).toMatchObject({ route: 'direct', pool: null });
+    expect(byId.Q1?.route).toBe('pool');
+    expect(byId.Q1?.pool?.id).toBe('QA');
+  });
+
+  it('weighs assigned and pooled work apart, against capacity', () => {
+    const { workload } = buildQueue(roster(), config, { resourceId: 'ALICE' });
+    // A1 + A2 + AF are hers (3 + 1 + 0); only Q1 of the pool is hers to take.
+    expect(workload).toMatchObject({ assigned: 4, assignedIssues: 3, pooled: 2, pooledIssues: 1, capacity: 4 });
+  });
+
+  it('shows a role the work parked in it, inside the sprints it may work in', () => {
+    const queue = buildQueue(roster(), config, { resourceId: 'QA' });
+    expect(ids(queue.ready)).toEqual(['Q1']);
+  });
+
+  it("is everybody's queue with nobody chosen, or somebody the roster no longer has", () => {
+    for (const resourceId of [null, 'GONE']) {
+      const queue = buildQueue(roster(), config, { resourceId });
+      expect(queue.forResource).toBeNull();
+      expect(queue.workload).toBeNull();
+      expect(sorted(queue.ready)).toEqual(['A1', 'Q1', 'QS', 'U1']);
+      expect(queue.ready.every((card) => card.route === null)).toBe(true);
+    }
+  });
+
+  it('names whose queue is empty', () => {
+    const sections = queueSections(buildQueue(roster(), config, { resourceId: 'BOB' }));
+    expect(sections.find((section) => section.id === 'next')?.empty).toBe('Nothing ready for Bob.');
+  });
+});
+
+describe('claimantFor', () => {
+  const alice = resource('ALICE', 'person', { covers: ['QA'] });
+  const qa = resource('QA', 'role');
+
+  it("makes work started from a person's queue theirs", () => {
+    expect(claimantFor(issue('Q1', 'user_story', null, { assignee: 'QA' }), alice)).toBe('ALICE');
+  });
+
+  it('leaves the assignee alone where there is nobody new to hand it to', () => {
+    expect(claimantFor(issue('A1', 'user_story', null, { assignee: 'ALICE' }), alice)).toBeNull();
+    expect(claimantFor(issue('Q1', 'user_story', null, { assignee: 'QA' }), qa)).toBeNull();
+    expect(claimantFor(issue('Q1', 'user_story', null, { assignee: 'QA' }), null)).toBeNull();
+  });
+});
+
+describe('audienceOptions', () => {
+  it('offers everyone, then me, then people and roles by name', () => {
+    const nodes = board(
+      resource('Z', 'person', { title: 'Zoe' }),
+      resource('A', 'person', { title: 'Ann' }),
+      resource('QA', 'role', { title: 'QA engineer' }),
+    );
+    expect(audienceOptions(nodes, 'Z').map((option) => [option.group, option.label])).toEqual([
+      ['everyone', 'Everyone'],
+      ['me', 'Me — Zoe'],
+      ['people', 'Ann'],
+      ['roles', 'QA engineer'],
+    ]);
+  });
+
+  it('offers no "me" when the current user names nobody on the roster', () => {
+    const nodes = board(resource('A', 'person', { title: 'Ann' }));
+    expect(audienceOptions(nodes, 'ELSEWHERE').map((option) => option.group)).toEqual(['everyone', 'people']);
   });
 });
