@@ -1,5 +1,7 @@
 # Light Plan
 
+![The Light Plan web editor, with the queue panel on the left and the dependency graph of a view on the canvas](screenshot_1.png)
+
 A lightweight, file-based issue tracker. Your Agile board lives in your repo as
 folders and markdown files, versioned with git — no server, no database, no
 account.
@@ -53,8 +55,9 @@ board from the command line instead, see [Quick start](#quick-start).
 
 
 The experimental features — [`lpm queue agent`](#draining-the-queue-with-an-agent-lpm-queue-agent) and
-[Jira sync](docs/remote-jira.md) — need packages a standard install leaves out;
-their sections say what to add.
+[Jira sync](docs/remote-jira.md) — need packages a standard install leaves out.
+`lpm experimental on` installs them. See
+[Experimental features](#experimental-features-lpm-experimental).
 
 ### Agent configuration with hcm
 
@@ -1020,10 +1023,13 @@ done. Commits are made in the **project** repo, not the `.lpm` board — commit 
 board (statuses, comments, run logs) yourself.
 
 `lpm queue agent` is **experimental**, so the pi agent it drives is not installed
-with light-plan (it needs Node 22.19+). Install it beside light-plan — with `-g`
-when light-plan is installed globally, without it in a project:
+with light-plan (it needs Node 22.19+). `lpm experimental on` installs it. To
+install it yourself, put it beside light-plan — with `-g` when light-plan is
+installed globally, without it in a project:
 
 ```bash
+lpm experimental on
+# or, by hand:
 npm install -g @earendil-works/pi-coding-agent @earendil-works/pi-ai
 # or, through npx:
 npx -p light-plan -p @earendil-works/pi-coding-agent -p @earendil-works/pi-ai lpm queue agent
@@ -2702,6 +2708,7 @@ still refused.
 | `lpm queue agent` | Drain the queue with the pi coding agent. `--user`, `--max-tasks`, `--model`, `--effort`, `--commit`, `--unassigned`, `--parked`, `--timeout`, `--command-timeout`, `--plain`, `--file`, `--dry-run` |
 | `lpm remote [<sub>]` | Mirror the board onto an external tracker. No subcommand lists the remotes. `connect`, `push [<id>…]`, `pull [<key>…]`, `sync`, `status`, `ledger`, and the less common `add`, `login`, `setup`, `rm`, `log`, `resolve`, `link`, `unlink`, `decouple`, `relink`, `rebase`. `--remote <name>`, `--all`, `--children`, `--recursive`, `--parent <id>`, `--scope <id>`, `--force`, `--purge`, `--dry-run`, `--changed`, `--limit N`, `--yes`, `--refresh`, `--since <iso>`, `--json` |
 | `lpm check` | Validate. `--fix` repairs, `--strict` also fails on warnings |
+| `lpm experimental [on\|off]` | Say whether the experimental features are on. `on` writes the key `experimental` in `.lpm/config.yml` and installs the missing packages. `off` removes the key. `--no-install` |
 | `lpm ui` | Open the board in a browser. `--port`, `--host`, `--no-open`, `--api-only`, `--experimental`. Alias: `lpm web` |
 | `lpm export` | Publish the board as a static site. `-o/--out`, `--site <dir>`, `--workflow`, `--pretty`. Alias: `lpm publish` |
 | `lpm mcp` | Serve the board to AI agents over MCP. `--user`, `--profile`, `--read-only`, `--allow-remote`, `--root` |
@@ -2754,7 +2761,7 @@ down the left edge.
 lpm ui                 # serve the board and open a browser
 lpm ui --port 8080     # somewhere else
 lpm ui --api-only      # just the JSON API, for the dev server below
-lpm ui --experimental  # also offer features that are not finished yet
+lpm ui --experimental  # also offer features that are not finished yet, for this run
 ```
 
 The server binds to `127.0.0.1`, serves one board — the checkout it was started
@@ -2765,11 +2772,61 @@ behind a small REST API.
 Jira, GitHub or Linear — the Sync tab's tracker panel and its **Connect…**,
 readiness and **to fix** windows, the drift badges on the canvas, the **Push**
 and **Pull** entries in the canvas menu and the side panel's remote and conflict
-sections — is shown only by `lpm ui --experimental`. Without the flag the server
-does not register the `/api/remotes` routes at all, and the Sync tab offers
-[sharing the board through git](docs/git-sync.md) and nothing else. The bullets
-below marked *(experimental)* describe that mode. The `lpm remote` commands are
-unaffected.
+sections — is shown only while the experimental features are on. They are on
+when the key `experimental` in `.lpm/config.yml` holds `true`, which
+`lpm experimental on` writes, or for one run with `lpm ui --experimental`. The
+same switch shows the section **Trackers** and the mapping editor in
+**File ▸ Remote board…**. While the features are off, the server does not
+register the `/api/remotes` routes at all, and the Sync tab and the tab
+**Remote board** offer [sharing the board through git](docs/git-sync.md) and
+nothing else. The bullets below marked *(experimental)* describe the mode with
+the features on. The `lpm remote` commands are unaffected.
+
+### Experimental features: `lpm experimental`
+
+```bash
+lpm experimental         # say whether the features are on, and which packages are installed
+lpm experimental on      # turn the features on, and install the missing packages
+lpm experimental off     # turn the features off
+```
+
+`lpm experimental on` does two things.
+
+1. It writes the key `experimental` with the value `true` into
+   `.lpm/config.yml`. `lpm experimental off` removes the key. When the key is
+   absent, the features are off. The key is part of the board config, so the
+   team shares it. On a board shared through git, the change is committed and
+   pushed.
+2. It installs each experimental package that Node does not find beside
+   light-plan. The packages are the optional peer dependencies in
+   `package.json`: `jira.js` for the Jira provider, and
+   `@earendil-works/pi-coding-agent` and `@earendil-works/pi-ai` for
+   `lpm queue agent`.
+
+The command checks the packages on every run, not only on the first. A
+teammate who pulls a board that already holds the key runs
+`lpm experimental on` to get the packages. `lpm experimental off` uninstalls
+nothing.
+
+npm installs the packages where light-plan loads them from:
+
+| light-plan is installed | The command that `lpm experimental on` runs |
+| --- | --- |
+| globally (`npm install -g light-plan`) | `npm install -g <packages>` |
+| in a project (`npm install light-plan`) | `npm install <packages>`, in the project. npm adds the packages to the `dependencies` of the project. |
+| from a clone, or with `npm link` | `npm install --no-save <packages>`, in the clone |
+| through `npx`, or with pnpm or yarn | none. The command prints the `npm install` line to run. |
+
+The packages need Node 22 or newer, and `lpm queue agent` needs Node 22.19. On
+an older Node the command writes the key, installs nothing and says why.
+`--no-install` writes the key and installs nothing. When npm fails, the key
+stays written, the command prints the npm line and exits with the status 1.
+
+Restart a running `lpm ui` after a change, because the server reads the key
+when it starts. The key shows the tracker remotes in `lpm ui` and gates nothing
+else: `lpm remote` and `lpm queue agent` work with or without it. A board
+template that **File ▸ Board configuration… ▸ Templates** saves does not hold
+the key.
 
 ### Views
 
@@ -2816,7 +2873,7 @@ name of the board and the status label.
 
 | Menu | Contents |
 | --- | --- |
-| **File** | The commands for views, which the next table lists, and **Board configuration…**. |
+| **File** | The commands for views, which the next table lists, **Board configuration…** and **Remote board…**. |
 | **Edit** | **New** creates a document of the chosen type on the board. **Copy**, **Paste**, **Duplicate**, **Clear the selection**, **Remove from the view** and **Delete from the board…** act on the selection. **Push pending changes** pushes at once. |
 | **View** | **Board overview…**, **Arrange the graph**, **Hierarchy display…**, a switch for each pane (**Queue panel**, **Details panel**, **Drawer**) and **Appearance**. |
 | **Help** | **Keyboard shortcuts…** lists every shortcut. |
@@ -2837,6 +2894,7 @@ The **File** menu holds the commands for views:
 | **Open in new window** | See the list above. |
 | **Close tab** | Closes the tab of the open view. Disabled when the window has one tab. |
 | **Board configuration…** | Opens the dialog that shows and changes `.lpm/config.yml`. See [What it does](#what-it-does). |
+| **Remote board…** | Opens the same dialog on the tab **Remote board**, which sets up git sync and, with the experimental features on, the tracker remotes. |
 | **Delete view…** | Asks, then deletes the view file. The issues stay on the board. |
 
 The id of a view is the slug of the name that the view had when it was created,
@@ -3001,6 +3059,61 @@ teammate who pulls your branch sees the same canvas you were looking at.
   push; the side panel shows the same for one document and the canvas menu
   offers it for a selection. A document you decoupled, or one outside the
   remote's scope, is reported rather than offered — both were decided.
+- **File ▸ Remote board…** — the settings that share the board with other
+  people. The entry opens the tab **Remote board** of the board configuration
+  dialog. The tab has two sections.
+
+  **Git sync** is always shown. While git sync is off, **Set up git sync…** opens
+  the setup form. The form asks for the repository (the repository of this
+  project, or a separate one) and the branch. The branch field opens with a
+  value in it: `_lpm_board_remote` for the repository of this project, and
+  `main` for a separate repository. The value follows the choice of repository
+  until you type another name. **Check** asks git whether it
+  can reach the repository with the credentials that git already has, and
+  **Share** pushes the board and turns git sync on. While git sync is on, the
+  section shows the repository, the branch and the state, with **Sync now**,
+  **Set up again…** and **Turn off…**. The Sync tab of the drawer opens the same
+  form.
+
+  **Trackers** *(experimental)* is shown only while the experimental features
+  are on. While they are off, the tab names the command `lpm experimental on`.
+  The
+  section lists each tracker remote. **Connect a tracker…** opens the connect
+  form, **Connection** opens the connection of one remote, and **Mapping…**
+  opens the mapping editor. While git sync is on, the section lists the
+  trackers that git sync turned off and offers no action, because a board uses
+  git sync or trackers and not both.
+- **The mapping editor** *(experimental)* — **Mapping…** in the tab **Remote
+  board**, or in the bar of the Sync tab. The server asks the tracker for its
+  issue types with the hierarchy level of each, its workflow statuses and its
+  sprints. The editor then shows three blocks. Each block has the items of this
+  board on the left and the items of the tracker on the right, as a tree.
+
+  | Block | Left | Right | The control on each tracker item |
+  | --- | --- | --- | --- |
+  | **Issue types** | The issue types of the board, by level. | The issue types of the tracker, by level. | The board types that become this tracker type. A board type has one tracker type, so adding it here removes it from the tracker type that it had. |
+  | **Statuses** | The statuses of the board, in board order. | The statuses of the tracker. | The board statuses that this tracker status means. A board status can have several tracker statuses. The left side then has the dropdown **a push writes**. |
+  | **Periods** | The period types of the board. | The period container of the tracker (a sprint on Jira), with the sprints that the tracker holds. | The one board period type that maps to the container. The other period types are stored in the managed block of each issue. |
+
+  The left side shows the mapping of each board item, or **not mapped** in red.
+  **Save the mapping** writes the three blocks to `remotes.<name>.mapping` in
+  `.lpm/config.yml`, and lists the changed lines. The button is disabled until
+  every board type and every board status has a tracker item.
+
+  The editor reports these cases above the blocks:
+
+  - The tracker was not asked, for example because no credential is stored. The
+    right side then shows the names that the mapping holds.
+  - The mapping names a word that the tracker does not have. That board item
+    shows as not mapped.
+  - A tracker status means two board statuses. A pull cannot tell them apart,
+    and `lpm check` reports the pair.
+
+  A tracker with no list of its own (GitHub stores a type and a status as a
+  label) shows the names that the mapping holds, and a field that adds another
+  name. A remote that already mirrors documents needs `lpm remote rebase
+  <name>` after a mapping change. The editor says so after the save and does
+  not run the command.
 - **Connect a remote** *(experimental)* — the Sync tab's **Connect…** (or **Connect a remote…**
   on a board with none) asks which tracker, where its project is, and the
   credential, in one form drawn entirely from what each provider declares: the
@@ -3033,7 +3146,10 @@ teammate who pulls your branch sees the same canvas you were looking at.
   yours rather than the view's: they are kept in this browser, apply to every
   board and view you open in it, and never travel with a view to a teammate.
 - **File ▸ Board configuration…** — the content of `.lpm/config.yml`, and the
-  commands that change it. The dialog has three tabs.
+  commands that change it. The dialog has four tabs. The tab **Remote board**
+  has its own entry above. The top of the dialog shows the planning mode with
+  the button **Switch to queue** or **Switch to periods**, which writes the key
+  `planning` as the **Queue Mode** switch of the queue panel does.
 
   **Types and attributes** shows the hierarchy of each namespace that the board
   declares: issues, periods, the team and squads. Each level lists its types.
