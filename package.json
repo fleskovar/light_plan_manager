@@ -1,6 +1,6 @@
 {
   "name": "light-plan",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "A lightweight, file-based issue tracking system. Agile boards as folders and markdown.",
   "keywords": [
     "issue-tracker",
