@@ -7,7 +7,7 @@
   import { buildIndex } from '$lib/board/index.js';
 
   /**
-   * What is going on, before you open anything.
+   * What is going on on the board, for the overview dialog.
    *
    * Three readings of the same board: the sprint that is running, what has just
    * been written, and what the dependency graph says could be started. All the
@@ -36,7 +36,7 @@
   const dates = (period: { starts?: string; ends?: string }): string =>
     [period.starts, period.ends].filter(Boolean).join(' → ');
 
-  /** "2 days ago", roughly. A landing page wants the shape, not the timestamp. */
+  /** "2 days ago", roughly. The overview shows the age and not the timestamp. */
   function ago(iso: string | undefined): string {
     if (!iso) return '';
     const days = Math.floor((Date.now() - Date.parse(iso)) / 86_400_000);
@@ -154,9 +154,9 @@
 
 <style>
   /*
-   * Three tiles of the landing mosaic. The area names are the contract with
-   * `routes/Welcome.svelte`, which lays the grid out: `now` is the big one,
-   * `added` and `paths` are the wide ones under it.
+   * The three sections of the overview. The area names are the contract with
+   * `OverviewDialog.svelte`, which defines the grid: `now` takes the full
+   * width, and `added` and `paths` sit side by side under it.
    */
   .card {
     display: flex;

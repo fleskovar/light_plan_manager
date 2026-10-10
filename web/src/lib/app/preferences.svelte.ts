@@ -2,7 +2,9 @@ import { getContext, setContext } from 'svelte';
 
 /**
  * How the app looks to the person using it: light or dark, which accent, how
- * big the type is.
+ * big the type is. The key `autoSave` is the one preference about behaviour:
+ * it holds `true` or `false`, the default is `true`, and the workspace reads it
+ * to decide whether a layout change writes the view file without a Save.
  *
  * This is deliberately **not** view state. A view is committed with the board
  * and pulled by teammates, and inheriting somebody else's dark mode on a pull
@@ -27,12 +29,15 @@ export interface Preferences {
   theme: Theme;
   accent: Accent;
   textSize: TextSize;
+  /** Whether a change to the layout of a view writes the view file after a delay. */
+  autoSave: boolean;
 }
 
 export const DEFAULT_PREFERENCES: Readonly<Preferences> = {
   theme: 'system',
   accent: 'blue',
   textSize: 'default',
+  autoSave: true,
 };
 
 export const PREFERENCES_KEY = 'lpm:preferences';
@@ -57,6 +62,8 @@ export function parsePreferences(raw: string | null): Preferences {
     theme: pick(THEMES, stored.theme, DEFAULT_PREFERENCES.theme),
     accent: pick(ACCENTS, stored.accent, DEFAULT_PREFERENCES.accent),
     textSize: pick(TEXT_SIZES, stored.textSize, DEFAULT_PREFERENCES.textSize),
+    autoSave:
+      typeof stored.autoSave === 'boolean' ? stored.autoSave : DEFAULT_PREFERENCES.autoSave,
   };
 }
 

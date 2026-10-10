@@ -3,7 +3,7 @@
   import { SvelteFlowProvider } from '@xyflow/svelte';
   import { DEFAULT_DRAWER_HEIGHT } from '$shared';
   import { Shell, provideShell } from '$lib/app/shell.svelte.js';
-  import { goHome } from '$lib/app/router.svelte.js';
+  import { useTabs } from '$lib/app/tabs.svelte.js';
   import { findBinding, isTyping } from '$lib/shortcuts/bindings.js';
   import Button from '$lib/ui/Button.svelte';
   import ConfirmDialog from '$lib/ui/ConfirmDialog.svelte';
@@ -13,8 +13,12 @@
   import { paneFit, paneScale } from '$lib/ui/scale.js';
   import Splitter from '$lib/ui/Splitter.svelte';
   import { api } from '$lib/api/client.js';
-  import { Workspace, provideWorkspace } from '$lib/workspace/workspace.svelte.js';
+  import { type Workspace, provideWorkspace } from '$lib/workspace/workspace.svelte.js';
   import CommandBar from '$features/commandbar/CommandBar.svelte';
+  import ShortcutsDialog from '$features/commandbar/ShortcutsDialog.svelte';
+  import ViewDialog from '$features/commandbar/ViewDialog.svelte';
+  import ViewTabs from '$features/commandbar/ViewTabs.svelte';
+  import OverviewDialog from '$features/overview/OverviewDialog.svelte';
   import Drawer from '$features/drawer/Drawer.svelte';
   import QueuePanel from '$features/queue/QueuePanel.svelte';
   import { RemoteState, provideRemoteState } from '$features/drawer/remote/remote.svelte.js';
@@ -29,18 +33,26 @@
   import ReparentDialog from '$features/canvas/ReparentDialog.svelte';
 
   /**
-   * The main screen. It owns the two stores and the layout, and hands both down
-   * through context; every panel below reads from them rather than from props,
-   * which is what keeps the tree shallow.
+   * The screen of one tab. It owns the shell and the layout, and hands the
+   * workspace and the shell down through context; every panel below reads from
+   * them rather than from props, which is what keeps the tree shallow.
+   *
+   * The workspace belongs to the tab and not to this component. `App.svelte`
+   * takes it from the pool and keys this component on the view id. A switch to
+   * another tab destroys this component and keeps the workspace.
    */
   interface Props {
+    workspace: Workspace;
     viewId: string;
   }
 
-  let { viewId }: Props = $props();
+  let { workspace: opened, viewId }: Props = $props();
 
-  const workspace = provideWorkspace(new Workspace());
+  // App.svelte keys this component on the id, so one read of the prop is correct.
+  // svelte-ignore state_referenced_locally
+  const workspace = provideWorkspace(opened);
   const shell = provideShell(new Shell());
+  const tabs = useTabs();
   const remote = provideRemoteState(
     new RemoteState(api, {
       setSyncBadges: (badges) => {
@@ -92,7 +104,6 @@
     }),
   );
 
-  let failed = $state(false);
   let arrange = $state<() => void>(() => {});
 
   /**
@@ -149,13 +160,10 @@
     `Show ${DRAWER_TABS[workspace.doc.drawer.tab] ?? 'the board details'}`,
   );
 
-  // App.svelte keys this component on the id, so opening once is correct.
-  // svelte-ignore state_referenced_locally
-  void workspace.open(viewId).catch(() => (failed = true));
-
-  // `open` starts the poll that keeps the board pulled; nothing here stops
-  // it, so a workspace that outlived its component would poll forever.
-  onDestroy(() => workspace.dispose());
+  // The poll that keeps the board pulled runs only while this screen shows the
+  // workspace. The tab that closes disposes the workspace, in the pool.
+  workspace.resume();
+  onDestroy(() => workspace.suspend());
 
   /**
    * Read the remotes and their drift once the board is open, so the canvas can
@@ -225,15 +233,12 @@
   });
 
   function onkeydown(event: KeyboardEvent): void {
-    if (isTyping(event.target)) return;
+    // Every binding acts on the open view, and a view that still loads has none.
+    if (!workspace.ready || isTyping(event.target)) return;
     const binding = findBinding(event);
     if (!binding) return;
     event.preventDefault();
     binding.run({ workspace, shell, arrange: () => arrange() });
-  }
-
-  function onbeforeunload(event: BeforeUnloadEvent): void {
-    if (workspace.dirty) event.preventDefault();
   }
 
   /** Pull when a popup window pushed changes, so the canvas stays in sync. */
@@ -248,19 +253,32 @@
   }
 </script>
 
-<svelte:window {onkeydown} {onbeforeunload} onmessage={onMessage} />
+<svelte:window {onkeydown} onmessage={onMessage} />
 
-{#if failed}
-  <div class="failure">
-    <h1>Could not open “{viewId}”</h1>
-    <Button variant="primary" onclick={goHome}>Back to all views</Button>
-  </div>
-{:else if !workspace.ready}
-  <p class="loading">Loading the board…</p>
-{:else}
-  <div class="shell">
-    <CommandBar />
+<!-- The menu bar and the tabs stay on screen while a view loads and when a
+     view fails to load, so the reader can always open another view. The tabs
+     sit in the column of the canvas, so their row is as wide as the canvas.
+     A view that is not loaded has no side panes, and the row then takes the
+     full width. -->
+<div class="shell">
+  <CommandBar arrange={() => arrange()} />
 
+  {#if workspace.failed}
+    <ViewTabs />
+    <div class="failure">
+      <h1>Could not open “{viewId}”</h1>
+      <p>Open another view from the File menu, or try again.</p>
+      <div class="choices">
+        <Button variant="primary" onclick={() => workspace.load(viewId)}>Try again</Button>
+        {#if tabs.open.length > 1}
+          <Button onclick={() => tabs.close(viewId)}>Close this tab</Button>
+        {/if}
+      </div>
+    </div>
+  {:else if !workspace.ready}
+    <ViewTabs />
+    <p class="loading">Loading the board…</p>
+  {:else}
     <div class="middle" bind:clientWidth={middleWidth}>
       {#if queueOffered}
         {#if workspace.doc.queue.open}
@@ -294,46 +312,52 @@
         {/if}
       {/if}
 
-      <div class="stack" bind:clientHeight={stackHeight}>
-        <SvelteFlowProvider>
-          <Canvas bind:arrange />
-        </SvelteFlowProvider>
+      <div class="column">
+        <ViewTabs />
 
-        {#if workspace.doc.drawer.open}
-          <Splitter
-            size={drawerHeight}
-            min={120}
-            max={drawerRoom}
-            label="Resize the drawer"
-            onresize={(height) => {
-              workspace.doc.drawer.height = height;
-              workspace.scheduleSave();
-            }}
-          />
-          <!-- `ui-scale` is what makes a taller drawer show bigger rows rather
-               than more empty space; the factor comes from its own height. -->
-          <div
-            class="drawer ui-scale"
-            style="height: {drawerHeight}px; --ui-scale: {paneScale(
-              drawerHeight,
-              DEFAULT_DRAWER_HEIGHT,
-            )}"
-          >
-            <Drawer />
-          </div>
-        {:else}
-          <button
-            class="reveal"
-            type="button"
-            title="Show the board details"
-            onclick={() => {
-              workspace.doc.drawer.open = true;
-              workspace.scheduleSave();
-            }}
-          >
-            ▴ {drawerTabLabel}
-          </button>
-        {/if}
+        <!-- `stackHeight` measures the canvas and the drawer without the tabs,
+             because the drawer takes its room from the canvas alone. -->
+        <div class="stack" bind:clientHeight={stackHeight}>
+          <SvelteFlowProvider>
+            <Canvas bind:arrange />
+          </SvelteFlowProvider>
+
+          {#if workspace.doc.drawer.open}
+            <Splitter
+              size={drawerHeight}
+              min={120}
+              max={drawerRoom}
+              label="Resize the drawer"
+              onresize={(height) => {
+                workspace.doc.drawer.height = height;
+                workspace.scheduleSave();
+              }}
+            />
+            <!-- `ui-scale` is what makes a taller drawer show bigger rows rather
+                 than more empty space; the factor comes from its own height. -->
+            <div
+              class="drawer ui-scale"
+              style="height: {drawerHeight}px; --ui-scale: {paneScale(
+                drawerHeight,
+                DEFAULT_DRAWER_HEIGHT,
+              )}"
+            >
+              <Drawer />
+            </div>
+          {:else}
+            <button
+              class="reveal"
+              type="button"
+              title="Show the board details"
+              onclick={() => {
+                workspace.doc.drawer.open = true;
+                workspace.scheduleSave();
+              }}
+            >
+              ▴ {drawerTabLabel}
+            </button>
+          {/if}
+        </div>
       </div>
 
       {#if panelShown}
@@ -362,13 +386,33 @@
         </button>
       {/if}
     </div>
-  </div>
+  {/if}
+</div>
 
-  {#if shell.menu}
-    <ContextMenu
-      anchor={shell.menu.anchor}
-      entries={shell.menu.entries}
-      onclose={() => shell.closeMenu()}
+{#if shell.menu}
+  <ContextMenu
+    anchor={shell.menu.anchor}
+    entries={shell.menu.entries}
+    onclose={() => shell.closeMenu()}
+  />
+{/if}
+
+{#if shell.viewDialog}
+  {#key shell.viewDialog}
+    <ViewDialog kind={shell.viewDialog} onclose={() => (shell.viewDialog = null)} />
+  {/key}
+{/if}
+
+{#if shell.shortcutsOpen}
+  <ShortcutsDialog onclose={() => (shell.shortcutsOpen = false)} />
+{/if}
+
+{#if workspace.ready}
+  {#if shell.overviewOpen && workspace.snapshot}
+    <OverviewDialog
+      board={workspace.snapshot}
+      views={tabs.views.length}
+      onclose={() => (shell.overviewOpen = false)}
     />
   {/if}
 
@@ -404,15 +448,15 @@
   {#if shell.reparentRequest}
     <ReparentDialog request={shell.reparentRequest} onclose={() => shell.closeReparent()} />
   {/if}
+{/if}
 
-  {#if shell.confirmation}
-    {#key shell.confirmation}
-      <ConfirmDialog
-        confirmation={shell.confirmation}
-        onresolve={(accepted, choice) => shell.resolveConfirmation(accepted, choice)}
-      />
-    {/key}
-  {/if}
+{#if shell.confirmation}
+  {#key shell.confirmation}
+    <ConfirmDialog
+      confirmation={shell.confirmation}
+      onresolve={(accepted, choice) => shell.resolveConfirmation(accepted, choice)}
+    />
+  {/key}
 {/if}
 
 <!-- The readiness gate lives here rather than in the Sync tab, because a push
@@ -443,6 +487,7 @@
     min-height: 0;
   }
 
+  .column,
   .stack {
     flex: 1;
     display: flex;
@@ -487,12 +532,28 @@
 
   .loading,
   .failure {
+    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: var(--space-4);
-    height: 100%;
+    margin: 0;
     color: var(--ink-muted);
+  }
+
+  .failure h1,
+  .failure p {
+    margin: 0;
+  }
+
+  .failure h1 {
+    color: var(--ink);
+    font-size: var(--text-lg);
+  }
+
+  .choices {
+    display: flex;
+    gap: var(--space-2);
   }
 </style>

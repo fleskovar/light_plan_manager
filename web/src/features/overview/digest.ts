@@ -24,7 +24,7 @@ import type { WorkingNodes } from '$lib/board/working.js';
 import type { NodeIndex } from '$lib/board/index.js';
 
 /**
- * What the landing page can say about a board before you open anything.
+ * What the overview dialog can say about a board.
  *
  * Three questions, and they are deliberately different ones. *Now* is the
  * calendar's answer: the increment and sprint that are running today, and what

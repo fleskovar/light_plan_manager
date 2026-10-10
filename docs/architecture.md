@@ -191,11 +191,57 @@ if a new operation needs to move one, give it a heading and call `setFlag`.
 | `src/mcp/` | `context.ts` (per-session board handle and identity), `reply.ts`, `tools/{read,plan,templates,work}.ts`. Registered by `lpm mcp`; the SDK is dynamically imported so a missing optional dependency is a message, not a crash. `cli/commands/mcp/` holds the command: `serve.ts`, plus `setup.ts`/`config.ts`, which write a host's JSON config. |
 | `src/runner/` | `lpm queue agent`: the autonomous development loop. `loop.ts` picks the top of `nextTasks`, hands the brief to an injected `PiRunner`, and records the outcome through the engine's own operations (`moveNode`, `flagIssue`, `addComment`); `pi.ts` is the one file that touches the optional pi SDK; `shell.ts` (the non-interactive environment and the guard that keeps a command from waiting for a person), `config.ts` (the `--file` YAML), `git.ts` (project-repo commits), `stats.ts` (the comment + `.lpm/runs/` artifact), `types.ts` (the SDK-free vocabulary, including the `RunEvent` a run reports itself with). |
 | `assets/` + `cli/commands/agent/` | What `lpm agent` installs into someone else's project. `assets/` is a **neutral tree** of any files at all; `assets/harnesses/*.yml` is a list of copy rules saying which of them land where, selected `.gitignore`-style. `assets.ts` walks the tree, `glob.ts` matches patterns, `mapping.ts` validates a mapping and expands its templates, `install.ts` writes without destroying, `prompt.ts` asks the one question. |
-| `web/src/lib/` | `api/` (the only `fetch` in the editor), `board/` (working copy, selectors, links, critical path), `workspace/` (the store + the mutation vocabulary), `ui/` (presentational primitives, plus `markdown.ts` — the only place that produces HTML), `shortcuts/`. |
-| `web/src/features/` | `canvas/`, `drawer/{table,periods,gantt,team,remote}/`, `queue/` (the left panel), `panel/`, `commandbar/`, `welcome/`. |
+| `web/src/lib/` | `api/` (the only `fetch` in the editor), `app/` (`router.svelte.ts`, `tabs.svelte.ts`, `preferences.svelte.ts`, `shell.svelte.ts`), `board/` (working copy, selectors, links, critical path), `workspace/` (the store, `pool.svelte.ts` and the mutation vocabulary), `ui/` (presentational primitives, plus `markdown.ts` — the only place that produces HTML), `shortcuts/`. |
+| `web/src/features/` | `canvas/`, `drawer/{table,periods,gantt,team,remote}/`, `queue/` (the left panel), `panel/`, `commandbar/` (the menu bar and the tabs: `menus.ts` builds the File, Edit, View and Help menus, `CommandBar` draws the bar, `ViewTabs` and `TabStrip` draw the tabs, plus `ViewDialog` and `ShortcutsDialog`), `overview/` (the dialog that View ▸ Board overview opens, and `digest.ts`). |
 | `web/src/viewer/` | The read-only app, its own entry (`web/viewer/index.html`, `web/vite.viewer.config.ts`, out to `web/dist-viewer`): `source.ts` (URL → the board file to fetch), `board.svelte.ts` (the store), `Viewer`/`ViewerCanvas`/`Inspector`. It reuses the canvas wholesale and touches nothing in `lib/api/`. |
 
 Things to keep true here:
+
+- **The editor has one screen, and a view is a tab.** `App.svelte` renders
+  `routes/Workspace.svelte` for the view that the address `#/view/<id>` names.
+  The app has no start page: an address that names no view makes `Tabs.land`
+  pick a view, and `Tabs.land` creates the view `Default` on a board with none.
+  Three stores divide the work:
+  - `Tabs` in `lib/app/tabs.svelte.ts` holds the ids of the open views and the
+    view list. It writes the open ids to the `localStorage` entry
+    `lpm:tabs:<board root>`. A window that "Open in new window" created has
+    `window.name` starting with `lpm-window-`, gets no storage, and writes no
+    entry. The tabs follow the address, so every change of tab goes through
+    `goToView`.
+  - `WorkspacePool` in `lib/workspace/pool.svelte.ts` holds one `Workspace` for
+    each open tab. A switch of tab destroys the `Workspace.svelte` component
+    and keeps the store: the component calls `suspend` and `resume`, and only
+    `Tabs` reports a closed tab, which makes the pool call `dispose`. Create a
+    workspace through `pool.acquire` from an effect or an event handler, not
+    during the render of a component.
+  - `Workspace` writes the view file. `scheduleSave` records a layout change
+    and sets `viewDirty`. The preference `autoSave` (`lpm:preferences`, values
+    `true` and `false`, default `true`) decides whether that change writes the
+    file after the delay or waits for `save`. A push and the write of the queue
+    go through `#outgoing`, which sends the last stored layout when `autoSave`
+    holds `false`. A new write path must use `#outgoing` too, or it saves a
+    layout that the reader did not save.
+- **The menu bar is data, and a shortcut has one implementation.** `barMenus`
+  in `features/commandbar/menus.ts` returns the four menus as `MenuEntry`
+  lists, and `lib/ui/menu/MenuBar.svelte` draws them. An entry with a keyboard
+  shortcut calls `runBinding` with the id of the binding in
+  `lib/shortcuts/bindings.ts`, and takes its key label from `shortcutLabel`.
+  Add a command with a shortcut as a binding first, then as a menu entry that
+  runs the binding. Help ▸ Keyboard shortcuts lists `BINDINGS`, so a binding
+  needs no second entry there.
+- **The tab row belongs to the column of the canvas.** `Workspace.svelte`
+  renders `ViewTabs` inside the `.column` element, above the `.stack` element
+  that holds the canvas and the drawer. The row therefore has the left edge
+  and the width of the canvas whatever the queue panel and the details panel
+  take. `stackHeight` measures `.stack` and not `.column`, because the drawer
+  takes its room from the canvas and not from the tabs.
+- **The server refuses to write a view that has no file.** `updateView` in
+  `server/views/store.ts` is behind `PUT /api/views/:id`, and the push route
+  skips the save of a deleted view. A window can hold a view that another
+  window deleted, and its autosave must not create the file again. Only
+  `createView` creates a view file. `createView` allocates the id: the slug of
+  the name, or the slug with a number when a file uses the slug, because a
+  renamed view keeps its id.
 
 - **Tracker remotes are experimental in the web UI, and one switch hides them.**
   `lpm ui --experimental` sets `ServerOptions.experimental`; without it

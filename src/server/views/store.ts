@@ -24,7 +24,7 @@ export function listViews(paths: BoardPaths): ViewSummary[] {
       try {
         return summarize(parseView(readView(paths, id), id));
       } catch {
-        // A broken view file must not take the welcome screen down with it.
+        // The list skips a view file that does not parse, so the app still opens.
         return null;
       }
     })
@@ -65,6 +65,37 @@ export function saveView(paths: BoardPaths, view: ViewDocument): ViewDocument {
   return stored;
 }
 
+/**
+ * Write a view that already has a file, and refuse a view that has none.
+ *
+ * The autosave of the web app calls this function. A second browser window can
+ * hold a view that the first window deleted. Without the refusal, the autosave
+ * of the second window writes the deleted file again.
+ */
+export function updateView(paths: BoardPaths, view: ViewDocument): ViewDocument {
+  if (!viewExists(paths, view.id)) {
+    throw new BoardError(`No view "${view.id}"`, ['Another window deleted this view.']);
+  }
+  return saveView(paths, view);
+}
+
+const sameName = (a: string, b: string): boolean =>
+  a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/**
+ * The id for a new view: the slug of the name, or the slug with a number when
+ * a file already uses the slug. A renamed view keeps its id, so the slug of a
+ * free name can belong to another view.
+ */
+function freeViewId(paths: BoardPaths, name: string): string {
+  const slug = viewIdFor(name);
+  if (!viewExists(paths, slug)) return slug;
+  for (let suffix = 2; ; suffix += 1) {
+    const id = `${slug}-${suffix}`;
+    if (!viewExists(paths, id)) return id;
+  }
+}
+
 export function createView(
   paths: BoardPaths,
   name: string,
@@ -72,13 +103,13 @@ export function createView(
 ): ViewDocument {
   const trimmed = name.trim();
   if (!trimmed) throw new BoardError('A view needs a name');
-  const id = viewIdFor(trimmed);
-  if (viewExists(paths, id)) {
-    throw new BoardError(`A view called "${trimmed}" already exists`, [
+  const taken = listViews(paths).find((view) => sameName(view.name, trimmed));
+  if (taken) {
+    throw new BoardError(`A view called "${taken.name}" already exists`, [
       'Pick another name, or open the existing view.',
     ]);
   }
-  return saveView(paths, { ...emptyView(id, trimmed), mode });
+  return saveView(paths, { ...emptyView(freeViewId(paths, trimmed), trimmed), mode });
 }
 
 export function removeView(paths: BoardPaths, id: string): void {

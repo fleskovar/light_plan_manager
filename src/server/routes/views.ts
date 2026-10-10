@@ -1,5 +1,5 @@
 import type { BoardPaths } from '../../core/index.js';
-import { loadBoard } from '../../core/index.js';
+import { loadBoard, viewExists } from '../../core/index.js';
 import type { ViewDocument } from '../../shared/index.js';
 import { remapChanges } from '../../shared/index.js';
 import { toSnapshot } from '../../sync/dto.js';
@@ -8,7 +8,15 @@ import { HttpError, readJson, sendJson } from '../http/respond.js';
 import type { Router } from '../http/router.js';
 import { applyChanges } from '../../sync/apply.js';
 import { parseView } from '../views/schema.js';
-import { createView, listViews, loadView, pruneView, removeView, saveView } from '../views/store.js';
+import {
+  createView,
+  listViews,
+  loadView,
+  pruneView,
+  removeView,
+  saveView,
+  updateView,
+} from '../views/store.js';
 
 /**
  * Views: the app's own state, and the one endpoint that writes to the board.
@@ -39,7 +47,7 @@ export function viewRoutes(router: Router, paths: BoardPaths): void {
   router.put('/api/views/:id', async ({ req, res, params }) => {
     const body = await readJson<unknown>(req);
     const view = parseView(body, params.id!);
-    sendJson(res, 200, saveView(paths, view));
+    sendJson(res, 200, updateView(paths, view));
   });
 
   router.delete('/api/views/:id', ({ res, params }) => {
@@ -63,7 +71,10 @@ export function viewRoutes(router: Router, paths: BoardPaths): void {
       view.changes.filter((change) => !result.applied.includes(change.id)),
       result.idMap,
     );
-    const saved = saveView(paths, pruneView({ ...view, changes: remaining }, result.board));
+    // A push from a window that still holds a deleted view writes the board
+    // and leaves the view deleted.
+    const pruned = pruneView({ ...view, changes: remaining }, result.board);
+    const saved = viewExists(paths, id) ? saveView(paths, pruned) : pruned;
 
     sendJson(res, 200, {
       idMap: result.idMap,

@@ -49,6 +49,22 @@ import { Selection } from './selection.svelte.js';
 const AUTOSAVE_DELAY = 1500;
 const AUTO_PULL_INTERVAL = 5000;
 
+/**
+ * The writes that the last disposed workspace still runs. `open` waits for
+ * this promise, so a view that closes and opens again loads what the closing
+ * tab wrote.
+ */
+let settling: Promise<void> = Promise.resolve();
+
+export interface WorkspaceOptions {
+  /**
+   * Reads the preference `autoSave`. With `true`, a change to the layout
+   * writes the view file after `AUTOSAVE_DELAY`. With `false`, only `save`
+   * writes the layout. The default always returns `true`.
+   */
+  autoSave?: () => boolean;
+}
+
 export type WorkspaceStatus = 'idle' | 'loading' | 'saving' | 'pushing';
 
 export interface Notice {
@@ -69,6 +85,15 @@ export class Workspace {
   index = $state.raw<NodeIndexImpl>(buildIndex({}));
   status = $state<WorkspaceStatus>('idle');
   notices = $state<Notice[]>([]);
+  /** True when `load` could not read the view or the board. */
+  failed = $state(false);
+
+  /**
+   * True when the open view holds a change to its members, its layout, its
+   * panes or its display that no save wrote to the view file. Unpushed board
+   * edits do not count: `dirty` reports those.
+   */
+  viewDirty = $state(false);
 
   /** Ids copied with Ctrl-C, waiting to be duplicated by Ctrl-V. */
   clipboard = $state<string[]>([]);
@@ -113,6 +138,25 @@ export class Workspace {
   #pullTimer: ReturnType<typeof setInterval> | null = null;
   #noticeId = 0;
   #tempSequence = 0;
+
+  readonly #autoSave: () => boolean;
+  /** The view as the server stored it last. A write without the layout starts from it. */
+  #baseline: ViewDocument | null = null;
+  /** Counts the layout changes, so a save can tell that one arrived while it ran. */
+  #revision = 0;
+  /** False while no screen shows this workspace. The board poll then stops. */
+  #watching = true;
+  /** True after the view file was deleted. No write may create the file again. */
+  #abandoned = false;
+
+  constructor(options: WorkspaceOptions = {}) {
+    this.#autoSave = options.autoSave ?? (() => true);
+  }
+
+  /** True when the layout waits for a Save that only the reader can give. */
+  get unsaved(): boolean {
+    return this.viewDirty && !this.#autoSave();
+  }
 
   get ready(): boolean {
     return this.snapshot !== null && this.view !== null;
@@ -215,7 +259,7 @@ export class Workspace {
     await this.pull(true);
     this.notify(
       'info',
-      planning === 'queue' ? 'Working the board as one queue' : 'Planning with periods again',
+      planning === 'queue' ? 'Working the board as one queue' : 'Planning with periods and sprints.',
     );
     return true;
   }
@@ -257,9 +301,12 @@ export class Workspace {
   async open(viewId: string): Promise<void> {
     this.status = 'loading';
     try {
+      await settling;
       const [snapshot, view] = await Promise.all([api.board(), api.loadView(viewId)]);
       this.snapshot = snapshot;
-      this.view = completeView(view);
+      this.#baseline = completeView(view);
+      this.view = structuredClone(this.#baseline);
+      this.viewDirty = false;
       this.#rebuild();
       this.#reportBoardProblems(snapshot);
     } catch (error) {
@@ -270,11 +317,39 @@ export class Workspace {
     }
     // There is no manual Pull button to press instead, so the poll starts on
     // its own the moment the board is open — see the class comment.
-    this.#startAutoPull();
+    if (this.#watching) this.#startAutoPull();
     void api
       .me()
       .then((user) => (this.me = user.id))
       .catch(() => {});
+  }
+
+  /** Open the view and record a failure in `failed`, for a caller that cannot await. */
+  load(viewId: string): void {
+    this.failed = false;
+    void this.open(viewId).catch(() => {
+      this.failed = true;
+    });
+  }
+
+  /**
+   * A screen shows this workspace again. The workspace reads the board once
+   * and restarts the poll that `suspend` stopped.
+   */
+  resume(): void {
+    this.#watching = true;
+    if (!this.ready) return;
+    void this.#backgroundPull();
+    this.#startAutoPull();
+  }
+
+  /**
+   * No screen shows this workspace, but its tab is still open. The poll stops.
+   * A pending save and a pending push still run on their timers.
+   */
+  suspend(): void {
+    this.#watching = false;
+    this.#stopAutoPull();
   }
 
   /** Re-read the board, keeping unpushed work laid over the new snapshot. */
@@ -324,11 +399,21 @@ export class Workspace {
     }
   }
 
-  /** Tear down the timers so neither outlives the view it belongs to. */
-  dispose(): void {
+  /**
+   * Stop the poll and run the pending writes now, so neither timer outlives
+   * the tab. With `deleted`, the view file is gone: the pending push still
+   * writes the board, and nothing writes the view file again.
+   */
+  dispose(options: { deleted?: boolean } = {}): void {
     this.#stopAutoPull();
-    if (this.#saveTimer) clearTimeout(this.#saveTimer);
-    if (this.#pushTimer) clearTimeout(this.#pushTimer);
+    if (options.deleted) this.#abandoned = true;
+    settling = this.flush();
+  }
+
+  /** Run the pending push and the pending save now, and wait for both. */
+  async flush(): Promise<void> {
+    if (this.#pushTimer !== null) await this.push(true);
+    if (this.#saveTimer !== null) await this.#write(this.#autoSave());
   }
 
   #rebuild(): void {
@@ -486,39 +571,117 @@ export class Workspace {
 
   // -- persistence ---------------------------------------------------------
 
+  /**
+   * Record a change to the layout of the view. When the preference `autoSave`
+   * holds `true`, the view file is written `AUTOSAVE_DELAY` later. When it
+   * holds `false`, the change waits for `save`.
+   */
   scheduleSave(): void {
+    this.viewDirty = true;
+    this.#revision += 1;
+    if (this.#autoSave()) this.#armSave();
+  }
+
+  #armSave(): void {
     if (this.#saveTimer) clearTimeout(this.#saveTimer);
-    this.#saveTimer = setTimeout(() => void this.save(), AUTOSAVE_DELAY);
+    this.#saveTimer = setTimeout(() => void this.#write(this.#autoSave()), AUTOSAVE_DELAY);
   }
 
   /**
    * Debounce the actual write to `.lpm`, the way `scheduleSave` debounces the
-   * view. Also saves the view immediately, so a push that fails — or a
-   * browser closed before the debounce fires — still leaves the queue on
-   * disk rather than only in memory.
+   * view. The queue is also written to the view file on the same delay, so a
+   * push that fails still leaves the queue on disk rather than only in
+   * memory. That write happens whatever `autoSave` holds: with `false` it
+   * carries the queue and leaves the saved layout as it was.
    */
   schedulePush(): void {
-    this.scheduleSave();
+    this.#armSave();
     if (this.#pushTimer) clearTimeout(this.#pushTimer);
     this.#pushTimer = setTimeout(() => void this.push(true), AUTOSAVE_DELAY);
   }
 
-  /** Write the view file. Never touches board documents — that is `push`. */
-  async save(): Promise<void> {
+  /**
+   * Write the whole view to its file, layout included. Never touches board
+   * documents — that is `push`. This is the Save of the File menu and Ctrl+S.
+   */
+  async save(): Promise<boolean> {
+    return this.#write(true);
+  }
+
+  /**
+   * The document that a write sends. With `full`, it is the view as the
+   * screen shows it. Without `full`, it is the last stored view with the
+   * current queue, so the write does not save a layout that nobody saved.
+   */
+  #outgoing(full: boolean): ViewDocument {
+    const live = $state.snapshot(this.doc) as ViewDocument;
+    if (full || !this.#baseline) return live;
+    return { ...this.#baseline, changes: live.changes };
+  }
+
+  async #write(full: boolean): Promise<boolean> {
     if (this.#saveTimer) {
       clearTimeout(this.#saveTimer);
       this.#saveTimer = null;
     }
     const view = this.view;
-    if (!view) return;
+    if (!view || this.#abandoned) return false;
+    const revision = this.#revision;
     this.status = 'saving';
     try {
-      const saved = await api.saveView($state.snapshot(view) as ViewDocument);
+      const saved = await api.saveView(this.#outgoing(full));
       view.updated = saved.updated;
+      this.#baseline = saved;
+      // A layout change that arrived during the request is still unsaved.
+      if (full && revision === this.#revision) this.viewDirty = false;
+      return true;
     } catch (error) {
       this.report(error);
+      return false;
     } finally {
       this.status = 'idle';
+    }
+  }
+
+  /**
+   * Give the view another name. The id and the file name stay, so open tabs
+   * and saved addresses keep working. The write does not save the layout.
+   */
+  async rename(name: string): Promise<boolean> {
+    const view = this.doc;
+    const previous = view.name;
+    view.name = name;
+    if (this.#baseline) this.#baseline = { ...this.#baseline, name };
+    if (await this.#write(this.#autoSave())) return true;
+    view.name = previous;
+    if (this.#baseline) this.#baseline = { ...this.#baseline, name: previous };
+    return false;
+  }
+
+  /**
+   * Create a view with this name that holds the members, the layout, the
+   * panes and the display of the open view. Returns the id of the new view,
+   * or null when the server refused. The queue of unpushed changes stays with
+   * the open view: two views that hold the same queue push every change twice.
+   * The pending push runs first, so the copy holds the ids that the board
+   * allocated and no temporary id.
+   */
+  async saveCopy(name: string): Promise<string | null> {
+    try {
+      await this.flush();
+      const created = await api.createView(name, this.mode);
+      const live = $state.snapshot(this.doc) as ViewDocument;
+      await api.saveView({
+        ...live,
+        id: created.id,
+        name: created.name,
+        created: created.created,
+        changes: [],
+      });
+      return created.id;
+    } catch (error) {
+      this.report(error);
+      return null;
     }
   }
 
@@ -548,15 +711,21 @@ export class Workspace {
 
     this.status = 'pushing';
     try {
-      const result = await api.push($state.snapshot(view) as ViewDocument);
+      // The server stores the view that it receives. Without auto-save the
+      // request carries the saved layout, so a push does not save the layout.
+      const autoSave = this.#autoSave();
+      const result = await api.push(this.#outgoing(autoSave));
       this.snapshot = result.board;
+      this.#baseline = result.view;
       this.view = completeView({
-        ...result.view,
+        ...($state.snapshot(view) as ViewDocument),
+        changes: result.view.changes,
+        updated: result.view.updated,
         members: this.#remap(view.members, result.idMap),
+        layout: Object.fromEntries(
+          Object.entries(view.layout).map(([id, layout]) => [result.idMap[id] ?? id, layout]),
+        ),
       });
-      this.doc.layout = Object.fromEntries(
-        Object.entries(view.layout).map(([id, layout]) => [result.idMap[id] ?? id, layout]),
-      );
       this.selection.set(this.#remap(this.selection.ids, result.idMap));
       if (Object.keys(result.idMap).length) {
         this.#allocated = { ...this.#allocated, ...result.idMap };
@@ -572,8 +741,14 @@ export class Workspace {
       } else if (!silent) {
         this.notify('info', 'Pushed to the board');
       }
-      void this.save();
       this.onPushed?.();
+      // The members and the layout now carry the ids that the push allocated.
+      if (autoSave) await this.#write(true);
+      else if (this.#saveTimer) {
+        // The server stored the queue with this push, so the pending write has nothing to add.
+        clearTimeout(this.#saveTimer);
+        this.#saveTimer = null;
+      }
       return result.failures;
     } catch (error) {
       this.report(error);

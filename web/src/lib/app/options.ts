@@ -10,9 +10,9 @@ import {
 } from './preferences.svelte.js';
 
 /**
- * Options ▸ Appearance: the part of the Options menu that is about the reader
- * rather than the view. Every screen with an Options button offers it, and
- * the workspace adds its view options after it.
+ * View ▸ Appearance: the entries of the menu bar that are about the reader
+ * rather than the view. `viewMenu` in `features/commandbar/menus.ts` places
+ * them in the submenu Appearance.
  */
 const THEME_LABELS: Record<Theme, string> = {
   system: 'Match the system',
@@ -33,14 +33,17 @@ const TEXT_SIZE_LABELS: Record<TextSize, string> = {
   large: 'Large',
 };
 
+/** The preferences that this menu offers. `autoSave` is in the File menu. */
+type AppearanceKey = 'theme' | 'accent' | 'textSize';
+
 /** The narrow surface the menu needs, so a test can pass a plain object. */
 export interface AppearanceTarget {
   values: Preferences;
-  set<K extends keyof Preferences>(key: K, value: Preferences[K]): void;
+  set<K extends AppearanceKey>(key: K, value: Preferences[K]): void;
 }
 
 export function appearanceEntries(preferences: AppearanceTarget): MenuEntry[] {
-  const choices = <K extends keyof Preferences>(
+  const choices = <K extends AppearanceKey>(
     key: K,
     options: readonly Preferences[K][],
     labels: Record<Preferences[K], string>,

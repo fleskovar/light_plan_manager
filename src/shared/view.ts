@@ -107,7 +107,7 @@ export interface ViewDocument {
   mode: ViewMode;
 }
 
-/** Listing entry for the welcome screen. */
+/** One entry of the view list that the web app shows in its tabs and its View menu. */
 export interface ViewSummary {
   id: string;
   name: string;

@@ -34,7 +34,7 @@
   /*
    * Every colour is a `light-dark()` pair: the first for a light page, the
    * second for a dark one. Which one applies is `color-scheme`, which follows
-   * the system unless the reader chose otherwise in Options ▸ Appearance —
+   * the system unless the reader chose otherwise in View ▸ Appearance —
    * that writes `data-theme` on the root (see `lib/app/preferences.svelte.ts`).
    * One declaration per token is the point: a palette written out twice, once
    * per theme, is two palettes free to disagree.
@@ -106,7 +106,7 @@
   --ui-scale: 1;
 }
 
-/* Options ▸ Appearance ▸ Theme. Absent means "follow the system". */
+/* View ▸ Appearance ▸ Theme. Absent means "follow the system". */
 :root[data-theme='light'] {
   color-scheme: light;
 }
@@ -115,7 +115,7 @@
   color-scheme: dark;
 }
 
-/* Options ▸ Appearance ▸ Accent. Blue is the default declared above. */
+/* View ▸ Appearance ▸ Accent. Blue is the default declared above. */
 :root[data-accent='indigo'] {
   --accent: light-dark(#5b45d6, #a294f9);
   --accent-soft: light-dark(#ebe7ff, #2c2650);
@@ -131,7 +131,7 @@
   --accent-soft: light-dark(#e6e8ec, #2b3039);
 }
 
-/* Options ▸ Appearance ▸ Text size. Every size token is in rem, so this is all
+/* View ▸ Appearance ▸ Text size. Every size token is in rem, so this is all
    it takes for the whole app — panes that scale their own contents included. */
 :root[data-text-size='small'] {
   font-size: 87.5%;

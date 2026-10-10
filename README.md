@@ -2131,7 +2131,7 @@ decide in one call.
 
 ### Building one on the canvas
 
-`lpm ui` → New view → **Template registry**. The same canvas, table and side
+`lpm ui` → **View ▸ New view…** → **The template registry**. The same canvas, table and side
 panel as a board view, over the registry instead: drag templates into folders,
 draw dependencies between them, edit descriptions and parameters in the panel
 — every edit reaches the registry on its own within moments, the same as
@@ -2761,6 +2761,85 @@ dragged, which subflows are collapsed, which levels are drawn as badges rather
 than as nodes, how the panes are sized, and any edits that have not been written
 to the board yet.
 
+The app opens on a view. It has no separate start page.
+
+- **First launch.** On a board with no view file, the app creates the view
+  `Default` (the file `.lpm/views/default.json`) and opens it. The view is empty.
+  Select issues in the table to add them to the canvas.
+- **Later launches.** The app opens the tabs that this browser had open, and
+  shows the view that it showed last. A browser with no stored tabs opens the
+  view with the newest save.
+- **Tabs.** Each open view has a tab. The tabs are a row of buttons under the
+  menu bar, above the canvas. The row has the left edge and the width of the
+  canvas, so it moves with the queue panel and the details panel. A click on a
+  tab shows the view. The **×** on a tab, or a middle click, closes the tab.
+  The **+** after the tabs creates a view. A window always keeps one tab open.
+  A right-click on a tab offers **Close**, **Close other tabs** and **Open in
+  new window**.
+- **Open in new window.** The view opens in a new browser window. Its tab closes
+  in the first window when that window holds other tabs. The new window has its
+  own tabs.
+- **The address.** `#/view/<id>` names the view that the window shows. A reload
+  and a bookmark return to that view. The Back button returns to the tab that
+  the window showed before.
+
+The app stores the tabs in the `localStorage` of the browser, in one entry for
+each board. The key of the entry is `lpm:tabs:<root folder of the board>`. The
+value is a JSON object with two keys: `open` holds the ids of the open views in
+tab order, and `active` holds the id of the view that the window showed last.
+No file under `.lpm` stores the tabs, so a teammate who pulls the board does not
+receive them. A window that **Open in new window** created writes no entry.
+
+The top of the window holds a menu bar with four menus: **File**, **Edit**,
+**View** and **Help**. A click on a name opens its menu. While a menu is open,
+the pointer on another name opens that menu. The right end of the bar shows the
+name of the board and the status label.
+
+| Menu | Contents |
+| --- | --- |
+| **File** | The commands for views, which the next table lists. |
+| **Edit** | **New** creates a document of the chosen type on the board. **Copy**, **Paste**, **Duplicate**, **Clear the selection**, **Remove from the view** and **Delete from the board…** act on the selection. **Push pending changes** pushes at once. |
+| **View** | **Board overview…**, **Arrange the graph**, **Hierarchy display…**, a switch for each pane (**Queue panel**, **Details panel**, **Drawer**) and **Appearance**. |
+| **Help** | **Keyboard shortcuts…** lists every shortcut. |
+
+Each entry with a shortcut shows the keys at its right edge. An entry that
+needs the board is disabled while a view loads.
+
+The **File** menu holds the commands for views:
+
+| Command | Result |
+| --- | --- |
+| **New view…** | Asks for a name, and whether the view shows the board or the template registry. Creates the view file and opens it in a new tab. |
+| **Open** | Lists every view of the board. A tick marks the views that have a tab. A click shows the view, in a new tab when it has none. |
+| **Save** (Ctrl+S) | Writes the open view to its file, layout included. |
+| **Save as…** | Asks for a name, and writes the members, the layout, the panes and the display of the open view to a new view file. The copy takes the place of the open view in its tab. Unpushed edits stay with the first view. |
+| **Rename…** | Changes the key `name` in the view file. The id and the file name stay, so tabs and saved addresses keep working. |
+| **Auto-save** | Switches the preference `autoSave`. A tick shows that it holds `true`. |
+| **Open in new window** | See the list above. |
+| **Close tab** | Closes the tab of the open view. Disabled when the window has one tab. |
+| **Delete view…** | Asks, then deletes the view file. The issues stay on the board. |
+
+The id of a view is the slug of the name that the view had when it was created,
+and the id names the file. When a file already uses the slug, the server adds a
+number, for example `plan-2`. Two views cannot have the same name. The server
+compares names without regard to capitals.
+
+**Auto-save** decides when a change to the layout reaches the view file. The
+layout is the members of the view, the positions and sizes of the nodes, the
+collapsed subflows, the pane sizes and the hierarchy display. The app stores
+the preference in the `localStorage` entry `lpm:preferences`, under the key
+`autoSave`. The values are `true` and `false`, and the default is `true`.
+
+- With `true`, the app writes the view file about 1.5 seconds after a change.
+- With `false`, the app writes the layout only on **Save**. Until then the tab
+  shows a dot before the view name, and the status label reads *Layout not
+  saved*. A tab with an unsaved layout asks before it closes, and offers to
+  save first. A switch to another tab keeps the unsaved layout in memory.
+
+Auto-save does not apply to edits of the board. The app pushes those in both
+cases, as the next paragraph describes. With `false`, a push writes the queue of
+edits to the view file and leaves the saved layout as it was.
+
 Every change is queued in the open view and autosaved there — but there is
 nothing to press to send it. A debounce (~1.5s, so a dragged slider or a few
 fields typed in a row still land as one write) replays the queue through the
@@ -2785,7 +2864,9 @@ teammate who pulls your branch sees the same canvas you were looking at.
 
 ### What it does
 
-- **Home** — before you open a view, three readings of the board. *Now* is the
+- **Overview** — **View ▸ Board overview…** opens a window with the
+  counts of the board (issues, periods, roster, templates, views) and three
+  readings of the board. *Now* is the
   increment and sprint running today, what is in flight in it, and what is
   unblocked and unstarted, ranked the way `lpm task next` ranks work; when
   today's sprint is finished it looks ahead to the next one with work in it and
@@ -2927,12 +3008,11 @@ teammate who pulls your branch sees the same canvas you were looking at.
   chain six people are already on does not come back as "nothing to schedule".
   Both are `lpm upstream` [described above](#what-has-to-happen-first-upstream-work),
   reading the same rule.
-- **Options ▸ Appearance** — light or dark (or whatever the system says), the
-  accent colour that marks the selection, and the text size. The Options button
-  sits at the right end of the top bar, and on the welcome screen too. These are
+- **View ▸ Appearance** — light or dark (or whatever the system says), the
+  accent colour that marks the selection, and the text size. These are
   yours rather than the view's: they are kept in this browser, apply to every
   board and view you open in it, and never travel with a view to a teammate.
-- **Options ▸ DAG ▸ Hierarchy display** — how deep the canvas draws. A board four
+- **View ▸ Hierarchy display…** — how deep the canvas draws. A board four
   levels deep drawn as boxes inside boxes is a picture of the hierarchy, not of
   the work: the dependencies run between the stories at the bottom, and every
   level above is a frame around the part you are reading. Set a level to
@@ -2942,16 +3022,19 @@ teammate who pulls your branch sees the same canvas you were looking at.
   its badge stays a node, and the choice is saved with the view (and published
   with it). The canvas is laid out again when it changes, because badging a
   level moves everything below it.
-- **Sprints & PIs / Queue** — the switch at the very top of the queue panel,
-  with a **?** beside it that explains the two modes. It is the board's planning
-  mode (`lpm planning`), not a view setting, so it changes what every teammate
-  and agent is offered. *Sprints & PIs* is the default, and gives the drawer its
-  Periods and Gantt tabs. *Queue* is for teams that do not plan a fortnight at a
-  time: they take work off the top as the graph unblocks it. The whole board
-  becomes one PI holding one sprint, and the panel says so. The Periods and
-  Gantt tabs, the period badges on nodes, the period field, the table's period
-  column and the "Schedule into" menu go away, and the landing page's *Now* card
-  shows the whole board. No document changes either way, so switching back
+- **Queue Mode** — the switch at the very top of the queue panel, after the
+  label **Queue Mode**, with a **?** at the end of the row that explains the two
+  states. The switch is green and reads **On**, or grey and reads **Off**. It
+  sets the board's planning mode (`lpm planning`), not a view setting, so it
+  changes what every teammate and agent is offered. **On** writes the value
+  `queue` to the key `planning` in `.lpm/config.yml`, and **Off** writes the
+  value `periods`. *Off* is the default: the board plans with sprints and PIs,
+  and the drawer has its Periods and Gantt tabs. *On* is for teams that do not
+  plan a fortnight at a time: they take work off the top as the graph unblocks
+  it. The whole board becomes one PI holding one sprint, and the panel says so.
+  The Periods and Gantt tabs, the period badges on nodes, the period field, the
+  table's period column and the "Schedule into" menu go away, and the *Now* card
+  of the overview shows the whole board. No document changes either way, so switching back
   restores the plan exactly. A board whose config declares no period types is
   always in queue mode, because there is nothing to plan with.
 - **Dropping something where it does not fit** — a story dragged onto a program

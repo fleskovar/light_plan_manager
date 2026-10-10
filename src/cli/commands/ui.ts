@@ -21,7 +21,8 @@ Options
                         controls). Without it the Sync tab offers git sharing only.
 
 The server is local-only and edits this checkout's .lpm folder. Stop it with
-Ctrl-C; nothing is written to the board until you press Push in the app.`;
+Ctrl-C. The app writes each edit to the board about 1.5 seconds after you make
+it. On a board with no view, the app creates .lpm/views/default.json.`;
 
 /** A bind address as somebody would type it into a browser. */
 function displayHost(host: string): string {

@@ -485,6 +485,54 @@ describe('http api', () => {
     expect(await json<unknown[]>('/api/views')).toEqual([]);
   });
 
+  it('keeps the id of a renamed view and gives the next view a free id', async () => {
+    const put = (view: ViewDocument): RequestInit => ({
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(view),
+    });
+    const created = await json<ViewDocument>('/api/views', post('/api/views', { name: 'Plan' }));
+    const renamed = await json<ViewDocument>(
+      `/api/views/${created.id}`,
+      put({ ...created, name: 'Quarter' }),
+    );
+    expect(renamed).toMatchObject({ id: 'plan', name: 'Quarter' });
+
+    // The name "Plan" is free again, and the file `plan.json` is not.
+    const second = await json<ViewDocument>('/api/views', post('/api/views', { name: 'Plan' }));
+    expect(second.id).toBe('plan-2');
+
+    // A name is taken whatever its capitals are.
+    const refused = await fetch(`${base}/api/views`, post('/api/views', { name: 'quarter' }));
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as { error: string }).error).toMatch(/"Quarter" already exists/);
+
+    await fetch(`${base}/api/views/plan`, { method: 'DELETE' });
+    await fetch(`${base}/api/views/plan-2`, { method: 'DELETE' });
+  });
+
+  it('does not write a deleted view again', async () => {
+    const view = await json<ViewDocument>('/api/views', post('/api/views', { name: 'Gone' }));
+    await fetch(`${base}/api/views/${view.id}`, { method: 'DELETE' });
+
+    // The autosave of a window that still holds the view.
+    const saved = await fetch(`${base}/api/views/${view.id}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(view),
+    });
+    expect(saved.status).toBe(400);
+    expect(((await saved.json()) as { error: string }).error).toMatch(/No view "gone"/);
+
+    // A push from that window answers, and the view stays deleted.
+    const pushed = await fetch(
+      `${base}/api/views/${view.id}/push`,
+      post(`/api/views/${view.id}/push`, { view }),
+    );
+    expect(pushed.status).toBe(200);
+    expect(await json<unknown[]>('/api/views')).toEqual([]);
+  });
+
   it('pushes a view and clears the changes that landed', async () => {
     const view = await json<ViewDocument>('/api/views', post('/api/views', { name: 'Push test' }));
     const changes: Change[] = [

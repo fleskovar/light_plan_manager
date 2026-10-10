@@ -162,7 +162,7 @@ Never reached
 2. Create a view: in the card **New view**, type a name and select **Create**.
 3. The queue panel is on the left side. If you see only a narrow strip with the
    word "Queue", select the strip.
-4. At the top of the panel, the switch shows **Queue**. Below the heading, the
+4. At the top of the panel, the switch **Queue Mode** shows **On**. Below the heading, the
    panel shows "One PI › one sprint › all 10 work units".
 5. In the list **Queue for**, select **Alice**.
 6. Read the number in the circle beside each card, in the three sections.
@@ -203,8 +203,8 @@ board: switch the mode of the board from part 3.
    lpm planning periods
    ```
 
-   You can also select **Sprints & PIs** in the switch at the top of the queue
-   panel. Both write the same key in `.lpm/config.yml`.
+   You can also set the switch **Queue Mode** at the top of the queue panel to
+   **Off**. Both write the same key in `.lpm/config.yml`.
 
 2. Run the commands of part 3, step 2, again. Two lists change:
 
@@ -230,7 +230,7 @@ board: switch the mode of the board from part 3.
    Each list must be equal to `periods-mode/outputs/sequence.json`.
 
 3. In the browser, wait five seconds. The web app reads the board again every
-   five seconds. The switch now shows **Sprints & PIs**, and the drawer at the
+   five seconds. The switch **Queue Mode** now shows **Off**, and the drawer at the
    bottom shows the tabs **Periods** and **Gantt**.
 
 4. Compare the panel with this table. The values are in

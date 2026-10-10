@@ -201,7 +201,7 @@ export function statusTone(config: ConfigDto, statusId: string): StatusTone {
  * The two things the engine actually knows about a status, and the two orders
  * everything that ranks work agrees on.
  *
- * The landing page's digest and the queue board both answer "what could be
+ * The overview's digest and the queue board both answer "what could be
  * picked up next?", so the primitives behind that answer live here rather than
  * once in each — a board where the digest and the queue disagreed about what is
  * ready would be worse than either.

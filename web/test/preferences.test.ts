@@ -43,12 +43,17 @@ describe('parsePreferences', () => {
   });
 
   it('reads what was stored', () => {
-    const stored: Preferences = { theme: 'dark', accent: 'teal', textSize: 'large' };
+    const stored: Preferences = {
+      theme: 'dark',
+      accent: 'teal',
+      textSize: 'large',
+      autoSave: false,
+    };
     expect(parsePreferences(JSON.stringify(stored))).toEqual(stored);
   });
 
   it('loses only the setting it cannot read, never the others', () => {
-    const raw = JSON.stringify({ theme: 'sepia', accent: 'indigo', textSize: 42 });
+    const raw = JSON.stringify({ theme: 'sepia', accent: 'indigo', textSize: 42, autoSave: 'no' });
     expect(parsePreferences(raw)).toEqual({ ...DEFAULT_PREFERENCES, accent: 'indigo' });
   });
 
@@ -67,7 +72,12 @@ describe('applyPreferences', () => {
 
   it('writes a choice, and takes it away again on the way back to the default', () => {
     const root = fakeRoot();
-    applyPreferences(root, { theme: 'light', accent: 'graphite', textSize: 'small' });
+    applyPreferences(root, {
+      theme: 'light',
+      accent: 'graphite',
+      textSize: 'small',
+      autoSave: false,
+    });
     expect(Object.fromEntries(root.attributes)).toEqual({
       'data-theme': 'light',
       'data-accent': 'graphite',
@@ -119,7 +129,7 @@ describe('PreferencesStore', () => {
   });
 });
 
-describe('Options ▸ Appearance', () => {
+describe('View ▸ Appearance', () => {
   const submenu = (entries: MenuEntry[], label: string): MenuItem[] =>
     ((entries.find((entry) => 'label' in entry && entry.label === label) as MenuItem).items ??
       []) as MenuItem[];

@@ -2,6 +2,7 @@
   import { DEFAULT_QUEUE_WIDTH, flagLabel, type IssueDto } from '$shared';
   import { useShell } from '$lib/app/shell.svelte.js';
   import StatusChip from '$lib/ui/StatusChip.svelte';
+  import Toggle from '$lib/ui/Toggle.svelte';
   import TypeIcon from '$lib/ui/TypeIcon.svelte';
   import { paneScale } from '$lib/ui/scale.js';
   import { assign, setStatus } from '$lib/workspace/mutations.js';
@@ -39,7 +40,9 @@
    *
    * Above all of it sits the board's planning mode, because it decides what
    * this panel is: the queue inside the running sprints, or the whole board as
-   * one continuous run. It is board config (`lpm planning`), so flipping it
+   * one continuous run. The row shows the label "Queue Mode" and a switch. On
+   * is the value `queue` of the key `planning` in `.lpm/config.yml`, and off is
+   * the value `periods`. It is board config (`lpm planning`), so flipping it
    * here changes what every teammate and agent is offered, and the "?" beside
    * it says so before anybody does.
    *
@@ -91,6 +94,13 @@
   );
   const sequenced = $derived(sequence.steps !== null);
   const queueMode = $derived(workspace.planning === 'queue');
+  const modeTitle = $derived(
+    !workspace.canPlanWithPeriods
+      ? 'This board declares no period types, so Queue Mode is always on'
+      : queueMode
+        ? 'On: the board is one continuous queue. Switch off to plan with sprints and PIs.'
+        : 'Off: the board plans with sprints and PIs. Switch on to work the board as one queue.',
+  );
 
   async function choose(planning: 'periods' | 'queue'): Promise<void> {
     if (switching || planning === workspace.planning) return;
@@ -152,35 +162,21 @@
   style="width: {width}px; --ui-scale: {paneScale(width, DEFAULT_QUEUE_WIDTH)}"
 >
   <div class="mode">
-    <div class="switch" role="group" aria-label="Planning mode">
-      <button
-        type="button"
-        aria-pressed={!queueMode}
-        disabled={switching || !workspace.canPlanWithPeriods}
-        title={workspace.canPlanWithPeriods
-          ? 'Plan with sprints and increments'
-          : 'This board declares no period types, so the queue is its only mode'}
-        onclick={() => choose('periods')}
-      >
-        Sprints &amp; PIs
-      </button>
-      <button
-        type="button"
-        aria-pressed={queueMode}
-        disabled={switching}
-        title="Work the whole board as one continuous queue"
-        onclick={() => choose('queue')}
-      >
-        Queue
-      </button>
-    </div>
+    <span class="mode-label">Queue Mode</span>
+    <Toggle
+      checked={queueMode}
+      label="Queue Mode"
+      disabled={switching || !workspace.canPlanWithPeriods}
+      title={modeTitle}
+      onchange={(on) => choose(on ? 'queue' : 'periods')}
+    />
     <button
       class="help"
       class:on={explaining}
       type="button"
       aria-expanded={explaining}
       aria-controls="planning-help"
-      title="What do these modes do?"
+      title="What does Queue Mode do?"
       onclick={() => (explaining = !explaining)}
     >
       ?
@@ -190,12 +186,12 @@
   {#if explaining}
     <div class="explain" id="planning-help">
       <p>
-        <strong>Sprints &amp; PIs</strong> — the queue follows the timeline. Work in the running
-        sprint comes first and later sprints wait their turn. A switched-off period holds its work
-        back, and a squad's sprint is offered only to that squad.
+        <strong>Off.</strong> The board plans with sprints and PIs, and the queue follows the
+        timeline. Work in the running sprint comes first and later sprints wait their turn. A
+        switched-off period holds its work back, and a squad's sprint is offered only to that squad.
       </p>
       <p>
-        <strong>Queue</strong> — the whole board is one big PI holding one big sprint, with
+        <strong>On.</strong> The whole board is one big PI holding one big sprint, with
         everything inside it. Every period is ignored, so the order is priority, then column, then
         the feature already under way, then how much finishing a task unblocks.
       </p>
@@ -417,45 +413,20 @@
     background: var(--surface-2);
   }
 
-  .switch {
-    flex: 1;
+  .mode-label {
     min-width: 0;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    padding: 2px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-0);
-  }
-
-  .switch button {
-    min-width: 0;
-    padding: 0.2rem 0.4rem;
-    border: none;
-    border-radius: var(--radius-sm);
-    background: none;
-    color: var(--ink-muted);
-    font-size: var(--text-xs);
-    font-weight: 600;
-    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .switch button:hover:not(:disabled) {
+    white-space: nowrap;
     color: var(--ink);
-  }
-
-  .switch button[aria-pressed='true'] {
-    background: var(--accent);
-    color: var(--accent-ink);
-  }
-
-  .switch button:disabled:not([aria-pressed='true']) {
-    opacity: 0.5;
+    font-size: var(--text-sm);
+    font-weight: 600;
   }
 
   .help {
+    /* The label and the switch sit together at the left. The help button
+       takes the right end of the row. */
+    margin-left: auto;
     flex: none;
     display: grid;
     place-items: center;

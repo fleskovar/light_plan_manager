@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PeriodDto } from '$shared';
-import { currentFocus, latestIssues, openPathways } from '$features/welcome/digest.js';
+import { currentFocus, latestIssues, openPathways } from '$features/overview/digest.js';
 import { board, config, issue, period } from './fixtures.js';
 
 /**
@@ -67,7 +67,7 @@ describe('currentFocus', () => {
   });
 
   /**
-   * The landing page and the periods view must not disagree about what is now,
+   * The overview and the periods view must not disagree about what is now,
    * so the digest reads the switch through the same `isRunning` they do.
    */
   it('stops pointing at a sprint somebody switched off', () => {

@@ -29,10 +29,12 @@ export interface ReparentRequest {
   onDone: () => void;
 }
 
+export type ViewDialogKind = 'new' | 'save-as' | 'rename';
+
 export class Shell {
   menu = $state<{ anchor: MenuAnchor; entries: MenuEntry[] } | null>(null);
   breakdownTarget = $state<string | null>(null);
-  /** The Options ▸ DAG ▸ Hierarchy display dialog. */
+  /** The View ▸ Hierarchy display dialog. */
   hierarchyOpen = $state(false);
   /** The resource whose card's pencil was clicked. */
   resourceTarget = $state<string | null>(null);
@@ -40,6 +42,15 @@ export class Shell {
   newResourceType = $state<string | null>(null);
   reparentRequest = $state<ReparentRequest | null>(null);
   confirmation = $state<Confirmation | null>(null);
+  /**
+   * The dialog of the File menu that asks for a name. `new` creates a view,
+   * `save-as` copies the open view, and `rename` renames the open view.
+   */
+  viewDialog = $state<ViewDialogKind | null>(null);
+  /** The board overview that View ▸ Board overview opens. */
+  overviewOpen = $state(false);
+  /** The list of keyboard shortcuts that Help ▸ Keyboard shortcuts opens. */
+  shortcutsOpen = $state(false);
   /**
    * The period box a canvas drag is hovering, so the drawer can light it up.
    *

@@ -12,7 +12,7 @@ import type { WorkingNodes } from '$lib/board/working.js';
 import { Workspace } from '$lib/workspace/workspace.svelte.js';
 import { buildQueue, markerOf, markerTitle, queueSections } from '$features/queue/queue.js';
 import { QueueSequence, sequenceKey } from '$features/queue/sequence.svelte.js';
-import { currentFocus } from '$features/welcome/digest.js';
+import { currentFocus } from '$features/overview/digest.js';
 import { buildGraph } from '$features/canvas/model.js';
 import { bulkEntries } from '$features/canvas/menus.js';
 import { board, config, issue, period, resource } from './fixtures.js';
@@ -333,7 +333,7 @@ describe('the rest of the app in queue mode', () => {
     expect(scheduleOf(queueConfig)).toBeNull();
   });
 
-  it('reads the whole board as the one run on the landing page', () => {
+  it('reads the whole board as the one run in the overview', () => {
     const focus = currentFocus(scheduled(), queueConfig, { today: '2026-03-01' });
     expect(focus.continuous).toBe(true);
     expect(focus.sprint).toBeNull();
