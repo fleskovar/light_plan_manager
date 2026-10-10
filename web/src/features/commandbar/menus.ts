@@ -132,7 +132,9 @@ const submenu = (items: MenuEntry[]): MenuEntry[] | undefined => (items.length ?
 
 /**
  * The File menu: the commands that act on a view file and on its tab, and the
- * entry that opens the configuration of the board.
+ * two entries that open the configuration of the board. **Remote board…** opens
+ * the same dialog on the tab that shares the board through git or mirrors it
+ * onto a tracker.
  */
 export function fileMenu(context: ViewContext): MenuEntry[] {
   const { tabs, shell, workspace, preferences } = context;
@@ -183,7 +185,8 @@ export function fileMenu(context: ViewContext): MenuEntry[] {
       onSelect: () => active !== null && closeTab(context, active),
     },
     { separator: true },
-    { label: 'Board configuration…', disabled: !ready, onSelect: () => (shell.configOpen = true) },
+    { label: 'Board configuration…', disabled: !ready, onSelect: () => shell.openConfig('types') },
+    { label: 'Remote board…', disabled: !ready, onSelect: () => shell.openConfig('remote') },
     { separator: true },
     {
       label: 'Delete view…',

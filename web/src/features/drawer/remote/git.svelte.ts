@@ -60,12 +60,41 @@ export interface GitSetupDraft {
   /** The project's own repository, or a URL of the board's own. */
   where: 'project' | 'url';
   url: string;
-  /** Blank means the default for `where`. */
+  /**
+   * The branch. The form opens with `defaultBranch` in this field, so the
+   * reader sees the value that Share sends. A blank still means the default.
+   */
   branch: string;
 }
 
+/**
+ * The branch that the form fills in for a choice of repository. In the
+ * repository of the project, the board takes the branch that the server
+ * reports in `projectBranch`, which is `_lpm_board_remote`. In a repository of
+ * its own, the board takes `main`. `lpm git setup` uses the same two defaults.
+ */
+export function defaultBranch(where: GitSetupDraft['where'], status: GitSyncStatusDto | null): string {
+  return where === 'project' ? (status?.projectBranch ?? '_lpm_board_remote') : 'main';
+}
+
 export function emptyGitDraft(status: GitSyncStatusDto | null): GitSetupDraft {
-  return { where: status?.project ? 'project' : 'url', url: '', branch: '' };
+  const where = status?.project ? 'project' : 'url';
+  return { where, url: '', branch: defaultBranch(where, status) };
+}
+
+/**
+ * The draft after the reader chose the other repository. The branch follows
+ * the choice while the field is blank or still holds the default of the
+ * choice before. A branch that the reader typed stays.
+ */
+export function withWhere(
+  draft: GitSetupDraft,
+  where: GitSetupDraft['where'],
+  status: GitSyncStatusDto | null,
+): GitSetupDraft {
+  const typed = draft.branch.trim();
+  const untouched = typed === '' || typed === defaultBranch(draft.where, status);
+  return { ...draft, where, branch: untouched ? defaultBranch(where, status) : draft.branch };
 }
 
 /**
@@ -110,8 +139,7 @@ export function setupRequestOf(draft: GitSetupDraft): GitSetupRequest {
 
 /** The branch the form will use, for the hint under the field. */
 export function effectiveBranch(draft: GitSetupDraft, status: GitSyncStatusDto | null): string {
-  if (draft.branch.trim()) return draft.branch.trim();
-  return draft.where === 'project' ? (status?.projectBranch ?? '_lpm_board_remote') : 'main';
+  return draft.branch.trim() || defaultBranch(draft.where, status);
 }
 
 export type Tone = 'ok' | 'warn' | 'error';
@@ -216,6 +244,13 @@ export class GitState {
     this.draft = null;
     this.check = null;
     this.turnOffQuestion = null;
+  }
+
+  /** Choose the repository. The branch field follows, and the last check no longer applies. */
+  chooseWhere(where: GitSetupDraft['where']): void {
+    if (!this.draft) return;
+    this.draft = withWhere(this.draft, where, this.status);
+    this.check = null;
   }
 
   /** Back out of the warning to the filled-in form. */

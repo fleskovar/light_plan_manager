@@ -33,10 +33,13 @@ where custom fields must be created — but an API token on an account with the
 project permissions below is the supported path.
 
 The connector also needs the `jira.js` client. Jira sync is experimental, so
-the client is not installed with light-plan. Install it once, beside light-plan,
-on the machine that runs the sync (Node 22+ required):
+the client is not installed with light-plan. `lpm experimental on` installs it,
+with the other experimental packages, on the machine that runs the sync
+(Node 22+ required). To install only this client yourself, put it beside
+light-plan:
 
 ```bash
+lpm experimental on                         # installs every experimental package
 npm install -g jira.js                      # light-plan installed with -g
 npm install jira.js                         # light-plan is a project dependency
 npx -p light-plan -p jira.js lpm remote …   # running through npx

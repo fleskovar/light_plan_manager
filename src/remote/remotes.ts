@@ -29,7 +29,7 @@ import { normalizePeriodMapping, resolvePeriodContainer } from './periods.js';
 import type { Connector, Provider } from './provider.js';
 import { redactor } from './redact.js';
 import { lookupProvider } from './registry.js';
-import { findMarkers, MARKER_PREFIX } from './scaffold.js';
+import { findMarkers, isMarker, MARKER_PREFIX } from './scaffold.js';
 
 /**
  * One remote, opened: the frame core validated, plus the provider-specific
@@ -73,6 +73,40 @@ export interface OpenedRemote {
   mapping: Record<string, unknown>;
 }
 
+/** How strictly `openRemote` reads the mapping of a remote. */
+export interface OpenRemoteOptions {
+  /**
+   * Open a remote whose mapping is not complete. The three refusals about the
+   * mapping are skipped: a scaffold marker, a board status with no remote
+   * state, and a board with periods that maps no period type. The connection
+   * is validated as always.
+   *
+   * Only the mapping editor (`mapping-editor.ts`) passes this option. It reads
+   * a remote in order to complete the mapping, so it cannot require a complete
+   * one. A sync must never pass it.
+   */
+  lenient?: boolean;
+}
+
+/** A mapping without the entries whose value is a scaffold marker. */
+function withoutMarkers(mapping: Record<string, unknown>): Record<string, unknown> {
+  const marked = (value: unknown): boolean =>
+    isMarker(value) ||
+    (value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      isMarker((value as Record<string, unknown>)['remote']));
+  const strip = (value: unknown): unknown => {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, entry]) => !marked(entry))
+        .map(([key, entry]) => [key, strip(entry)]),
+    );
+  };
+  return strip(mapping) as Record<string, unknown>;
+}
+
 /**
  * Resolve and validate one declared remote.
  *
@@ -85,7 +119,12 @@ export interface OpenedRemote {
  * Throws `BoardError` when the remote is not declared, the provider is
  * unknown, or the provider's schema rejects the block.
  */
-export function openRemote(config: BoardConfig, name: string): OpenedRemote {
+export function openRemote(
+  config: BoardConfig,
+  name: string,
+  options: OpenRemoteOptions = {},
+): OpenedRemote {
+  const lenient = options.lenient === true;
   const declared = remoteNamed(config, name);
   if (!declared) {
     const names = remoteNames(config);
@@ -100,7 +139,7 @@ export function openRemote(config: BoardConfig, name: string): OpenedRemote {
   // *raw* mapping core stored, before the provider schema, so a marker in a
   // key the schema would strip is still caught rather than silently dropped.
   const markers = findMarkers(declared.mapping);
-  if (markers.length > 0) {
+  if (markers.length > 0 && !lenient) {
     throw new BoardError(
       `Remote "${name}" cannot be opened: the mapping scaffold has unresolved markers`,
       markers.map(
@@ -114,7 +153,10 @@ export function openRemote(config: BoardConfig, name: string): OpenedRemote {
 
   const parsed = provider.config.safeParse({
     connection: declared.connection,
-    mapping: declared.mapping,
+    // A marker is a placeholder and not a value, so a lenient open reads the
+    // mapping without it. The schema of a provider can refuse a marker where it
+    // expects one word of a fixed list, for example a period carrier.
+    mapping: lenient ? withoutMarkers(declared.mapping) : declared.mapping,
   });
   if (!parsed.success) {
     throw new BoardError(
@@ -140,7 +182,7 @@ export function openRemote(config: BoardConfig, name: string): OpenedRemote {
     statusMappings,
     config.statuses.map((status) => status.id),
   );
-  if (missing.length > 0) {
+  if (missing.length > 0 && !lenient) {
     throw new BoardError(
       `Remote "${name}" cannot be opened: not every board status is mapped`,
       missing.map((id) => `remotes.${name}.mapping.statuses: status "${id}" is not mapped`),
@@ -166,7 +208,7 @@ export function openRemote(config: BoardConfig, name: string): OpenedRemote {
   // has no connector yet — so an unresolved cell keeps the conservative demand.
   const periodsCell = provider.capabilities.periods;
   const nativePeriods = isProbe(periodsCell) ? true : periodsCell.native;
-  if (hasPeriods(config) && nativePeriods) {
+  if (hasPeriods(config) && nativePeriods && !lenient) {
     const periodMapping = normalizePeriodMapping(data.mapping['periods']);
     if (!periodMapping) {
       throw new BoardError(

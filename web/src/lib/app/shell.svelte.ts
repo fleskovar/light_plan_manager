@@ -31,6 +31,9 @@ export interface ReparentRequest {
 
 export type ViewDialogKind = 'new' | 'save-as' | 'rename';
 
+/** The tabs of the board configuration dialog. */
+export type ConfigTab = 'types' | 'statuses' | 'remote' | 'templates';
+
 export class Shell {
   menu = $state<{ anchor: MenuAnchor; entries: MenuEntry[] } | null>(null);
   breakdownTarget = $state<string | null>(null);
@@ -49,8 +52,12 @@ export class Shell {
   viewDialog = $state<ViewDialogKind | null>(null);
   /** The board overview that View ▸ Board overview opens. */
   overviewOpen = $state(false);
-  /** The dialog that File ▸ Board configuration opens. */
-  configOpen = $state(false);
+  /**
+   * The tab of the board configuration dialog that is open, or null while the
+   * dialog is closed. File ▸ Board configuration opens `types`, File ▸ Remote
+   * board opens `remote`, and the Sync tab of the drawer opens `remote` too.
+   */
+  configTab = $state<ConfigTab | null>(null);
   /** The list of keyboard shortcuts that Help ▸ Keyboard shortcuts opens. */
   shortcutsOpen = $state(false);
   /**
@@ -95,6 +102,14 @@ export class Shell {
 
   closeBreakdown(): void {
     this.breakdownTarget = null;
+  }
+
+  openConfig(tab: ConfigTab = 'types'): void {
+    this.configTab = tab;
+  }
+
+  closeConfig(): void {
+    this.configTab = null;
   }
 
   openHierarchy(): void {

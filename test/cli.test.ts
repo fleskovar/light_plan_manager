@@ -986,3 +986,46 @@ describe('lpm ui', () => {
     }
   });
 });
+
+describe('lpm experimental', () => {
+  const configText = (): string => readFileSync(path.join(cwd, '.lpm', 'config.yml'), 'utf8');
+
+  it('reports the state and each package, turns the features on and turns them off', () => {
+    init('--prefix', 'LP');
+    const before = configText();
+
+    const off = lpm('experimental');
+    expect(off.stdout).toContain('Experimental  off');
+    expect(off.stdout).toMatch(/jira\.js \S+\s+installed/);
+    expect(off.stdout).toContain('lpm experimental on');
+
+    // This checkout holds the three packages as dev dependencies, so `on` has nothing to install.
+    const on = lpm('experimental', 'on');
+    expect(on.status).toBe(0);
+    expect(on.stdout).toContain('Experimental  on');
+    expect(on.stdout).toContain('every experimental package is installed');
+    expect(configText()).toMatch(/^experimental: true$/m);
+    expect(lpm('experimental').stdout).toContain('Experimental  on');
+
+    expect(lpm('experimental', 'on').stdout).toContain('Already  on');
+
+    const again = lpm('experimental', 'off');
+    expect(again.stdout).toContain('Experimental  off');
+    expect(configText()).toBe(before);
+  });
+
+  it('writes the key and installs nothing with --no-install', () => {
+    init('--prefix', 'LP');
+    const run = lpm('experimental', 'on', '--no-install');
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain('--no-install: no package was installed');
+    expect(configText()).toMatch(/^experimental: true$/m);
+  });
+
+  it('refuses a word that is not on or off', () => {
+    init('--prefix', 'LP');
+    const run = lpm('experimental', 'maybe');
+    expect(run.status).toBe(1);
+    expect(run.all).toContain('Say on or off');
+  });
+});

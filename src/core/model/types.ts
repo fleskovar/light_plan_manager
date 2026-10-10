@@ -281,6 +281,14 @@ export interface BoardConfig {
    * for a board with no period types; `operations/planning.ts` writes it.
    */
   planning: PlanningMode;
+
+  /**
+   * Whether the experimental features are on, as the key `experimental` holds
+   * it. False when the key is absent. Today the key shows the tracker remotes
+   * in `lpm ui`. Read it with `experimentalOf`. `operations/experimental.ts`
+   * writes it.
+   */
+  experimental: boolean;
 }
 
 /** How a board decides what happens next. @see BoardConfig.planning */

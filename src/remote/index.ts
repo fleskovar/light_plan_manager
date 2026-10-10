@@ -55,6 +55,8 @@
  *                  refusals every caller without a terminal must share
  *   inspect.ts     ask a remote about itself: reachability, discovery,
  *                  vocabulary and prerequisites, as a report
+ *   mapping-editor.ts what the tracker has beside what the mapping says, and
+ *                  writing a chosen mapping back, for the web mapping editor
  *   check.ts       remote config as a check pass, composed by `lpm check` (LP-262)
  *   preflight.ts   every unmappable value, collected before a push writes (LP-273)
  *   prerequisites.ts what the remote must already have for a push to land —
@@ -117,6 +119,7 @@ export * from './links.js';
 export * from './managed-block.js';
 export * from './managed-comment.js';
 export * from './mapping.js';
+export * from './mapping-editor.js';
 export * from './merge.js';
 export * from './periods.js';
 export * from './plan.js';

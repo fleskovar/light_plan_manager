@@ -128,6 +128,35 @@ describe('renaming a type', () => {
     expect(result.notes).toContain('Renamed the key "epic" to "milestone" in remotes.tracker.mapping.types.');
   });
 
+  it('notes each remote whose mapping has no entry for a new status or a new type', () => {
+    const paths = seed();
+    appendFileSync(
+      paths.configPath,
+      [
+        '',
+        'remotes:',
+        '  tracker:',
+        '    provider: jsonfile',
+        '    conflict: manual',
+        '    mapping:',
+        '      types: { epic: Epic }',
+        '      statuses: { backlog: Todo }',
+        '',
+      ].join('\n'),
+    );
+
+    const result = editBoardConfig(paths, [
+      { op: 'add-status', id: 'parked', label: 'Parked' },
+      { op: 'add-type', kind: 'issue', name: 'spike', label: 'Spike', level: 3, placement: 'join' },
+      { op: 'add-type', kind: 'period', name: 'quarter', label: 'Quarter', level: 0, placement: 'join' },
+    ]);
+
+    expect(result.notes).toEqual([
+      'remotes.tracker.mapping.statuses has no entry for "parked". The remote cannot sync until the status is mapped.',
+      'remotes.tracker.mapping.types has no entry for "spike". The remote cannot sync an issue of this type until the type is mapped.',
+    ]);
+  });
+
   it('changes one line of the config when only the label changes, and rewrites no document', () => {
     const paths = seed();
     const before = configOf(paths).split('\n');

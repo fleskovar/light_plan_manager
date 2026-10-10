@@ -30,6 +30,8 @@ import {
   loadLinkStore,
   loadResolutions,
   openRemote,
+  readRemoteMapping,
+  writeRemoteMapping,
   periodIndexOf,
   planConflicts,
   recordDocumentResolution,
@@ -61,6 +63,8 @@ import type {
   RemoteInspectAnswersDto,
   RemoteInspectAnswersResultDto,
   RemoteInspectDto,
+  RemoteMappingUpdateDto,
+  RemoteMappingUpdateResultDto,
   RemoteProviderDto,
   RemoteReadinessFixDto,
   RemoteReadinessFixResultDto,
@@ -206,6 +210,30 @@ export function remoteRoutes(router: Router, paths: BoardPaths): void {
       ...(body.statuses !== undefined ? { statuses: stringRecord(body.statuses, 'statuses') } : {}),
     });
     const dto: RemoteInspectAnswersResultDto = { changed };
+    sendJson(res, 200, dto);
+  });
+
+  // The mapping editor: what the tracker has beside what the mapping says, and
+  // the mapping that a person chose. The read asks the tracker, so it can take
+  // seconds. The write changes `remotes.<name>.mapping` and no document.
+  router.get('/api/remotes/:name/mapping', async ({ res, params }) => {
+    sendJson(res, 200, await readRemoteMapping(loadBoard(paths), params.name!));
+  });
+
+  router.put('/api/remotes/:name/mapping', async ({ req, res, params }) => {
+    const name = params.name!;
+    const body = await readJson<Partial<RemoteMappingUpdateDto>>(req);
+    refuseDuringSync();
+    const update: RemoteMappingUpdateDto = {
+      ...(body.types !== undefined ? { types: stringRecord(body.types, 'types') } : {}),
+      ...(body.statuses !== undefined ? { statuses: stringListRecord(body.statuses, 'statuses') } : {}),
+      ...(body.periodContainer !== undefined ? { periodContainer: String(body.periodContainer) } : {}),
+    };
+    const { changed } = writeRemoteMapping(loadBoard(paths), name, update);
+    const dto: RemoteMappingUpdateResultDto = {
+      changed,
+      mapping: await readRemoteMapping(loadBoard(paths), name),
+    };
     sendJson(res, 200, dto);
   });
 
@@ -847,6 +875,21 @@ function stringRecord(value: unknown, what: string): Record<string, string> {
   for (const [key, entry] of Object.entries(value)) {
     if (typeof entry !== 'string') throw new HttpError(400, `${what}.${key} must be a string`);
     out[key] = entry;
+  }
+  return out;
+}
+
+/** An object whose values are lists of strings. A message names the offending key, never its value. */
+function stringListRecord(value: unknown, what: string): Record<string, string[]> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new HttpError(400, `${what} must be an object`);
+  }
+  const out: Record<string, string[]> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (!Array.isArray(entry) || entry.some((item) => typeof item !== 'string')) {
+      throw new HttpError(400, `${what}.${key} must be a list of strings`);
+    }
+    out[key] = entry as string[];
   }
   return out;
 }

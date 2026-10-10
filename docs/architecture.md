@@ -192,7 +192,7 @@ if a new operation needs to move one, give it a heading and call `setFlag`.
 | `src/runner/` | `lpm queue agent`: the autonomous development loop. `loop.ts` picks the top of `nextTasks`, hands the brief to an injected `PiRunner`, and records the outcome through the engine's own operations (`moveNode`, `flagIssue`, `addComment`); `pi.ts` is the one file that touches the optional pi SDK; `shell.ts` (the non-interactive environment and the guard that keeps a command from waiting for a person), `config.ts` (the `--file` YAML), `git.ts` (project-repo commits), `stats.ts` (the comment + `.lpm/runs/` artifact), `types.ts` (the SDK-free vocabulary, including the `RunEvent` a run reports itself with). |
 | `assets/` + `cli/commands/agent/` | What `lpm agent` installs into someone else's project. `assets/` is a **neutral tree** of any files at all; `assets/harnesses/*.yml` is a list of copy rules saying which of them land where, selected `.gitignore`-style. `assets.ts` walks the tree, `glob.ts` matches patterns, `mapping.ts` validates a mapping and expands its templates, `install.ts` writes without destroying, `prompt.ts` asks the one question. |
 | `web/src/lib/` | `api/` (the only `fetch` in the editor), `app/` (`router.svelte.ts`, `tabs.svelte.ts`, `preferences.svelte.ts`, `shell.svelte.ts`), `board/` (working copy, selectors, links, critical path), `workspace/` (the store, `pool.svelte.ts` and the mutation vocabulary), `ui/` (presentational primitives, plus `markdown.ts` — the only place that produces HTML), `shortcuts/`. |
-| `web/src/features/` | `canvas/`, `drawer/{table,periods,gantt,team,remote}/`, `queue/` (the left panel), `panel/`, `config/` (the dialog that File ▸ Board configuration opens: `model.ts` derives its rows, `editor.svelte.ts` sends the edits), `commandbar/` (the menu bar and the tabs: `menus.ts` builds the File, Edit, View and Help menus, `CommandBar` draws the bar, `ViewTabs` and `TabStrip` draw the tabs, plus `ViewDialog` and `ShortcutsDialog`), `overview/` (the dialog that View ▸ Board overview opens, and `digest.ts`). |
+| `web/src/features/` | `canvas/`, `drawer/{table,periods,gantt,team,remote}/`, `queue/` (the left panel), `panel/`, `config/` (the dialog that File ▸ Board configuration opens: `model.ts` derives its rows, `editor.svelte.ts` sends the edits, and `remote/` holds the tab Remote board with the mapping editor of a tracker remote), `commandbar/` (the menu bar and the tabs: `menus.ts` builds the File, Edit, View and Help menus, `CommandBar` draws the bar, `ViewTabs` and `TabStrip` draw the tabs, plus `ViewDialog` and `ShortcutsDialog`), `overview/` (the dialog that View ▸ Board overview opens, and `digest.ts`). |
 | `web/src/viewer/` | The read-only app, its own entry (`web/viewer/index.html`, `web/vite.viewer.config.ts`, out to `web/dist-viewer`): `source.ts` (URL → the board file to fetch), `board.svelte.ts` (the store), `Viewer`/`ViewerCanvas`/`Inspector`. It reuses the canvas wholesale and touches nothing in `lib/api/`. |
 
 Things to keep true here:
@@ -244,6 +244,26 @@ Things to keep true here:
   renamed view keeps its id.
 
 - **Tracker remotes are experimental in the web UI, and one switch hides them.**
+  The switch has two sources. The key `experimental` in `.lpm/config.yml` holds
+  `true` or `false`, and is off when absent. `setExperimental` in
+  `core/operations/experimental.ts` writes it, as text, the way `setPlanning`
+  writes `planning`: turning the features on appends one commented line, and
+  turning them off removes that line, byte for byte. `experimentalOf` in
+  `config/lookup.ts` is the one read. The flag `lpm ui --experimental` turns the
+  features on for one run. `cli/commands/ui.ts` passes "the flag or the key" to
+  the server once, at start, so a change to the key needs a restart of
+  `lpm ui`.
+
+  `lpm experimental on` also installs the packages that the features load.
+  That half is in `cli/experimental-deps.ts` and not in core, because the
+  packages belong to the installation of light-plan and not to a board. The
+  list is the optional peer dependencies of `package.json`, so a new optional
+  peer is installed with no edit. `installTarget` decides where npm runs from
+  the folder of the package (a global install, a project, a clone, or an npx
+  cache where nothing is installed). The command checks on every `on`, because
+  the key travels with the board and the packages do not.
+  `boardTemplateText` removes the key from a template.
+
   `lpm ui --experimental` sets `ServerOptions.experimental`; without it
   `buildRouter` does not register `remoteRoutes` at all, and `/api/health`
   (`ServerInfoDto`) says so. The web app reads that into `RemoteState.enabled`,
@@ -984,6 +1004,25 @@ Things to keep true here:
   The dialog reads `ConfigDto` and the snapshot. `features/config/model.ts`
   derives the rows and the document counts as pure functions, and
   `editor.svelte.ts` holds the request state. The components are presentational.
+  **The dialog is the one place for the settings of the board, and
+  `shell.configTab` says which tab is open.** The value is `types`, `statuses`,
+  `remote` or `templates`, or null while the dialog is closed. File ▸ Board
+  configuration… opens `types`. File ▸ Remote board… and the button **Mapping…**
+  of the Sync tab open `remote`. A new settings surface is a tab of this dialog
+  and a menu entry that calls `shell.openConfig`, not a dialog of its own.
+
+  The tab **Remote board** (`features/config/remote/RemoteBoardTab.svelte`)
+  holds no decision. It reads the three state machines of the Sync tab
+  (`GitState`, `RemoteState`, `ConnectionsState`), so the two surfaces cannot
+  disagree. Its section **Trackers** is drawn only when `remote.enabled` is
+  true. `Workspace.svelte` mounts `GitSetupDialog` and `ConnectDialog` once,
+  after the configuration dialog. The Sync tab used to mount them, and a dialog
+  that the drawer mounts does not exist while the drawer is closed.
+
+  A dialog can now open a dialog, so `Modal.svelte` keeps a module-level stack
+  of the open dialogs and only the newest one closes on Escape. Before the
+  stack, each dialog listened on the window and one key press closed them all.
+
   No CLI command and no MCP tool calls `editBoardConfig` yet. Each one that is
   added must call that function and must not edit the config another way.
 - **A board template is a config file, and the user folder holds the ones a
@@ -1709,6 +1748,11 @@ table, so the two spellings cannot drift. Note there is deliberately no
 LP-3` would read as "clear it" and would in fact raise one. Keep the ranking
 and eligibility rules in core, not in the command. `lpm planning` is one
 `setPlanning` call and a report; it decides nothing about what the mode means.
+`lpm experimental` is one `setExperimental` call, one
+`installMissingDependencies` call (`cli/experimental-deps.ts`) and a report.
+It is the one command that starts `npm`. The runner is an argument of every
+function that needs it, so `test/experimental.test.ts` passes a recorder and
+no test starts npm.
 `lpm period` is its sibling
 for the timeline and takes flags rather than subcommands; every branch is one
 `updateNode` or one planner from `src/shared/plans/`, and none of the date
@@ -1873,6 +1917,15 @@ the parent's `help` string rather than adding an unreachable one.
 - **New built-in template**: a file in `templates/` plus its name in
   `BUILTIN_TEMPLATES` (`operations/board-template.ts`); templates are validated
   by `parseConfigText` at init.
+- **New block in the mapping editor** (for example `attributes`): a field on
+  `RemoteMappingDto` and on `RemoteMappingUpdateDto` in
+  `src/shared/remote-api.ts`, a read and a `write…` function in
+  `src/remote/mapping-editor.ts`, a field on `MappingDraft` with its change
+  functions in `web/src/features/config/remote/mapping.svelte.ts`, and a block
+  in `MappingEditor.svelte`. Ask the connector through an optional method and
+  wrap the call in `ask`, so a provider without the method still opens the
+  editor. Test the read against a stubbed `fetch` and the write against
+  `openRemote` in `test/remote-mapping-editor.test.ts`.
 - **New config edit**: a case in the union `ConfigEdit` in
   `src/shared/board-config.ts`, a function and a `switch` case in
   `operations/config-edit.ts`, and a case in `describeConfigEdit`, whose text

@@ -919,6 +919,60 @@ Scope applies exactly as it does to a pull, through the *same* walk:
 report, so the report offers precisely what a pull would adopt. A second copy of
 that walk would be a report offering work the pull then declined to take.
 
+## 7m. The mapping editor: the tracker's items beside the board's, chosen and written whole
+
+`lpm remote add` drafts the mapping from a convention, and `lpm remote setup`
+corrects the spelling of a drafted name. Neither lets a person choose. A
+project with an `Initiative` level, or a workflow with an `In Review` state,
+keeps the conventional `Epic` and `In Progress` until somebody edits YAML. The
+mapping editor (`mapping-editor.ts`, and `web/src/features/config/remote/`) is
+that edit as a screen.
+
+- **`readRemoteMapping` asks four questions and survives each one failing.**
+  `reachable()`, `issueTypes()` (or `vocabulary().types`), `vocabulary().statuses`
+  and `listSprints()`. Each is optional on a connector. A question that throws
+  becomes a line in `problems`, and the block is answered from the mapping
+  alone with `fixed: false`. A missing credential stops before the first
+  question, with the reason. The editor is then still usable, and that matters:
+  the screen where a person completes a mapping must not need a complete setup.
+- **The read opens the remote with `lenient: true`.** `openRemote` refuses a
+  scaffold marker, a board status with no remote state and a board with periods
+  and no period mapping. Each of those is a reason to open the editor.
+  `OpenRemoteOptions.lenient` skips those three refusals and nothing else: the
+  connection is validated as always. Only `readRemoteMapping` passes the
+  option. A sync that passed it would file against a placeholder.
+- **The write opens the remote strictly before it writes.** `writeRemoteMapping`
+  edits the `yaml` document, parses the whole file, and calls the strict
+  `openRemote` on the result. A choice that leaves the remote unable to open
+  is refused and the file is not written. Every issue type and every status of
+  the board must have an entry. `openRemote` does not check the types, so the
+  writer does.
+- **The write keeps the shape of an entry that exists.** `{ remote: Done,
+  closed: true }` keeps `closed`, and a plain name stays a plain name. A new
+  status entry gets `closed` from the `terminal` flag of the board status, as
+  the scaffold writes it. The list of a status is written with the pushed
+  state first, and an explicit `push:` is removed, because the two would say
+  the same thing twice. A key for a board word that the board no longer
+  declares is removed.
+- **The control sits on the tracker item, and the file is keyed by the board
+  item.** A person reads the tracker's list and says what each item is on the
+  board. `.lpm/config.yml` stores the answer the other way round (§7c). The
+  draft in `mapping.svelte.ts` is keyed like the file, and `boardTypesFor` and
+  `boardStatusesFor` answer the question from the tracker side. A board type
+  has one tracker type, so adding it to a tracker type moves it. A tracker
+  status can mean several board statuses, because a tracker with three states
+  must hold a board with five. `sharedStatuses` names each such pair, which is
+  the pair that `lpm check` reports.
+- **Periods map one type, and the sprints are shown, not mapped.** The block
+  writes `mapping.periods.container` and keeps the carrier. A sprint is matched
+  to a period by its title at push time (LP-328), so the list of sprints is
+  context for the choice and not a second mapping.
+- **The editor does not re-base.** A mapping change after the first sync
+  changes the fingerprint (LP-370), and the next sync stops until `lpm remote
+  rebase` runs. `RemoteMappingDto.linked` lets the dialog say so after the save.
+  A re-base reads every twin, which can take minutes, so it is not a side
+  effect of a Save button.
+
 ## 8. Open questions
 
 Listed as open, deliberately not resolved by omission:

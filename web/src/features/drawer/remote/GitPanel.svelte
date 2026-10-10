@@ -1,7 +1,6 @@
 <script lang="ts">
   import { useShell } from '$lib/app/shell.svelte.js';
   import Button from '$lib/ui/Button.svelte';
-  import GitSetupDialog from './GitSetupDialog.svelte';
   import { gitSummary, nameList, useGitState } from './git.svelte.js';
 
   /**
@@ -145,10 +144,6 @@
     <p class="placeholder">Loading…</p>
   {/if}
 </div>
-
-{#if git.draft}
-  <GitSetupDialog onclose={() => git.closeSetup()} />
-{/if}
 
 <style>
   .git {

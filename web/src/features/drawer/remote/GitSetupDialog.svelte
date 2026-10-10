@@ -1,7 +1,7 @@
 <script lang="ts">
   import Button from '$lib/ui/Button.svelte';
   import Modal from '$lib/ui/Modal.svelte';
-  import { effectiveBranch, gitDraftProblem, nameList, useGitState } from './git.svelte.js';
+  import { defaultBranch, effectiveBranch, gitDraftProblem, nameList, useGitState } from './git.svelte.js';
 
   /**
    * Share the board through git: this project's repository on a branch of its
@@ -26,6 +26,7 @@
   const status = $derived(git.status);
   const problem = $derived(draft ? gitDraftProblem(draft, status) : null);
   const branch = $derived(draft ? effectiveBranch(draft, status) : '');
+  const suggested = $derived(draft ? defaultBranch(draft.where, status) : '');
   const check = $derived(git.check);
 
   async function submit(turnOffRemotes = false): Promise<void> {
@@ -77,10 +78,7 @@
               type="radio"
               name="where"
               checked={draft.where === 'project'}
-              onchange={() => {
-                draft.where = 'project';
-                git.check = null;
-              }}
+              onchange={() => git.chooseWhere('project')}
             />
             <span>
               <strong>This project's repository</strong>
@@ -95,10 +93,7 @@
             type="radio"
             name="where"
             checked={draft.where === 'url'}
-            onchange={() => {
-              draft.where = 'url';
-              git.check = null;
-            }}
+            onchange={() => git.chooseWhere('url')}
           />
           <span>
             <strong>Separate repository</strong>
@@ -130,10 +125,22 @@
               draft.branch = event.currentTarget.value;
               git.check = null;
             }}
-            placeholder={branch}
+            placeholder={suggested}
             spellcheck="false"
           />
         </label>
+        <!-- The field opens with the suggested branch in it. The line below
+             says what an empty field does, so the reader does not have to
+             guess whether the grey text is a value. -->
+        <p class="hint">
+          {#if draft.branch.trim() === ''}
+            An empty field uses the branch <code>{suggested}</code>.
+          {:else if draft.branch.trim() === suggested}
+            light-plan suggests this branch. You can type another name.
+          {:else}
+            The suggested branch is <code>{suggested}</code>.
+          {/if}
+        </p>
       </div>
 
       {#if draft.where === 'url' && !check}
@@ -259,6 +266,13 @@
 
   .fields label > span {
     color: var(--ink-muted);
+  }
+
+  .hint {
+    grid-column: 2;
+    margin: calc(var(--space-1) * -1) 0 0;
+    color: var(--ink-faint);
+    font-size: var(--text-xs);
   }
 
   .fields input {

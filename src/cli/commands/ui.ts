@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { parseArgs } from 'node:util';
-import { BoardError, findBoardPaths } from '../../core/index.js';
+import { BoardError, experimentalOf, findBoardPaths, loadConfig } from '../../core/index.js';
 import { DEFAULT_HOST, DEFAULT_PORT, startBoardServer } from '../../server/index.js';
 import { noBoardFound } from '../context.js';
 import { bold, dim, out, reportError } from '../ui.js';
@@ -15,10 +15,15 @@ Options
       --host <address>  Address to bind (default ${DEFAULT_HOST})
       --no-open         Do not launch a browser
       --api-only        Serve the API without the web app
-      --experimental    Also offer features that are not finished yet: mirroring
-                        the board onto Jira, GitHub or Linear (the Sync tab's
-                        tracker panel, its dialogs and the per-issue remote
-                        controls). Without it the Sync tab offers git sharing only.
+      --experimental    Also offer features that are not finished yet, for this
+                        run: mirroring the board onto Jira, GitHub or Linear
+                        (the Sync tab's tracker panel, its dialogs and the
+                        per-issue remote controls).
+
+The experimental features are also on when the key \`experimental\` in
+.lpm/config.yml holds \`true\`. \`lpm experimental on\` writes the key and
+installs the packages that the features need. With the key absent and no
+--experimental, the Sync tab offers git sharing only.
 
 The server is local-only and edits this checkout's .lpm folder. Stop it with
 Ctrl-C. The app writes each edit to the board about 1.5 seconds after you make
@@ -65,7 +70,13 @@ export function run(args: string[]): number {
   }
   const apiOnly = values['api-only'] === true;
   const host = values.host ?? DEFAULT_HOST;
-  const experimental = values.experimental === true;
+  // The flag turns the features on for one run. The key `experimental` in
+  // .lpm/config.yml, which `lpm experimental on` writes, turns them on for
+  // every run. A config that does not validate counts as off here: the server
+  // reports the config error to the app.
+  const config = loadConfig(paths).config;
+  const fromConfig = config !== null && experimentalOf(config);
+  const experimental = values.experimental === true || fromConfig;
 
   void startBoardServer(paths, {
     port,
@@ -76,7 +87,13 @@ export function run(args: string[]): number {
     .then(({ url }) => {
       out(`${bold('light-plan')} ${dim(paths.root)}`);
       out(`  ${url}`);
-      if (experimental) out(dim('  experimental features on: tracker remotes (Jira, GitHub, Linear)'));
+      if (experimental) {
+        out(
+          dim(
+            `  experimental features on (${values.experimental === true ? '--experimental' : 'the key `experimental` in .lpm/config.yml'}): tracker remotes (Jira, GitHub, Linear)`,
+          ),
+        );
+      }
       out(dim('  Ctrl-C to stop'));
       if (!values['no-open'] && !apiOnly) openBrowser(url);
     })

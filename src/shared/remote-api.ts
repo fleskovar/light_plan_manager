@@ -428,3 +428,93 @@ export interface RemoteInspectAnswersDto {
 export interface RemoteInspectAnswersResultDto {
   changed: string[];
 }
+
+// ---------------------------------------------------------------------------
+// The mapping editor (File ▸ Board configuration ▸ Remote board)
+//
+// `GET /api/remotes/:name/mapping` answers what the tracker has and what the
+// mapping says. `PUT` on the same path writes what a person chose into
+// `remotes.<name>.mapping` of `.lpm/config.yml`. `src/remote/mapping-editor.ts`
+// builds and applies both shapes.
+// ---------------------------------------------------------------------------
+
+/** One issue type of the tracker. */
+export interface RemoteTypeItemDto {
+  name: string;
+  /**
+   * The level of the type in the hierarchy of the tracker, when the tracker
+   * has one. A higher number is nearer the top. Jira reports -1 for a
+   * sub-task, 0 for a standard type and 1 for an epic.
+   */
+  level?: number;
+  /** True for a type that the tracker creates only under a parent. */
+  subtask?: boolean;
+}
+
+/** One sprint, cycle or milestone that the tracker holds. */
+export interface RemotePeriodItemDto {
+  name: string;
+  /** `future`, `active` or `closed`, in the words of the tracker. */
+  state: string;
+  starts?: string;
+  ends?: string;
+}
+
+export interface RemoteMappingDto {
+  remoteName: string;
+  provider: string;
+  /** What the reachability probe answered. Absent when the connector has no probe or could not be built. */
+  reachability?: { reachable: boolean; evidence: string };
+  types: {
+    /**
+     * True when the tracker reported its own issue types. False when the type
+     * names are light-plan's to choose (the tracker stores a type as a label),
+     * or when the tracker could not be asked. `items` then holds the names
+     * that the mapping declares.
+     */
+    fixed: boolean;
+    items: RemoteTypeItemDto[];
+    /** Board type name to the tracker name. A board type with no entry is not mapped. */
+    mapping: Record<string, string>;
+  };
+  statuses: {
+    /** As `types.fixed`, for workflow statuses. */
+    fixed: boolean;
+    items: string[];
+    /** Board status id to the tracker states that mean the status. A push writes the first. */
+    mapping: Record<string, string[]>;
+  };
+  periods: {
+    /** True when the tracker has a container of its own for a period. */
+    native: boolean;
+    /** The container of the tracker: `sprint`, `milestones` or `iteration`. Null when no mapping names one. */
+    carrier: string | null;
+    /** The board period type that maps to the container, or null. */
+    container: string | null;
+    /** The containers that the tracker holds now. Null when the tracker could not list them. */
+    items: RemotePeriodItemDto[] | null;
+  };
+  /** How many documents this remote already mirrors. A mapping change needs a re-base when it is not 0. */
+  linked: number;
+  /** Each question that the tracker did not answer, with the reason. */
+  problems: string[];
+}
+
+/** The body of `PUT /api/remotes/:name/mapping`. An absent block is not written. */
+export interface RemoteMappingUpdateDto {
+  /** Board type name to the tracker name. Every issue type of the board must have an entry. */
+  types?: Record<string, string>;
+  /**
+   * Board status id to the tracker states that mean the status. A push writes
+   * the first state. Every status of the board must have at least one state.
+   */
+  statuses?: Record<string, string[]>;
+  /** The board period type that maps to the container of the tracker. */
+  periodContainer?: string;
+}
+
+export interface RemoteMappingUpdateResultDto {
+  /** The lines of `.lpm/config.yml` that the call changed, as `<block>.<key>: old → new`. */
+  changed: string[];
+  mapping: RemoteMappingDto;
+}

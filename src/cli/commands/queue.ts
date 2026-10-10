@@ -77,7 +77,8 @@ and marks it done or flags it for help from what the agent reports — logging a
 comment and a full JSON run log under .lpm/runs/. It works the same queue
 \`lpm task next\` offers, and finishes all the work under one parent before moving
 on. It is experimental, and its pi packages are not installed with light-plan
-(Node 22.19+): \`npm install -g @earendil-works/pi-coding-agent @earendil-works/pi-ai\`
+(Node 22.19+). \`lpm experimental on\` installs them. By hand:
+\`npm install -g @earendil-works/pi-coding-agent @earendil-works/pi-ai\`
 beside a global install, or the same without -g in a project.
 
 On a terminal the run draws a live pane on stderr: the task, the stage it is in,

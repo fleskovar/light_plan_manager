@@ -7,7 +7,8 @@ the board's shape is richer than the platform's.
 
 **In the web UI this is experimental.** Every tracker surface of `lpm ui` —
 the Sync tab's tracker panel, its dialogs, the drift badges, the per-document
-Push and Pull — needs `lpm ui --experimental`; without it the server does not
+Push and Pull — needs the experimental features on: `lpm experimental on` for
+every run, or `lpm ui --experimental` for one run. Without it the server does not
 serve the remote routes and the Sync tab offers git sharing only
 ([`docs/git-sync.md`](git-sync.md)). The `lpm remote` commands below work
 either way.
@@ -633,6 +634,18 @@ keep it honest, and neither needs you to do anything:
 - the push **preflight** validates every mapped name against the live project
   before a single write, so a name that is wrong and uncorrected refuses the
   push rather than filing anything.
+
+**The web app has an editor for the three blocks that name a tracker item.**
+With `lpm ui --experimental`, open **File ▸ Remote board…** and select
+**Mapping…** on a remote. The server asks the tracker for its issue types (with
+the hierarchy level of each), its workflow statuses and its sprints. The editor
+shows the items of the board on the left and the items of the tracker on the
+right. Each tracker item has a control that chooses the board items that map to
+it. **Save the mapping** writes `types`, `statuses` and `periods.container`
+under `remotes.<name>.mapping`. The editor does not write `attributes`,
+`accounts` or `fields`. A remote whose mapping is not complete cannot sync, but
+the editor still opens it: a new board status with no tracker state is the
+common case, and the editor is where you give it one.
 
 A `TODO:` marker is what is left where a provider states no convention at all:
 the remote refuses to open until it is answered. None of the four shipped

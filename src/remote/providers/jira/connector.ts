@@ -804,7 +804,8 @@ export function jiraConnector(
     } catch (error) {
       throw new BoardError('The Jira client (jira.js) is not available', [
         'Jira sync is experimental, so its client is not installed with light-plan.',
-        'Install it beside light-plan: npm install -g jira.js (a global install),',
+        'Run `lpm experimental on` to install it.',
+        'Or install it beside light-plan yourself: npm install -g jira.js (a global install),',
         'npm install jira.js (a project), or npx -p light-plan -p jira.js lpm … (npx).',
         'It requires Node 22 or newer.',
         (error as Error).message,

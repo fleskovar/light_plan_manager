@@ -6,6 +6,7 @@ import * as check from './commands/check.js';
 import * as comment from './commands/comment.js';
 import * as convert from './commands/convert.js';
 import * as copy from './commands/copy.js';
+import * as experimental from './commands/experimental.js';
 import * as exportBoard from './commands/export.js';
 import * as flag from './commands/flag.js';
 import * as git from './commands/git.js';
@@ -66,6 +67,7 @@ const commands: Record<string, Command> = {
   remote,
   git,
   check,
+  experimental,
   ui,
   export: exportBoard,
   mcp,
@@ -127,6 +129,7 @@ const summaries: Record<string, string> = {
   remote: 'Push and pull a board\'s remotes, and settle sync conflicts',
   git: 'Share the board through git: pull before every change, push after',
   check: 'Validate the board; --fix repairs what it can',
+  experimental: 'Turn the unfinished features on or off, and install their packages',
   ui: 'Open the board in a web browser',
   export: 'Publish the board as a static site anyone can open',
   mcp: 'Serve the board to AI agents over MCP',

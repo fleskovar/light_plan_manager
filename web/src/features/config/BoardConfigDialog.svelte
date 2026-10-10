@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { useShell, type ConfigTab } from '$lib/app/shell.svelte.js';
   import Button from '$lib/ui/Button.svelte';
   import Modal from '$lib/ui/Modal.svelte';
   import Tabs from '$lib/ui/Tabs.svelte';
   import { usePool } from '$lib/workspace/pool.svelte.js';
   import { useWorkspace } from '$lib/workspace/workspace.svelte.js';
   import { ConfigEditor } from './editor.svelte.js';
+  import RemoteBoardTab from './remote/RemoteBoardTab.svelte';
   import StatusesTab from './StatusesTab.svelte';
   import TemplatesTab from './TemplatesTab.svelte';
   import TypesTab from './TypesTab.svelte';
@@ -19,8 +21,19 @@
    *
    * Each change is written at once. `ConfigEditor.apply` sends the change to
    * `POST /api/config/edits`, and the server rewrites the config and every
-   * document that holds a renamed name. The third tab saves the configuration
-   * as a template for new boards and chooses the default template.
+   * document that holds a renamed name.
+   *
+   * The dialog is the one place for the settings of the board. Its tabs:
+   *
+   * - **Types and attributes** and **Statuses** change the vocabulary.
+   * - **Remote board** shares the board through git, and on a server started
+   *   with `lpm ui --experimental` connects a tracker and maps its items.
+   * - **Templates** saves the configuration as a template for new boards and
+   *   chooses the default template.
+   *
+   * `shell.configTab` holds the open tab, so a menu entry or the Sync tab of
+   * the drawer can open the dialog on a tab. The planning mode, which the
+   * switch of the queue panel also writes, has a button beside its value.
    */
   interface Props {
     onclose: () => void;
@@ -29,19 +42,37 @@
   let { onclose }: Props = $props();
 
   const workspace = useWorkspace();
+  const shell = useShell();
   const pool = usePool();
   const editor = new ConfigEditor({ workspace, workspaces: () => pool.all() });
 
-  type TabId = 'types' | 'statuses' | 'templates';
-  let tab = $state<TabId>('types');
+  const tab = $derived<ConfigTab>(shell.configTab ?? 'types');
 
   const config = $derived(workspace.config);
+  const otherPlanning = $derived(workspace.planning === 'queue' ? 'periods' : 'queue');
 </script>
 
 <Modal title="Board configuration" size="lg" {onclose}>
   <dl class="facts">
     <div><dt>Board</dt><dd>{config.boardName}</dd></div>
-    <div><dt>Planning</dt><dd>{config.planning}</dd></div>
+    <div>
+      <dt>Planning</dt>
+      <dd>
+        {config.planning}
+        {#if workspace.canPlanWithPeriods}
+          <button
+            type="button"
+            class="link"
+            title={otherPlanning === 'queue'
+              ? 'Ignore every sprint and increment, and order the work by priority and by dependencies'
+              : 'Order the work by the sprints and the increments of the board'}
+            onclick={() => void workspace.setPlanning(otherPlanning)}
+          >
+            Switch to {otherPlanning}
+          </button>
+        {/if}
+      </dd>
+    </div>
     <div><dt>Default status</dt><dd><code>{config.defaultStatus}</code></dd></div>
     <div>
       <dt>Priority attribute</dt>
@@ -62,10 +93,11 @@
     tabs={[
       { id: 'types', label: 'Types and attributes' },
       { id: 'statuses', label: 'Statuses' },
+      { id: 'remote', label: 'Remote board' },
       { id: 'templates', label: 'Templates' },
     ]}
     active={tab}
-    onselect={(id) => (tab = id)}
+    onselect={(id) => shell.openConfig(id)}
   />
 
   {#if editor.problem}
@@ -97,6 +129,8 @@
       <TypesTab {editor} />
     {:else if tab === 'statuses'}
       <StatusesTab {editor} />
+    {:else if tab === 'remote'}
+      <RemoteBoardTab />
     {:else}
       <TemplatesTab {editor} />
     {/if}
@@ -136,6 +170,15 @@
   code {
     font-family: var(--font-mono);
     font-size: 0.95em;
+  }
+
+  .link {
+    margin-left: var(--space-2);
+    border: none;
+    background: none;
+    padding: 0;
+    color: var(--accent);
+    font-size: var(--text-xs);
   }
 
   .lede {

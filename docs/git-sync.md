@@ -39,8 +39,15 @@ lpm git                            # where the shared board stands
 lpm git sync                       # commit stray edits, pull, push, now
 ```
 
-In the web UI, the **Sync** tab offers **Share through git…** when the board has
-no remote yet. When git sync is on, the tab shows the Git panel.
+In the web UI, **File ▸ Remote board…** opens the tab **Remote board** of the
+board configuration dialog. The section **Git sync** of that tab has the button
+**Set up git sync…**, which opens the setup form. The branch field of the form
+opens with the default branch in it: `_lpm_board_remote` for the repository of
+the project, and `main` for a separate repository. These are the defaults of
+`lpm git setup`. The **Sync** tab of the drawer has the same button while the
+board has no remote. When git sync is on, the
+section shows the repository, the branch and the state, and the Sync tab shows
+the Git panel.
 
 ## 2. What happens on every change
 

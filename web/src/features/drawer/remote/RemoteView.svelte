@@ -1,13 +1,12 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { useShell } from '$lib/app/shell.svelte.js';
   import Button from '$lib/ui/Button.svelte';
   import BlockedDialog from './BlockedDialog.svelte';
   import ChangesTable from './ChangesTable.svelte';
-  import ConnectDialog from './ConnectDialog.svelte';
   import CoverageSection from './CoverageSection.svelte';
   import ConnectionPanel from './ConnectionPanel.svelte';
   import GitPanel from './GitPanel.svelte';
-  import GitSetupDialog from './GitSetupDialog.svelte';
   import { panelMode, useGitState } from './git.svelte.js';
   import { useConnectionsState } from './connections.svelte.js';
   import {
@@ -51,6 +50,7 @@
   const remote = useRemoteState();
   const connections = useConnectionsState();
   const git = useGitState();
+  const shell = useShell();
 
   /**
    * A board is shared through git *or* mirrored onto trackers, never both, so
@@ -235,6 +235,13 @@
         aria-expanded={showConnection}
       >
         Connection
+      </Button>
+      <Button
+        size="sm"
+        title="Choose the tracker type, status and sprint of each board item"
+        onclick={() => shell.openConfig('remote')}
+      >
+        Mapping…
       </Button>
       <Button size="sm" onclick={() => void connections.openConnect(taken)}>Connect…</Button>
     </header>
@@ -497,16 +504,8 @@
 </div>
 {/if}
 
-{#if git.draft && mode !== 'git'}
-  <GitSetupDialog onclose={() => git.closeSetup()} />
-{/if}
-
 {#if remote.enabled && showBlocked}
   <BlockedDialog onclose={() => (showBlocked = false)} />
-{/if}
-
-{#if remote.enabled && connections.draft}
-  <ConnectDialog {taken} onclose={() => connections.closeConnect()} />
 {/if}
 
 <style>

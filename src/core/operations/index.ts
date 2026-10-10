@@ -7,7 +7,8 @@
  * above it (rollup), and remembering who is at the keyboard (user) and which
  * profile they run under (profile). `planning` switches the board between
  * planning with its periods and working as one queue — a config edit, never a
- * document edit. `config-edit` changes the types, the statuses and the
+ * document edit. `experimental` writes the key that shows the unfinished
+ * features, in the same way. `config-edit` changes the types, the statuses and the
  * attributes that `.lpm/config.yml` declares, and rewrites every document that
  * holds a renamed name. `board-template` saves a config as a template for new
  * boards; it writes the user folder and never a board.
@@ -37,6 +38,7 @@ export * from './claim.js';
 export * from './comment.js';
 export * from './config-edit.js';
 export * from './create.js';
+export * from './experimental.js';
 export * from './flag.js';
 export * from './git-sync.js';
 export * from './remotes-off.js';

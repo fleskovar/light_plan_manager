@@ -26,6 +26,9 @@ import type {
   RemoteInspectAnswersDto,
   RemoteInspectAnswersResultDto,
   RemoteInspectDto,
+  RemoteMappingDto,
+  RemoteMappingUpdateDto,
+  RemoteMappingUpdateResultDto,
   RemoteProviderDto,
   RemoteReadinessFixDto,
   RemoteReadinessFixResultDto,
@@ -321,6 +324,15 @@ export const api = {
 
   answerRemote: (name: string, body: RemoteInspectAnswersDto): Promise<RemoteInspectAnswersResultDto> =>
     request(`/api/remotes/${encodeURIComponent(name)}/answers`, send('POST', body)),
+
+  // The mapping editor. The read asks the tracker for its issue types, its
+  // statuses and its sprints, so it can take seconds. The write changes the
+  // block `remotes.<name>.mapping` of `.lpm/config.yml`.
+  remoteMapping: (name: string): Promise<RemoteMappingDto> =>
+    request(`/api/remotes/${encodeURIComponent(name)}/mapping`),
+
+  saveRemoteMapping: (name: string, body: RemoteMappingUpdateDto): Promise<RemoteMappingUpdateResultDto> =>
+    request(`/api/remotes/${encodeURIComponent(name)}/mapping`, send('PUT', body)),
 
   removeRemote: (name: string): Promise<{ name: string; purged: boolean }> =>
     request(`/api/remotes/${encodeURIComponent(name)}`, send('DELETE')),

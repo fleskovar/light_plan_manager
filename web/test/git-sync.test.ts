@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   GitState,
   describeSync,
+  defaultBranch,
   effectiveBranch,
   emptyGitDraft,
   gitDraftProblem,
@@ -9,6 +10,7 @@ import {
   nameList,
   panelMode,
   setupRequestOf,
+  withWhere,
   type GitApi,
   type GitStateHost,
 } from '$features/drawer/remote/git.svelte.js';
@@ -71,6 +73,24 @@ describe('the setup form', () => {
   it("defaults to the project's own repository when there is one", () => {
     expect(emptyGitDraft(status({ enabled: false, project: PROJECT })).where).toBe('project');
     expect(emptyGitDraft(status({ enabled: false })).where).toBe('url');
+  });
+
+  it('opens with the branch filled in: the board branch in the project repository, else main', () => {
+    expect(emptyGitDraft(status({ enabled: false, project: PROJECT })).branch).toBe('_lpm_board_remote');
+    expect(emptyGitDraft(status({ enabled: false })).branch).toBe('main');
+    expect(defaultBranch('project', null)).toBe('_lpm_board_remote');
+  });
+
+  it('moves the filled-in branch with the choice of repository, and keeps a branch that was typed', () => {
+    const off = status({ enabled: false, project: PROJECT });
+    const opened = emptyGitDraft(off);
+
+    const separate = withWhere(opened, 'url', off);
+    expect(separate).toMatchObject({ where: 'url', branch: 'main' });
+    expect(withWhere(separate, 'project', off).branch).toBe('_lpm_board_remote');
+
+    expect(withWhere({ ...opened, branch: '' }, 'url', off).branch).toBe('main');
+    expect(withWhere({ ...opened, branch: 'plan' }, 'url', off).branch).toBe('plan');
   });
 
   it("uses the project's board branch, else main, unless one is typed", () => {
@@ -211,10 +231,27 @@ describe('the state machine', () => {
     // Confirming turns the tracker off and shares, in one request.
     expect(await git.submitSetup()).toBe(false);
     expect(await git.submitSetup(true)).toBe(true);
-    expect(sent).toEqual([{ project: true, branch: undefined, turnOffRemotes: true }]);
+    expect(sent).toEqual([{ project: true, branch: '_lpm_board_remote', turnOffRemotes: true }]);
     expect(git.turnOffQuestion).toBeNull();
     expect(git.draft).toBeNull();
     expect(notes.at(-1)).toMatch(/Shared/);
+  });
+
+  it('changes the branch with the repository choice and forgets the last check', async () => {
+    const { api, host } = fake({
+      gitStatus: async () => status({ enabled: false, project: PROJECT }),
+    });
+    const git = new GitState(api, host);
+    await git.load();
+    git.openSetup();
+    expect(git.draft?.branch).toBe('_lpm_board_remote');
+    await git.checkDraft();
+    expect(git.check).not.toBeNull();
+
+    git.chooseWhere('url');
+
+    expect(git.draft).toMatchObject({ where: 'url', branch: 'main' });
+    expect(git.check).toBeNull();
   });
 
   it('never asks to turn anything off on a board with no tracker', async () => {

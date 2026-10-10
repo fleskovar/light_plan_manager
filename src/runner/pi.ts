@@ -135,7 +135,8 @@ async function loadSdk(): Promise<{ sdk: PiSdk; ai: PiAi }> {
   } catch (error) {
     throw new BoardError('The pi coding agent is not available', [
       'The agent is experimental, so its packages are not installed with light-plan.',
-      'Install them beside light-plan (add -g if light-plan is installed globally):',
+      'Run `lpm experimental on` to install them.',
+      'Or install them beside light-plan yourself (add -g if light-plan is installed globally):',
       '  npm install @earendil-works/pi-coding-agent @earendil-works/pi-ai',
       'They require Node 22.19 or newer.',
       (error as Error).message,

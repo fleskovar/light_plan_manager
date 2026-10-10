@@ -1,4 +1,15 @@
+<script lang="ts" module>
+  /**
+   * The open dialogs, the newest last. A dialog can open another dialog: the
+   * board configuration opens the git setup form and the confirmation of a
+   * removal. Each dialog listens for Escape on the window, so without this
+   * list one key press closes every dialog at once.
+   */
+  const stack: symbol[] = [];
+</script>
+
 <script lang="ts">
+  import { onMount } from 'svelte';
   import type { Snippet } from 'svelte';
 
   interface Props {
@@ -12,11 +23,20 @@
 
   let { title, size = 'md', onclose, children, footer }: Props = $props();
 
+  const self = Symbol('modal');
+
+  onMount(() => {
+    stack.push(self);
+    return () => {
+      const index = stack.indexOf(self);
+      if (index !== -1) stack.splice(index, 1);
+    };
+  });
+
   function onkeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
-      event.stopPropagation();
-      onclose();
-    }
+    if (event.key !== 'Escape' || stack.at(-1) !== self) return;
+    event.stopPropagation();
+    onclose();
   }
 </script>
 

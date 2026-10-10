@@ -31,6 +31,8 @@
   import Canvas from '$features/canvas/Canvas.svelte';
   import HierarchyDialog from '$features/canvas/HierarchyDialog.svelte';
   import BoardConfigDialog from '$features/config/BoardConfigDialog.svelte';
+  import ConnectDialog from '$features/drawer/remote/ConnectDialog.svelte';
+  import GitSetupDialog from '$features/drawer/remote/GitSetupDialog.svelte';
   import ReparentDialog from '$features/canvas/ReparentDialog.svelte';
 
   /**
@@ -83,7 +85,7 @@
   // Connecting a remote from the Sync tab. When the set of remotes changes, the
   // remote state re-reads its list rather than running a full load, which a
   // slow drift report can hold busy for minutes.
-  provideConnectionsState(
+  const connections = provideConnectionsState(
     new ConnectionsState(api, {
       notify: (level, message, details) => workspace.notify(level, message, details),
       report: (error) => workspace.report(error),
@@ -94,7 +96,7 @@
   // Sharing the board through its own git repository: the other thing the
   // Sync tab can hold. After a sync or a setup the board on disk has moved, so
   // it is re-read straight away rather than at the next poll.
-  provideGitState(
+  const git = provideGitState(
     new GitState(api, {
       notify: (level, message, details) => workspace.notify(level, message, details),
       report: (error) => workspace.report(error),
@@ -421,8 +423,22 @@
     <HierarchyDialog onclose={() => shell.closeHierarchy()} />
   {/if}
 
-  {#if shell.configOpen}
-    <BoardConfigDialog onclose={() => (shell.configOpen = false)} />
+  {#if shell.configTab}
+    <BoardConfigDialog onclose={() => shell.closeConfig()} />
+  {/if}
+
+  <!-- The two setup dialogs are mounted here, once, and not inside the Sync
+       tab. The board configuration dialog and the Sync tab both open them, and
+       a dialog that the drawer mounts does not exist while the drawer is
+       closed. They come after the configuration dialog, so they draw on top. -->
+  {#if git.draft}
+    <GitSetupDialog onclose={() => git.closeSetup()} />
+  {/if}
+  {#if remote.enabled && connections.draft}
+    <ConnectDialog
+      taken={remote.remotes.map((summary) => summary.name)}
+      onclose={() => connections.closeConnect()}
+    />
   {/if}
 
   <!-- A dialog opened on a document nobody has pushed yet holds its temporary

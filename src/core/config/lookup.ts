@@ -250,6 +250,14 @@ export function planningOf(config: BoardConfig): PlanningMode {
 }
 
 /**
+ * Whether the experimental features of the board are on. The one place the key
+ * `experimental` is read. @see operations/experimental.ts
+ */
+export function experimentalOf(config: BoardConfig): boolean {
+  return config.experimental;
+}
+
+/**
  * Whether the queue reads the board as one continuous run, ignoring every
  * period: no schedule rank, no parked switch, no squad owning a sprint. The
  * documents keep their `period:` either way. @see operations/planning.ts

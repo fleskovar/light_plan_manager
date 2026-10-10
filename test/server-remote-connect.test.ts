@@ -20,6 +20,8 @@ import type {
   RemoteConnectResultDto,
   RemoteCredentialsResultDto,
   RemoteInspectDto,
+  RemoteMappingDto,
+  RemoteMappingUpdateResultDto,
   RemoteProviderDto,
 } from '../src/shared/index.js';
 import { startBoardServer } from '../src/server/index.js';
@@ -233,5 +235,66 @@ describe('the credential is only ever in one file', () => {
     };
     walk(paths.lpmDir);
     expect(hits).toEqual([]);
+  });
+});
+
+describe('the mapping editor routes', () => {
+  const connectJira = () =>
+    call('POST', '/api/remotes', {
+      name: 'jira',
+      provider: 'jira',
+      connection: { site: 'https://acme.atlassian.net', project: 'PAY' },
+    });
+
+  it('answers the drafted mapping, and says why the tracker was not asked', async () => {
+    await connectJira();
+    const { status, text } = await call('GET', '/api/remotes/jira/mapping');
+
+    expect(status).toBe(200);
+    const view = JSON.parse(text) as RemoteMappingDto;
+    expect(view.provider).toBe('jira');
+    expect(view.types.fixed).toBe(false);
+    expect(view.types.mapping.user_story).toBe('Story');
+    expect(view.statuses.mapping.done).toEqual(['Done']);
+    expect(view.problems[0]).toContain('The tracker was not asked');
+  });
+
+  it('writes a chosen mapping into config.yml and answers the changed lines with the new view', async () => {
+    await connectJira();
+    const before = JSON.parse((await call('GET', '/api/remotes/jira/mapping')).text) as RemoteMappingDto;
+
+    const { status, text } = await call('PUT', '/api/remotes/jira/mapping', {
+      types: { ...before.types.mapping, test: 'Story' },
+      statuses: { ...before.statuses.mapping, in_review: ['In Review', 'In Progress'] },
+    });
+
+    expect(status).toBe(200);
+    const result = JSON.parse(text) as RemoteMappingUpdateResultDto;
+    expect(result.changed).toEqual([
+      'types.test: Task → Story',
+      'statuses.in_review: ["In Progress"] → ["In Review","In Progress"]',
+    ]);
+    expect(result.mapping.types.mapping.test).toBe('Story');
+    expect(result.mapping.statuses.mapping.in_review).toEqual(['In Review', 'In Progress']);
+    // The entry keeps the object form that `lpm remote add` wrote.
+    expect(readFileSync(paths.configPath, 'utf8')).toMatch(/test: \{ ?remote: Story ?\}/);
+  });
+
+  it('answers 400 for a mapping that leaves a board status unmapped, and for a malformed body', async () => {
+    await connectJira();
+    const refused = await call('PUT', '/api/remotes/jira/mapping', { statuses: { backlog: ['To Do'] } });
+    expect(refused.status).toBe(400);
+    expect(JSON.parse(refused.text).error).toBe('Not every status of the board is mapped');
+
+    expect((await call('PUT', '/api/remotes/jira/mapping', { statuses: { backlog: 'To Do' } })).status).toBe(400);
+  });
+
+  it('is not registered on a server started without --experimental', async () => {
+    const plain = await startBoardServer(paths, { port: 0, serveApp: false });
+    try {
+      expect((await fetch(`${plain.url}/api/remotes/jira/mapping`)).status).toBe(404);
+    } finally {
+      plain.server.close();
+    }
   });
 });

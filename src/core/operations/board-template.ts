@@ -13,6 +13,7 @@ import {
   writeUserSettings,
   writeUserTemplate,
 } from '../storage/user.js';
+import { configWithExperimental } from './experimental.js';
 import { configWithPlanning } from './planning.js';
 
 /**
@@ -147,15 +148,17 @@ export function readBoardTemplate(template: string): { text: string; name: strin
 }
 
 /**
- * The text of a board config without the key `planning` and without the keys
- * of `BOARD_ONLY_KEYS`. Every other key stays as the board wrote it.
+ * The text of a board config without the keys `planning` and `experimental`
+ * and without the keys of `BOARD_ONLY_KEYS`. Every other key stays as the
+ * board wrote it.
  *
- * `configWithPlanning` removes the key `planning` from the text, with the
- * comment that `lpm init` and `lpm planning queue` write above it. The other
- * keys are removed from the `yaml` document.
+ * `configWithPlanning` and `configWithExperimental` remove their key from the
+ * text, with the comment that the command wrote above it. The other keys are
+ * removed from the `yaml` document. A template does not hold `experimental`,
+ * because a new board must not show features whose packages nobody installed.
  */
 export function boardTemplateText(configText: string): string {
-  const doc = parseDocument(configWithPlanning(configText, 'periods'));
+  const doc = parseDocument(configWithExperimental(configWithPlanning(configText, 'periods'), false));
   for (const { key, keepComment } of BOARD_ONLY_KEYS) deleteKey(doc, key, keepComment);
   return doc.toString({ lineWidth: 0, flowCollectionPadding: false });
 }

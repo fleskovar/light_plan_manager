@@ -97,7 +97,7 @@ describe('the File menu', () => {
 
     expect(item.disabled).toBe(false);
     item.onSelect?.();
-    expect(shell.configOpen).toBe(true);
+    expect(shell.configTab).toBe('types');
   });
 
   it('disables the entry while the board is not loaded', () => {

@@ -39,7 +39,10 @@ import { requireUnchanged, writeDocument } from './shared.js';
  *
  * The edits do not reach a developer profile, because a profile is a file
  * outside `.lpm`. They do not reach the text of a body or of a context
- * template. `ConfigEditResultDto.notes` lists what the caller must check.
+ * template. A new type or a new status gets no entry in the mapping of a
+ * remote, because only the tracker knows its own words: the mapping editor
+ * (`src/remote/mapping-editor.ts`) is where a person chooses one.
+ * `ConfigEditResultDto.notes` lists what the caller must check.
  * The view files in `.lpm/views` belong to the server, which renames the keys
  * of `display` from `renamedTypes`.
  *
@@ -172,6 +175,23 @@ function followInRemotes(work: Work, block: 'types' | 'statuses' | 'attributes' 
   }
 }
 
+/**
+ * Note each remote whose mapping has no entry for a new board word. A remote
+ * with a board status that is not mapped cannot be opened, and a push cannot
+ * file an issue whose type is not mapped. The edit does not choose the tracker
+ * word, because only the tracker knows its words.
+ */
+function noteUnmapped(work: Work, block: 'types' | 'statuses', key: string): void {
+  for (const { where, remote } of remoteBlocks(work.doc)) {
+    if (!remote.has('mapping') || mappingOf(remote, block)?.has(key)) continue;
+    work.notes.push(
+      `${where}.mapping.${block} has no entry for "${key}". The remote cannot sync ${
+        block === 'statuses' ? 'until the status is mapped' : 'an issue of this type until the type is mapped'
+      }.`,
+    );
+  }
+}
+
 // -- shared guards -----------------------------------------------------------
 
 function requireName(value: string, what: string): void {
@@ -265,6 +285,7 @@ function addType(work: Work, edit: Extract<ConfigEdit, { op: 'add-type' }>): voi
     edit.name,
     work.doc.createNode({ label, attributes: {}, body: '' }),
   );
+  if (edit.kind === 'issue') noteUnmapped(work, 'types', edit.name);
 }
 
 function renameType(work: Work, kind: ConfigNamespace, from: string, to: string): void {
@@ -388,6 +409,7 @@ function addStatus(work: Work, edit: Extract<ConfigEdit, { op: 'add-status' }>):
   if (index === 0 && !work.doc.has('default_status')) {
     work.doc.set('default_status', work.config.default_status);
   }
+  noteUnmapped(work, 'statuses', edit.id);
 }
 
 function updateStatus(work: Work, edit: Extract<ConfigEdit, { op: 'update-status' }>): void {
