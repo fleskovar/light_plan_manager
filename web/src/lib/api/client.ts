@@ -1,7 +1,10 @@
 import type {
   ApiErrorBody,
   BoardSnapshot,
+  BoardTemplatesDto,
   CommentDto,
+  ConfigEdit,
+  ConfigEditResultDto,
   CurrentUserDto,
   GitDisableRequest,
   GitSetupRequest,
@@ -176,6 +179,24 @@ export const api = {
   // a flag: the whole team works the same queue.
   setPlanning: (planning: Planning): Promise<{ planning: Planning; changed: boolean }> =>
     request('/api/planning', send('PUT', { planning })),
+
+  // The types, the statuses and the attributes of `.lpm/config.yml`. Written
+  // straight through, like the planning mode: the server rewrites every
+  // document that holds a renamed name in the same call.
+  editConfig: (edits: ConfigEdit[]): Promise<ConfigEditResultDto> =>
+    request('/api/config/edits', send('POST', { edits })),
+
+  // The board templates of the user folder, which `lpm init` accepts by name.
+  boardTemplates: (): Promise<BoardTemplatesDto> => request('/api/board-templates'),
+
+  saveBoardTemplate: (name: string, overwrite = false): Promise<BoardTemplatesDto> =>
+    request('/api/board-templates', send('POST', { name, overwrite })),
+
+  setDefaultBoardTemplate: (name: string): Promise<BoardTemplatesDto> =>
+    request('/api/board-templates/default', send('PUT', { name })),
+
+  removeBoardTemplate: (name: string): Promise<BoardTemplatesDto> =>
+    request(`/api/board-templates/${encodeURIComponent(name)}`, send('DELETE')),
 
   listViews: (): Promise<ViewSummary[]> => request('/api/views'),
 

@@ -282,6 +282,22 @@ export class Workspace {
     this.scheduleSave();
   }
 
+  /**
+   * Give the keys of `display` the new names of renamed issue types. `renames`
+   * maps an old type name to its new name, as `POST /api/config/edits` answers
+   * it. The server renames the same keys in every view file, so this method
+   * schedules no save. Without it, the next save of this view writes the old
+   * key again, and the level turns from badges back into nodes.
+   */
+  renameTypes(renames: Record<string, string>): void {
+    const view = this.view;
+    if (!view || !Object.keys(view.display).some((type) => type in renames)) return;
+    const renamed = (display: Record<string, TypeDisplay>): Record<string, TypeDisplay> =>
+      Object.fromEntries(Object.entries(display).map(([type, mode]) => [renames[type] ?? type, mode]));
+    view.display = renamed(view.display);
+    if (this.#baseline) this.#baseline = { ...this.#baseline, display: renamed(this.#baseline.display) };
+  }
+
   get dirty(): boolean {
     return this.pending.length > 0;
   }

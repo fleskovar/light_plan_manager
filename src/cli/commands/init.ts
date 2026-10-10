@@ -4,6 +4,7 @@ import {
   BOARD_ENV_VAR,
   BUILTIN_TEMPLATES,
   PROJECT_BOARD_BRANCH,
+  USER_HOME_ENV_VAR,
   expandHome,
   initBoard,
   loadConfig,
@@ -19,8 +20,9 @@ Usage
   lpm init [dir] [options]
 
 Options
-  -t, --template <name|path>  ${BUILTIN_TEMPLATES.join(' | ')} or a path to your own
-                              config YAML  (default: scrum)
+  -t, --template <name|path>  ${BUILTIN_TEMPLATES.join(' | ')}, the name of a template
+                              that you saved, or a path to your own config
+                              YAML  (default: see below)
       --prefix <PREFIX>       Issue id prefix, e.g. LP  (default: from the folder name)
       --no-git                Skip making .lpm its own git repo
       --no-omni               Skip the standing omni periods (see below)
@@ -28,6 +30,13 @@ Options
 
 By default .lpm becomes an independent git repository and is added to the
 surrounding repo's .gitignore, so the board has its own history and remote.
+
+The web app saves the config of a board as a template: File > Board
+configuration > Templates. A saved template is the file
+templates/<name>.yml in the user folder. The user folder is ~/.light-plan, or
+the folder that ${USER_HOME_ENV_VAR} names. Without --template, init reads the key
+\`default_template\` from settings.json in the user folder. When the key is
+absent, init uses the template scrum.
 
 On a template with a timeline, init also creates one standing "omni" period
 per level (an Omni Product Increment holding an Omni Sprint on scrum) and points

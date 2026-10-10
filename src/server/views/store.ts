@@ -79,6 +79,32 @@ export function updateView(paths: BoardPaths, view: ViewDocument): ViewDocument 
   return saveView(paths, view);
 }
 
+/**
+ * Give the keys of `display` in every view file the new names of renamed issue
+ * types. `renames` maps an old type name to its new name, as
+ * `editBoardConfig` returns it. Without this, a level that a view draws as
+ * badges turns back into nodes when its type gets another name.
+ *
+ * The field `updated` of a rewritten view stays, so the order of the view list
+ * does not change. A view file that does not parse is left alone.
+ */
+export function renameViewTypes(paths: BoardPaths, renames: Record<string, string>): void {
+  if (!Object.keys(renames).length) return;
+  for (const id of listViewIds(paths)) {
+    let view: ViewDocument;
+    try {
+      view = loadView(paths, id);
+    } catch {
+      continue;
+    }
+    if (!Object.keys(view.display).some((type) => type in renames)) continue;
+    const display = Object.fromEntries(
+      Object.entries(view.display).map(([type, mode]) => [renames[type] ?? type, mode]),
+    );
+    writeView(paths, id, { ...view, display });
+  }
+}
+
 const sameName = (a: string, b: string): boolean =>
   a.trim().toLowerCase() === b.trim().toLowerCase();
 

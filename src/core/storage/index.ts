@@ -4,7 +4,8 @@
  * (frontmatter, document), the work log beside it (comments), the activity
  * section inside a document's body (activity), the id counters (state),
  * per-checkout settings (local), saved views (views), the context templates a
- * brief is rendered with (templates), and authorship (git).  Nothing here knows
+ * brief is rendered with (templates), the user folder that holds the board
+ * templates of one person (user), and authorship (git).  Nothing here knows
  * what a valid board looks like; that is validation's job.
  *
  * Two of them are about sharing the folder rather than laying it out: `atomic`
@@ -24,4 +25,5 @@ export * from './lock.js';
 export * from './paths.js';
 export * from './state.js';
 export * from './templates.js';
+export * from './user.js';
 export * from './views.js';

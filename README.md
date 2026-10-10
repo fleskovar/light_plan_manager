@@ -1599,7 +1599,25 @@ Names must be `lower_snake_case` and cannot shadow the reserved fields:
 ```bash
 lpm init --template kanban
 lpm init --template ./my-process.yml    # your own
+lpm init --template team-flow           # a template that you saved
 ```
+
+You can save the config of a board as a template. In the web app, open
+**File ▸ Board configuration…** and select the **Templates** tab. The command
+**Save as a template** writes the file `templates/<name>.yml` in the user
+folder. The user folder is `~/.light-plan`, or the folder that the environment
+variable `LPM_HOME` names.
+
+The saved file holds every key of `.lpm/config.yml` except `remotes`,
+`remotes_off`, `git_sync`, `default_period` and `planning`. Those five keys
+describe one board. The template does not hold the issues, the template
+registry or the context templates of the board.
+
+`lpm init` without `--template` reads the key `default_template` in the file
+`settings.json` of the user folder. The value is the name of a built-in
+template or of a saved template. When the key is absent, `lpm init` uses
+`scrum`. The **Templates** tab writes the key when you select a template under
+**Template for new boards**.
 
 ## Sharing the board through git
 
@@ -2701,6 +2719,7 @@ pre-commit hook. Run `lpm <command> --help` for full options.
 | `LPM_BOARD_PATH` | The board to work on, from any folder |
 | `LPM_USER` | Act as this resource ([who you are](#working-as-a-team-member)) |
 | `LPM_PROFILE` | The profile file to use ([profiles](#profiles-giving-one-developer-one-part-of-the-board)) |
+| `LPM_HOME` | The user folder, which holds the saved board templates and `settings.json` ([templates](#templates)). The default is `~/.light-plan` |
 | `LPM_LOCK_TIMEOUT_MS`, `LPM_LOCK_STALE_MS`, `LPM_NO_LOCK` | The write lock ([sharing a checkout](#several-people-and-agents-one-checkout)) |
 
 Normally `lpm` finds the board by walking up from the current folder, the way
@@ -2797,7 +2816,7 @@ name of the board and the status label.
 
 | Menu | Contents |
 | --- | --- |
-| **File** | The commands for views, which the next table lists. |
+| **File** | The commands for views, which the next table lists, and **Board configuration…**. |
 | **Edit** | **New** creates a document of the chosen type on the board. **Copy**, **Paste**, **Duplicate**, **Clear the selection**, **Remove from the view** and **Delete from the board…** act on the selection. **Push pending changes** pushes at once. |
 | **View** | **Board overview…**, **Arrange the graph**, **Hierarchy display…**, a switch for each pane (**Queue panel**, **Details panel**, **Drawer**) and **Appearance**. |
 | **Help** | **Keyboard shortcuts…** lists every shortcut. |
@@ -2817,6 +2836,7 @@ The **File** menu holds the commands for views:
 | **Auto-save** | Switches the preference `autoSave`. A tick shows that it holds `true`. |
 | **Open in new window** | See the list above. |
 | **Close tab** | Closes the tab of the open view. Disabled when the window has one tab. |
+| **Board configuration…** | Opens the dialog that shows and changes `.lpm/config.yml`. See [What it does](#what-it-does). |
 | **Delete view…** | Asks, then deletes the view file. The issues stay on the board. |
 
 The id of a view is the slug of the name that the view had when it was created,
@@ -3012,6 +3032,59 @@ teammate who pulls your branch sees the same canvas you were looking at.
   accent colour that marks the selection, and the text size. These are
   yours rather than the view's: they are kept in this browser, apply to every
   board and view you open in it, and never travel with a view to a teammate.
+- **File ▸ Board configuration…** — the content of `.lpm/config.yml`, and the
+  commands that change it. The dialog has three tabs.
+
+  **Types and attributes** shows the hierarchy of each namespace that the board
+  declares: issues, periods, the team and squads. Each level lists its types.
+  Each type shows its label, its name, the number of documents of the type and
+  its attributes. For each attribute the tab shows the name, the type, the
+  allowed values, the default and the description.
+
+  **Statuses** shows each status in board order, with its label, its id, its
+  flags and the number of issues in the status.
+
+  **Templates** saves the config as a [board template](#templates) and selects
+  the template that `lpm init` uses by default.
+
+  Each change is written to `.lpm/config.yml` at once. A change that renames or
+  removes a name also rewrites each file that holds the name:
+
+  | Change | Files that the server rewrites |
+  | --- | --- |
+  | A new name for a type | The field `type` of every document of the type. For an issue type: the templates of the registry, the file `.lpm/templates/context/<type>.md`, the keys of `mapping.types` of each remote, and the keys of `display` in each view file. |
+  | A new id for a status | The field `status` of every issue in the status, the key `default_status`, and the keys of `mapping.statuses` of each remote. |
+  | A new name for an attribute | The value in every document of the type. When no other type declares the old name: `priority_attribute`, `effort_attribute`, and the keys of `mapping.attributes` and `fields` of each remote. |
+  | A removed attribute | The value in every document of the type. |
+
+  A change to a label rewrites one line of the config and no document. The
+  field `updated` of a rewritten document does not change.
+
+  The server refuses these changes, and the dialog disables the button:
+
+  - Removing a type that a document has, or a status that an issue holds.
+  - Removing the default status.
+  - Removing an enum value that a document holds.
+  - Inserting a level above existing documents. A document keeps its folder, so
+    each document at that depth then sits one level above the level of its
+    type. Add the type to an existing level, or add a level below the deepest
+    level.
+
+  The edits do not reach three places. A developer profile that lists a renamed
+  type under `scope.types` keeps the old name, because a profile is a file
+  outside `.lpm`. The text of a body or of a context template keeps the old
+  word. A view that holds unpushed changes stops the edit until the changes are
+  pushed, because an unpushed change can name the old type.
+
+  The dialog does not edit the flags `atomic`, `generic`, `active` and
+  `terminal`, the keys `default_status`, `priority_attribute` and
+  `effort_attribute`, the body of a type, or the default of an attribute. Edit
+  those in `.lpm/config.yml`. A renamed enum value is also a hand edit: the
+  dialog adds and removes values and does not rename one.
+
+  A config edit writes the file through the `yaml` library. Comments and key
+  order stay. A flow mapping loses the spaces inside its braces: `{ a: b }`
+  becomes `{a: b}`.
 - **View ▸ Hierarchy display…** — how deep the canvas draws. A board four
   levels deep drawn as boxes inside boxes is a picture of the hierarchy, not of
   the work: the dependencies run between the stories at the bottom, and every
@@ -3307,7 +3380,7 @@ Eight layers, each depending only on the ones above it:
 | `board/` | Reading all three collections into a `LoadedBoard` (`load.ts`), navigating it (`query.ts`), narrowing it to one person's part of it (`scope.ts`) and recommending work (`tasks.ts`). |
 | `profile/` | The file one developer is handed: parsing it (`schema.ts`) and finding the one in force (`current.ts`). Never board truth — `check` neither reads one nor knows it exists. |
 | `instructions/` | One issue plus its ancestry, rendered as a working brief: the little template language (`template.ts`), the values it can see (`context.ts`), the layout every board falls back to (`builtin.ts`) and which layout to use (`instructions.ts`). Read-only, like `tasks.ts`. |
-| `operations/` | The commands that change a board: `init`, `create`, `update`, `retype`, `move`, `link`, `comment`, `remove`, `user`, `profile`. Each validates fully before touching the filesystem. |
+| `operations/` | The commands that change a board: `init`, `create`, `update`, `retype`, `move`, `link`, `comment`, `remove`, `user`, `profile`, and `config-edit`, which changes the types, statuses and attributes of the config and rewrites the documents that hold a renamed name. Each validates fully before touching the filesystem. `board-template` saves a config as a template in the user folder. |
 | `validation/` | `check.ts` (read-only, reports everything) and `fix.ts` (repairs exactly what check marks `fixable`). Sharing a folder is what keeps the two from drifting. |
 
 `errors.ts` sits outside the stack — any layer may throw a `BoardError`.

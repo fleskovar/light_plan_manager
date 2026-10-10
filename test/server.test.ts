@@ -1,4 +1,7 @@
+import { mkdtempSync, rmSync } from 'node:fs';
 import type { Server } from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { BoardPaths } from '../src/core/index.js';
 import {
@@ -15,7 +18,9 @@ import { parseView } from '../src/server/views/schema.js';
 import { applyChanges } from '../src/sync/apply.js';
 import type {
   BoardSnapshot,
+  BoardTemplatesDto,
   Change,
+  ConfigEditResultDto,
   CurrentUserDto,
   NodePatch,
   QueueSequenceDto,
@@ -881,5 +886,91 @@ describe('the queue and the planning switch', () => {
   it('opens a view that still carries the planning it used to keep', () => {
     const view = parseView({ id: 'old', name: 'Old', planning: 'queue' }, 'old');
     expect('planning' in view).toBe(false);
+  });
+});
+
+describe('the board configuration routes', () => {
+  const send = (url: string, method: string, body?: unknown): Promise<Response> =>
+    fetch(url, {
+      method,
+      headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+
+  it('renames a type in the config, in the documents and in the display of a view', async () => {
+    const paths = seed();
+    const running = await startBoardServer(paths, { port: 0, serveApp: false });
+    try {
+      const view = (await (await send(`${running.url}/api/views`, 'POST', { name: 'Roadmap' })).json()) as ViewDocument;
+      await send(`${running.url}/api/views/${view.id}`, 'PUT', { ...view, display: { epic: 'badge' } });
+
+      const response = await send(`${running.url}/api/config/edits`, 'POST', {
+        edits: [{ op: 'update-type', kind: 'issue', type: 'epic', name: 'milestone', label: 'Milestone' }],
+      });
+      expect(response.status).toBe(200);
+      const result = (await response.json()) as ConfigEditResultDto;
+      expect(result.rewritten).toBe(1);
+      expect(result.renamedTypes).toEqual({ epic: 'milestone' });
+
+      const board = (await (await fetch(`${running.url}/api/board`)).json()) as BoardSnapshot;
+      expect(board.config.types.milestone?.label).toBe('Milestone');
+      expect(board.config.hierarchy.issue[1]).toEqual(['milestone']);
+      expect(board.issues.find((issue) => issue.id === 'LP-2')?.type).toBe('milestone');
+
+      const stored = (await (await fetch(`${running.url}/api/views/${view.id}`)).json()) as ViewDocument;
+      expect(stored.display).toEqual({ milestone: 'badge' });
+    } finally {
+      running.server.close();
+    }
+  });
+
+  it('answers 400 with the reason when an edit is refused, and for a body with no edits', async () => {
+    const paths = seed();
+    const running = await startBoardServer(paths, { port: 0, serveApp: false });
+    try {
+      const refused = await send(`${running.url}/api/config/edits`, 'POST', {
+        edits: [{ op: 'remove-type', kind: 'issue', type: 'epic' }],
+      });
+      expect(refused.status).toBe(400);
+      expect(await refused.json()).toEqual({
+        error: 'Cannot remove the type "epic"',
+        details: ['1 document has this type, for example LP-2.', 'Convert or delete those documents first.'],
+      });
+
+      expect((await send(`${running.url}/api/config/edits`, 'POST', { edits: [] })).status).toBe(400);
+    } finally {
+      running.server.close();
+    }
+  });
+
+  it('saves the board config as a template and sets the default template', async () => {
+    const previous = process.env.LPM_HOME;
+    const home = mkdtempSync(path.join(os.tmpdir(), 'lpm-home-'));
+    process.env.LPM_HOME = home;
+    const paths = seed();
+    const running = await startBoardServer(paths, { port: 0, serveApp: false });
+    try {
+      const url = `${running.url}/api/board-templates`;
+      const listed = (await (await fetch(url)).json()) as BoardTemplatesDto;
+      expect(listed.templates.map((template) => template.name)).toEqual(['scrum', 'kanban', 'blank']);
+      expect(listed.default).toBe('scrum');
+      expect(listed.folder).toBe(home);
+
+      const saved = (await (await send(url, 'POST', { name: 'team-flow' })).json()) as BoardTemplatesDto;
+      expect(saved.templates.at(-1)).toEqual({ name: 'team-flow', source: 'user' });
+      expect((await send(url, 'POST', { name: 'team-flow' })).status).toBe(400);
+
+      const chosen = (await (await send(`${url}/default`, 'PUT', { name: 'team-flow' })).json()) as BoardTemplatesDto;
+      expect(chosen.default).toBe('team-flow');
+
+      const removed = (await (await send(`${url}/team-flow`, 'DELETE')).json()) as BoardTemplatesDto;
+      expect(removed.templates.map((template) => template.name)).toEqual(['scrum', 'kanban', 'blank']);
+      expect(removed.default).toBe('scrum');
+    } finally {
+      running.server.close();
+      rmSync(home, { recursive: true, force: true });
+      if (previous === undefined) delete process.env.LPM_HOME;
+      else process.env.LPM_HOME = previous;
+    }
   });
 });

@@ -130,7 +130,10 @@ export function deleteActiveView(context: ViewContext): void {
 /** A submenu, or none for an empty list. A submenu with no entry opens an empty box. */
 const submenu = (items: MenuEntry[]): MenuEntry[] | undefined => (items.length ? items : undefined);
 
-/** The File menu: the commands that act on a view file and on its tab. */
+/**
+ * The File menu: the commands that act on a view file and on its tab, and the
+ * entry that opens the configuration of the board.
+ */
 export function fileMenu(context: ViewContext): MenuEntry[] {
   const { tabs, shell, workspace, preferences } = context;
   const active = tabs.active;
@@ -179,6 +182,8 @@ export function fileMenu(context: ViewContext): MenuEntry[] {
       disabled: active === null || tabs.open.length < 2,
       onSelect: () => active !== null && closeTab(context, active),
     },
+    { separator: true },
+    { label: 'Board configuration…', disabled: !ready, onSelect: () => (shell.configOpen = true) },
     { separator: true },
     {
       label: 'Delete view…',

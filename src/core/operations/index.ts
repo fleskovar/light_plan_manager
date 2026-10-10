@@ -7,7 +7,10 @@
  * above it (rollup), and remembering who is at the keyboard (user) and which
  * profile they run under (profile). `planning` switches the board between
  * planning with its periods and working as one queue — a config edit, never a
- * document edit.
+ * document edit. `config-edit` changes the types, the statuses and the
+ * attributes that `.lpm/config.yml` declares, and rewrites every document that
+ * holds a renamed name. `board-template` saves a config as a template for new
+ * boards; it writes the user folder and never a board.
  * Each validates its inputs up front and only then touches the filesystem, so
  * a rejected operation leaves nothing half-written. The ones that add, remove,
  * move or rename a document also rewrite `.lpm/INDEX.md` (board-index), which
@@ -29,8 +32,10 @@
  * not re-exported.
  */
 export * from './board-index.js';
+export * from './board-template.js';
 export * from './claim.js';
 export * from './comment.js';
+export * from './config-edit.js';
 export * from './create.js';
 export * from './flag.js';
 export * from './git-sync.js';

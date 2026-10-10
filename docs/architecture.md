@@ -30,12 +30,12 @@ not optional and has no config of its own — see the invariant below.
 | --- | --- |
 | `model/` | Domain types + pure logic (attribute coercion/validation, dependency-cycle detection). No I/O; every layer may import it. |
 | `config/` | `schema.ts` parses `.lpm/config.yml` into a validated `BoardConfig` (zod); `lookup.ts` answers every question about it. Callers never inspect the raw config shape. |
-| `storage/` | Disk encoding: `paths` (layout constants, slugs, id↔folder-name, and which board a command works on), `frontmatter`, `document` (serialize/write), `comments` (`_comments.md` beside a document), `activity` (the timestamped block at the end of a body), `state` (id counters), `local` (`.lpm/local.json`, the git-ignored current user and profile path), `views` (`.lpm/views/*.json`, contents deliberately opaque), `templates` (`.lpm/templates/context/*.md`, the layouts a brief is rendered with), `git` (identity, first-commit date), plus the two that make the folder safe to share: `atomic` (temp-then-rename writes, and the `DocStamp` that says whether a file moved under a reader) and `lock` (`.lpm/lock`, one writer at a time across processes). Knows the layout, not what makes it valid. |
+| `storage/` | Disk encoding: `paths` (layout constants, slugs, id↔folder-name, and which board a command works on), `frontmatter`, `document` (serialize/write), `comments` (`_comments.md` beside a document), `activity` (the timestamped block at the end of a body), `state` (id counters), `local` (`.lpm/local.json`, the git-ignored current user and profile path), `views` (`.lpm/views/*.json`, contents deliberately opaque), `templates` (`.lpm/templates/context/*.md`, the layouts a brief is rendered with), `user` (the user folder `~/.light-plan`, or the folder that `LPM_HOME` names: `templates/<name>.yml` and `settings.json`, which belong to one person and to no board), `git` (identity, first-commit date), plus the two that make the folder safe to share: `atomic` (temp-then-rename writes, and the `DocStamp` that says whether a file moved under a reader) and `lock` (`.lpm/lock`, one writer at a time across processes). Knows the layout, not what makes it valid. |
 | `board/` | `load.ts` reads every collection into a `LoadedBoard`; `query.ts` navigates it; `registry.ts` answers what the template registry adds (roots, folders, placement); `scope.ts` narrows it to one reader's part of it; `tasks.ts` ranks work and reports roster load; `simulate.ts` runs that ranking forward as one person's whole sequence; `rollup.ts` asks which containers are out of step with the work inside them (all read-only, config-aware). |
 | `gitsync/` | Sharing the board through its own git repository: `run.ts` (the only way git is run — never prompts, always times out), `repo.ts` (repository questions, and committing an exact list of files through a private index), `integrate.ts` (bring fetched work in: fast-forward, lay local work over upstream when the files differ, report a conflict when they are the same), `sync.ts` (fetch, pull, push, and `sharedWrite` — the write transaction), `status.ts`, `hosts.ts` (the hosts setup can talk somebody through). Sits between `board/` and `operations/`; `operations/git-sync.ts` builds the public entry points on it. |
 | `profile/` | The file one developer is handed: `schema.ts` parses it (strictly), `current.ts` finds the one in force and resolves its scope. Types live in `model/profile.ts`, evaluation in `board/scope.ts` — this layer is only the file it arrived in. |
 | `instructions/` | One issue plus its ancestry as a working brief: `analyze.ts` (the safety check a template passes *before* it is compiled), `template.ts` (rendering with Eta, plus the helpers a template may call), `context.ts` (board+issue → the values a template sees), `builtin.ts` (the layout every board falls back to, naming no type), `instructions.ts` (which layout, and rendering it). Read-only, like `board/tasks.ts`. |
-| `operations/` | `init`, `create`, `update`, `retype`, `move`, `claim`, `link`, `flag`, `comment`, `remove`, `user`, `profile` — validate fully, then write, every one of them under the board lock and refusing a document that changed underneath the handle. `shared.ts` holds their common guards (`boardWrite`, `requireUnchanged`, `writeDocument`) and is intentionally not re-exported; `board-index.ts` renders and rewrites `.lpm/INDEX.md`. |
+| `operations/` | `init`, `create`, `update`, `retype`, `move`, `claim`, `link`, `flag`, `comment`, `remove`, `user`, `profile`, `config-edit` — validate fully, then write, every one of them under the board lock and refusing a document that changed underneath the handle. `board-template.ts` resolves the template that `init` copies and saves a config as a user template. It writes the user folder and never a board, so it takes no lock. `shared.ts` holds their common guards (`boardWrite`, `requireUnchanged`, `writeDocument`) and is intentionally not re-exported; `board-index.ts` renders and rewrites `.lpm/INDEX.md`. |
 | `validation/` | `check.ts` (read-only) and `fix.ts` (writes). `shared.ts` keeps them agreeing. |
 
 `errors.ts` sits outside the stack: any layer may `throw new BoardError(message, details[])`.
@@ -192,7 +192,7 @@ if a new operation needs to move one, give it a heading and call `setFlag`.
 | `src/runner/` | `lpm queue agent`: the autonomous development loop. `loop.ts` picks the top of `nextTasks`, hands the brief to an injected `PiRunner`, and records the outcome through the engine's own operations (`moveNode`, `flagIssue`, `addComment`); `pi.ts` is the one file that touches the optional pi SDK; `shell.ts` (the non-interactive environment and the guard that keeps a command from waiting for a person), `config.ts` (the `--file` YAML), `git.ts` (project-repo commits), `stats.ts` (the comment + `.lpm/runs/` artifact), `types.ts` (the SDK-free vocabulary, including the `RunEvent` a run reports itself with). |
 | `assets/` + `cli/commands/agent/` | What `lpm agent` installs into someone else's project. `assets/` is a **neutral tree** of any files at all; `assets/harnesses/*.yml` is a list of copy rules saying which of them land where, selected `.gitignore`-style. `assets.ts` walks the tree, `glob.ts` matches patterns, `mapping.ts` validates a mapping and expands its templates, `install.ts` writes without destroying, `prompt.ts` asks the one question. |
 | `web/src/lib/` | `api/` (the only `fetch` in the editor), `app/` (`router.svelte.ts`, `tabs.svelte.ts`, `preferences.svelte.ts`, `shell.svelte.ts`), `board/` (working copy, selectors, links, critical path), `workspace/` (the store, `pool.svelte.ts` and the mutation vocabulary), `ui/` (presentational primitives, plus `markdown.ts` — the only place that produces HTML), `shortcuts/`. |
-| `web/src/features/` | `canvas/`, `drawer/{table,periods,gantt,team,remote}/`, `queue/` (the left panel), `panel/`, `commandbar/` (the menu bar and the tabs: `menus.ts` builds the File, Edit, View and Help menus, `CommandBar` draws the bar, `ViewTabs` and `TabStrip` draw the tabs, plus `ViewDialog` and `ShortcutsDialog`), `overview/` (the dialog that View ▸ Board overview opens, and `digest.ts`). |
+| `web/src/features/` | `canvas/`, `drawer/{table,periods,gantt,team,remote}/`, `queue/` (the left panel), `panel/`, `config/` (the dialog that File ▸ Board configuration opens: `model.ts` derives its rows, `editor.svelte.ts` sends the edits), `commandbar/` (the menu bar and the tabs: `menus.ts` builds the File, Edit, View and Help menus, `CommandBar` draws the bar, `ViewTabs` and `TabStrip` draw the tabs, plus `ViewDialog` and `ShortcutsDialog`), `overview/` (the dialog that View ▸ Board overview opens, and `digest.ts`). |
 | `web/src/viewer/` | The read-only app, its own entry (`web/viewer/index.html`, `web/vite.viewer.config.ts`, out to `web/dist-viewer`): `source.ts` (URL → the board file to fetch), `board.svelte.ts` (the store), `Viewer`/`ViewerCanvas`/`Inspector`. It reuses the canvas wholesale and touches nothing in `lib/api/`. |
 
 Things to keep true here:
@@ -925,6 +925,83 @@ Things to keep true here:
   still means `periods`, so a board created before this default does not change.
   `makeBoard` in `test/helpers.ts` and `init` in `test/cli.test.ts` ask for
   `periods`, because most tests build a timeline to check what a sprint does.
+- **The vocabulary of a board changes through one operation, and a rename
+  reaches every file that holds the name.** `editBoardConfig` in
+  `core/operations/config-edit.ts` takes a list of `ConfigEdit`
+  (`src/shared/board-config.ts`). An edit adds, changes or removes a type, a
+  status or an attribute. The web dialog **File ▸ Board configuration…**
+  (`web/src/features/config/`) sends the list to `POST /api/config/edits`
+  (`server/routes/config.ts`). The rules:
+
+  - **The config is edited as a `yaml` document.** `parseDocument` keeps the
+    comments and the key order. The operation writes the text with `lineWidth:
+    0` and `flowCollectionPadding: false`. Those two options reproduce the
+    text of the shipped `scrum` template, and `test/board-template.test.ts`
+    asserts it. A flow mapping with padding, such as the `{ remote: x }` that
+    `lpm remote add` writes, loses the padding. `setPlanning` stays a text edit
+    for that reason.
+  - **Each edit is validated against the result of the edits before it.**
+    After each edit the operation parses the text with `parseConfigText`. A
+    result that does not validate throws, and nothing is written. The first
+    write happens after the last check, so a list is applied whole or not at
+    all.
+  - **The board is loaded inside the lock.** The operation takes paths, not a
+    board handle, and calls `withBoardWrite` directly, as `claimIssue` reloads
+    inside the lock. `requireUnchanged` still runs on each document before the
+    first write, because an editor can write a file without the lock.
+  - **A rename follows the name.** A new type name rewrites the field `type` of
+    each document of the type. A registry template carries an issue type, so
+    `documentsOf` counts it as a document of the issue namespace. A new status
+    id rewrites `status` and `default_status`. A new attribute name moves the
+    value in each document of the type. The keys of `mapping.types`,
+    `mapping.statuses`, `mapping.attributes` and `fields` of each remote under
+    `remotes` and `remotes_off` follow, and so does `mapping.periods.container`
+    for a period type. `priority_attribute` and `effort_attribute` follow an
+    attribute rename when no other issue type still declares the old name. The
+    file `.lpm/templates/context/<type>.md` is renamed with its issue type.
+  - **The field `updated` of a rewritten document does not change.** The
+    document says what it said before.
+  - **Core does not read a view file, so the server renames the keys of
+    `display`.** `editBoardConfig` returns `renamedTypes`. The route passes it
+    to `renameViewTypes` in `server/views/store.ts`, and the web app passes it
+    to `Workspace.renameTypes` for each open tab. Without the second call, the
+    next save of an open tab writes the old key again.
+  - **Three edits are refused because no rewrite makes them valid.** A removed
+    type or status that a document holds, a removed enum value that a document
+    holds, and a new level above existing documents. A document keeps its
+    folder, so a new level puts each document at that depth one level above the
+    level of its type. `insert_between` is the operation that creates a parent
+    document. The operation does not call it, because a config edit creates no
+    document.
+  - **The edit is written straight through, like the planning mode.** A view
+    queues changes to the plan. A config edit changes the words that those
+    changes use. `ConfigEditor.apply` first flushes every open tab and refuses
+    while a tab still holds a pending change.
+  - **A developer profile is out of reach.** A profile is a file outside
+    `.lpm`, so `scope.types` keeps a renamed type. `ConfigEditResultDto.notes`
+    says so, and the dialog shows the notes until the next action.
+
+  The dialog reads `ConfigDto` and the snapshot. `features/config/model.ts`
+  derives the rows and the document counts as pure functions, and
+  `editor.svelte.ts` holds the request state. The components are presentational.
+  No CLI command and no MCP tool calls `editBoardConfig` yet. Each one that is
+  added must call that function and must not edit the config another way.
+- **A board template is a config file, and the user folder holds the ones a
+  person saved.** `lpm init --template <name>` resolves a name in this order: a
+  built-in template (`templates/<name>.yml` of the package), a user template
+  (`templates/<name>.yml` of the user folder), then a path. `readBoardTemplate`
+  in `operations/board-template.ts` holds that order. `saveBoardTemplate` writes
+  a user template from `.lpm/config.yml`. `boardTemplateText` removes the keys
+  that describe one board: `remotes`, `remotes_off`, `git_sync`,
+  `default_period` and `planning`. `lpm init` without `--template` calls
+  `defaultBoardTemplate`, which reads the key `default_template` of
+  `settings.json` in the user folder and falls back to `scrum`. The user folder
+  is `~/.light-plan`, not `~/.lpm`: `findBoardPaths` reads a `.lpm` folder as a
+  board, and a board in the home folder would answer for every project below
+  it. A board does not record the template that it started from. The root
+  `vitest.config.ts` sets `LPM_HOME` to a folder that no test creates, so
+  `initBoard` in a test never reads the `~/.light-plan` of the person who runs
+  the suite.
 - **A queue stays inside the part of the plan that is already moving, and
   `src/shared/cohesion.ts` is the one definition.** Two ready stories in two
   unrelated features used to be separated by priority, column and then *id*, so
@@ -1794,7 +1871,18 @@ the parent's `help` string rather than adding an unreachable one.
   a branch in `defaultOf` in `web/src/features/panel/sections/params.ts`, which
   reads a typed default out of the editor's text field.
 - **New built-in template**: a file in `templates/` plus its name in
-  `BUILTIN_TEMPLATES`; templates are validated by `parseConfigText` at init.
+  `BUILTIN_TEMPLATES` (`operations/board-template.ts`); templates are validated
+  by `parseConfigText` at init.
+- **New config edit**: a case in the union `ConfigEdit` in
+  `src/shared/board-config.ts`, a function and a `switch` case in
+  `operations/config-edit.ts`, and a case in `describeConfigEdit`, whose text
+  is the commit message on a board shared through git. Edit the `yaml`
+  document in place and do not re-create a node that exists, or its comment is
+  lost. If the edit renames or removes a name, rewrite each holder: the
+  documents (`work.changed`), the remote blocks (`followInRemotes`) and, for an
+  issue type, `work.renamedTypes`. Then a control in `web/src/features/config/`
+  and a case in `test/config-edit.test.ts` that reloads the board and asserts
+  that `checkBoard` reports no error.
 - **New agent or skill**: one markdown file under `assets/` with `name`
   (matching the file name), `description` and `roles` frontmatter (agents also
   carry `tools`), plus a `files:` rule in each mapping that selects it — the

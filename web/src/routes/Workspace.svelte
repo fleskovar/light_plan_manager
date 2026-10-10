@@ -30,6 +30,7 @@
   import SidePanel from '$features/panel/SidePanel.svelte';
   import Canvas from '$features/canvas/Canvas.svelte';
   import HierarchyDialog from '$features/canvas/HierarchyDialog.svelte';
+  import BoardConfigDialog from '$features/config/BoardConfigDialog.svelte';
   import ReparentDialog from '$features/canvas/ReparentDialog.svelte';
 
   /**
@@ -418,6 +419,10 @@
 
   {#if shell.hierarchyOpen}
     <HierarchyDialog onclose={() => shell.closeHierarchy()} />
+  {/if}
+
+  {#if shell.configOpen}
+    <BoardConfigDialog onclose={() => (shell.configOpen = false)} />
   {/if}
 
   <!-- A dialog opened on a document nobody has pushed yet holds its temporary

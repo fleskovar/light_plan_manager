@@ -21,6 +21,7 @@
  */
 export * from './adf.js';
 export * from './blocking.js';
+export * from './board-config.js';
 export * from './changes.js';
 export * from './cohesion.js';
 export * from './dependency-rollup.js';

@@ -1,6 +1,5 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { buildBoard } from '../board/load.js';
 import { parseConfigText } from '../config/schema.js';
 import { BoardError } from '../errors.js';
@@ -14,32 +13,9 @@ import type { BoardPaths } from '../storage/paths.js';
 import { LPM_DIR, boardPathsFor } from '../storage/paths.js';
 import { writeState } from '../storage/state.js';
 import { writeBoardIndex } from './board-index.js';
+import { defaultBoardTemplate, readBoardTemplate } from './board-template.js';
 import { createPeriod } from './create.js';
 import { configWithPlanning } from './planning.js';
-
-export const BUILTIN_TEMPLATES = ['scrum', 'kanban', 'blank'] as const;
-export type BuiltinTemplate = (typeof BUILTIN_TEMPLATES)[number];
-
-// Three levels up from src/core/operations (and dist/core/operations) is the
-// package root, where `templates/` is shipped. Keep in step with this file's depth.
-const TEMPLATE_DIR = fileURLToPath(new URL('../../../templates/', import.meta.url));
-
-export function builtinTemplatePath(name: string): string {
-  return path.join(TEMPLATE_DIR, `${name}.yml`);
-}
-
-function readTemplate(template: string): { text: string; name: string } {
-  const isBuiltin = (BUILTIN_TEMPLATES as readonly string[]).includes(template);
-  const file = isBuiltin ? builtinTemplatePath(template) : path.resolve(template);
-  try {
-    return { text: readFileSync(file, 'utf8'), name: isBuiltin ? template : file };
-  } catch {
-    throw new BoardError(`Cannot read template "${template}"`, [
-      `Built-in templates: ${BUILTIN_TEMPLATES.join(', ')}`,
-      'Or pass a path to your own config YAML.',
-    ]);
-  }
-}
 
 /** `light_plan` -> `LP`, `myapp` -> `MY`. Falls back to `LP`. */
 export function derivePrefix(dirName: string): string {
@@ -83,6 +59,10 @@ export function ensureGitignoreEntry(root: string): boolean {
 
 export interface InitOptions {
   root: string;
+  /**
+   * The name of a built-in template, the name of a user template, or a path to
+   * a config file. When omitted, `defaultBoardTemplate` decides.
+   */
   template?: string;
   prefix?: string;
   /** Make `.lpm` its own git repo and ignore it in the surrounding repo. */
@@ -127,7 +107,7 @@ export function initBoard(options: InitOptions): InitResult {
     throw new BoardError(`A board already exists at ${paths.lpmDir}`);
   }
 
-  const { text, name } = readTemplate(options.template ?? 'scrum');
+  const { text, name } = readBoardTemplate(options.template ?? defaultBoardTemplate());
   const prefix = options.prefix ?? derivePrefix(path.basename(root));
   if (!/^[A-Z][A-Z0-9]{0,9}$/.test(prefix)) {
     throw new BoardError(

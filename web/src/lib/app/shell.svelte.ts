@@ -49,6 +49,8 @@ export class Shell {
   viewDialog = $state<ViewDialogKind | null>(null);
   /** The board overview that View ▸ Board overview opens. */
   overviewOpen = $state(false);
+  /** The dialog that File ▸ Board configuration opens. */
+  configOpen = $state(false);
   /** The list of keyboard shortcuts that Help ▸ Keyboard shortcuts opens. */
   shortcutsOpen = $state(false);
   /**

@@ -169,8 +169,11 @@ function normalizeHierarchy(levels: Array<string | string[]>): string[][] {
   return levels.map((level) => (typeof level === 'string' ? [level] : level));
 }
 
-/** The config keys that describe one namespace, keyed by the kind they govern. */
-const NAMESPACE_KEYS = {
+/**
+ * The config keys that describe one namespace, keyed by the kind they govern.
+ * Exported for `operations/config-edit.ts`, which edits these keys in place.
+ */
+export const NAMESPACE_KEYS = {
   issue: { types: 'issue_types', hierarchy: 'hierarchy', prefix: 'key_prefix' },
   period: { types: 'period_types', hierarchy: 'period_hierarchy', prefix: 'period_prefix' },
   resource: { types: 'resource_types', hierarchy: 'resource_hierarchy', prefix: 'resource_prefix' },
