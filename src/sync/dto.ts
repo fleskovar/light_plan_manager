@@ -4,6 +4,7 @@ import type {
   BoardConfig,
   Issue,
   LoadedBoard,
+  QueueSimulation,
   NodeKind,
   Period,
   Resource,
@@ -14,6 +15,7 @@ import type {
 import {
   depthOfType,
   hasPeriods,
+  planningOf,
   hasResources,
   hasSquads,
   hierarchyFor,
@@ -28,6 +30,7 @@ import type {
   BoardSnapshot,
   ConfigDto,
   IssueDto,
+  QueueSequenceDto,
   NodeDtoBase,
   PeriodDto,
   ResourceDto,
@@ -113,6 +116,7 @@ export function toConfig(board: LoadedBoard): ConfigDto {
     hasSquads: hasSquads(config),
     priorityAttribute: config.priority_attribute,
     effortAttribute: config.effort_attribute,
+    planning: planningOf(config),
   };
 }
 
@@ -204,5 +208,27 @@ export function toSnapshot(board: LoadedBoard): BoardSnapshot {
       message: problem.message,
     })),
     readAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * A queue simulation as the queue panel reads it: ids in the engine's order,
+ * and why the rest were never reached. Ids only — the browser already holds
+ * every document, and its working copy is what it draws.
+ */
+export function toQueueSequence(board: LoadedBoard, run: QueueSimulation): QueueSequenceDto {
+  return {
+    resource: run.resource?.id ?? null,
+    planning: planningOf(board.config),
+    steps: run.steps.map((step) => ({
+      id: step.issue.id,
+      order: step.order,
+      started: step.started,
+    })),
+    skipped: run.skipped.map((skip) => ({
+      id: skip.issue.id,
+      reason: skip.reason,
+      blockedBy: skip.blockedBy.map((issue) => issue.id),
+    })),
   };
 }

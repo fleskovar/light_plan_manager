@@ -9,7 +9,9 @@ import type {
   GitSyncResponse,
   GitSyncStatusDto,
   GitUrlCheckDto,
+  Planning,
   PushFailure,
+  QueueSequenceDto,
   RemoteConflictDto,
   RemoteConnectRequestDto,
   RemoteConnectResultDto,
@@ -164,6 +166,16 @@ export const api = {
   me: (): Promise<CurrentUserDto> => request('/api/me'),
 
   board: (): Promise<BoardSnapshot> => request('/api/board'),
+
+  // The engine's own queue sequence, for one resource or (no id) the whole
+  // team — what the queue panel numbers its cards by.
+  queue: (resourceId: string | null): Promise<QueueSequenceDto> =>
+    request(resourceId ? `/api/queue?resource=${encodeURIComponent(resourceId)}` : '/api/queue'),
+
+  // Board config rather than a view setting, so written straight through like
+  // a flag: the whole team works the same queue.
+  setPlanning: (planning: Planning): Promise<{ planning: Planning; changed: boolean }> =>
+    request('/api/planning', send('PUT', { planning })),
 
   listViews: (): Promise<ViewSummary[]> => request('/api/views'),
 

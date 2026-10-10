@@ -18,6 +18,7 @@ import type {
   Change,
   CurrentUserDto,
   NodePatch,
+  QueueSequenceDto,
   ServerInfoDto,
   ViewDocument,
 } from '../src/shared/index.js';
@@ -464,7 +465,6 @@ describe('http api', () => {
         layout: { 'LP-3': { x: 10, y: 20, width: 320, height: 180, collapsed: true } },
         panel: { open: true, pinned: false, width: 480 },
         display: { feature: 'badge' },
-        planning: 'queue',
       }),
     });
     expect(saved.members).toEqual(['LP-3']);
@@ -473,8 +473,9 @@ describe('http api', () => {
     expect(saved.panel).toEqual({ open: true, pinned: false, width: 480 });
     // So is which levels the canvas draws as badges rather than as nodes.
     expect(saved.display).toEqual({ feature: 'badge' });
-    // And whether this view plans with sprints or works off the queue.
-    expect(saved.planning).toBe('queue');
+    // Whether the board plans with sprints is not: that is board config now,
+    // so every view and every teammate works the same queue.
+    expect('planning' in saved).toBe(false);
 
     expect(await json<{ id: string }[]>('/api/views')).toEqual([
       expect.objectContaining({ id: 'roadmap', members: 1 }),
@@ -774,5 +775,63 @@ describe('GET /api/me', () => {
       if (saved === undefined) delete process.env.LPM_USER;
       else process.env.LPM_USER = saved;
     }
+  });
+});
+
+describe('the queue and the planning switch', () => {
+  it('serves the engine’s sequence for the team and for one person', async () => {
+    const paths = seed();
+    const alice = createResource(reload(paths), { type: 'person', title: 'Alice' });
+    createIssue(reload(paths), { type: 'user_story', title: 'First', parentId: 'LP-3', assignee: alice.id });
+    createIssue(reload(paths), { type: 'user_story', title: 'Second', parentId: 'LP-3' });
+    const running = await startBoardServer(paths, { port: 0, serveApp: false });
+    try {
+      const queue = async (query = ''): Promise<Response> => fetch(`${running.url}/api/queue${query}`);
+
+      const team = (await (await queue()).json()) as QueueSequenceDto;
+      expect(team.resource).toBeNull();
+      expect(team.steps.map((step) => step.id).sort()).toEqual(['LP-4', 'LP-5']);
+      expect(team.steps.map((step) => step.order)).toEqual([1, 2]);
+
+      const mine = (await (await queue(`?resource=${alice.id}`)).json()) as QueueSequenceDto;
+      expect(mine.resource).toBe(alice.id);
+      expect(mine.steps.map((step) => step.id)).toEqual(['LP-4']);
+
+      expect((await queue('?resource=RS-99')).status).toBe(404);
+    } finally {
+      running.server.close();
+    }
+  });
+
+  it('switches the board to one queue and back, writing only the config', async () => {
+    const paths = seed();
+    const running = await startBoardServer(paths, { port: 0, serveApp: false });
+    const put = (planning: unknown): Promise<Response> =>
+      fetch(`${running.url}/api/planning`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ planning }),
+      });
+    const snapshot = async (): Promise<BoardSnapshot> =>
+      (await (await fetch(`${running.url}/api/board`)).json()) as BoardSnapshot;
+    try {
+      expect((await snapshot()).config.planning).toBe('periods');
+
+      expect(await (await put('queue')).json()).toEqual({ planning: 'queue', changed: true });
+      expect((await snapshot()).config.planning).toBe('queue');
+      expect(((await (await fetch(`${running.url}/api/queue`)).json()) as QueueSequenceDto).planning).toBe('queue');
+
+      expect(await (await put('periods')).json()).toEqual({ planning: 'periods', changed: true });
+      expect((await snapshot()).config.planning).toBe('periods');
+
+      expect((await put('kanban')).status).toBe(400);
+    } finally {
+      running.server.close();
+    }
+  });
+
+  it('opens a view that still carries the planning it used to keep', () => {
+    const view = parseView({ id: 'old', name: 'Old', planning: 'queue' }, 'old');
+    expect('planning' in view).toBe(false);
   });
 });

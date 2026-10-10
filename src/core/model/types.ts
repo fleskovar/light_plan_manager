@@ -271,7 +271,22 @@ export interface BoardConfig {
    * trackers, never both.
    */
   git_sync: GitSyncConfig | null;
+
+  /**
+   * How the board plans, as written in `planning:` — `periods` when the key is
+   * absent. `queue` reads the whole board as one continuous run: the queue
+   * ignores every period (no schedule rank, no parked switch, no squad gate)
+   * while each document keeps its `period:` exactly as it was, so switching
+   * back changes nothing on disk. Read it with `planningOf`, which also answers
+   * for a board with no period types; `operations/planning.ts` writes it.
+   */
+  planning: PlanningMode;
 }
+
+/** How a board decides what happens next. @see BoardConfig.planning */
+export type PlanningMode = 'periods' | 'queue';
+
+export const PLANNING_MODES: readonly PlanningMode[] = ['periods', 'queue'];
 
 /**
  * The board's git remote: which remote of the `.lpm` repository it pushes to,

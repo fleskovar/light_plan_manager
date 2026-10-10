@@ -1,0 +1,38 @@
+# The commands that build the board, in order. Each line is a real command:
+# paste it into a terminal, or run the whole file with `bash commands.txt` from
+# a folder that also holds config.yml. The ids in the comments are the ids that
+# the board allocates, because it numbers documents in creation order.
+
+# This case plans with sprints, so it starts the board in periods mode.
+lpm init --template config.yml --prefix LP --no-git --no-omni --planning periods
+
+# The team. RS-1 is a pool. Alice (RS-2) covers it. Bob (RS-3) does not.
+lpm new role -t QA
+lpm new person -t Alice --covers RS-1
+lpm new person -t Bob
+
+# Two sprints. Sprint 1 (SP-1) runs on any date from 2020 to 2098.
+# Sprint 2 (SP-2) starts in 2099, so it has not started.
+lpm new sprint -t "Sprint 1" --starts 2020-01-01 --ends 2098-12-31
+lpm new sprint -t "Sprint 2" --starts 2099-01-01 --ends 2099-12-31
+
+# Two features: LP-1 and LP-2.
+lpm new feature -t Checkout
+lpm new feature -t Search
+
+# Stories in Checkout: LP-3 to LP-8.
+lpm new story -t "Cart page" -p LP-1 --assignee Alice --set priority=medium --status doing
+lpm new story -t "Payment API client" -p LP-1 --assignee Alice --set priority=low --period SP-2
+lpm new story -t "Payment form" -p LP-1 --assignee Alice --set priority=high --depends-on LP-4
+lpm new story -t "Test checkout" -p LP-1 --assignee QA --set priority=low --period SP-1
+lpm new story -t "Receipt email" -p LP-1 --assignee Alice --set priority=high
+lpm new story -t "Refund flow" -p LP-1 --assignee Alice --set priority=low --depends-on LP-7
+
+# Stories in Search: LP-9 to LP-12. LP-12 has no assignee.
+lpm new story -t "Search box" -p LP-2 --assignee Alice --set priority=medium
+lpm new story -t "Search results" -p LP-2 --assignee Bob --set priority=high --depends-on LP-9
+lpm new story -t "Search filters" -p LP-2 --assignee Bob --set priority=medium
+lpm new story -t "Search analytics" -p LP-2 --set priority=high
+
+# LP-7 stops: somebody raised a flag on it.
+lpm flag LP-7 --reason blocked -m "Waiting for the email provider contract."

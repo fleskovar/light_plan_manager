@@ -2,12 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   completeView,
   emptyView,
-  type BoardSnapshot,
   type IssueDto,
   type SquadDto,
   type ViewDocument,
 } from '$shared';
-import { Workspace } from '$lib/workspace/workspace.svelte.js';
 import {
   audienceOptions,
   buildQueue,
@@ -282,40 +280,6 @@ describe('queueSections', () => {
       buildQueue(board(issue('A', 'user_story', null, { status: 'in_progress' })), config),
     );
     expect(stuck.find((section) => section.id === 'next')?.empty).toBe('Nothing ready.');
-  });
-});
-
-describe('choosing the queue', () => {
-  function workspaceOn(tab: 'periods' | 'gantt' | 'team'): Workspace {
-    const workspace = new Workspace();
-    workspace.snapshot = {
-      config,
-      issues: [],
-      periods: [],
-      resources: [],
-      squads: [],
-      templates: [],
-      problems: [],
-      readAt: new Date().toISOString(),
-    } satisfies BoardSnapshot;
-    const view = emptyView('test', 'Test');
-    workspace.view = { ...view, drawer: { ...view.drawer, tab }, queue: { ...view.queue, open: false } };
-    return workspace;
-  }
-
-  it('opens the queue panel, because choosing it is asking to see it', () => {
-    const workspace = workspaceOn('team');
-    workspace.setPlanning('queue');
-    expect(workspace.doc.queue.open).toBe(true);
-    expect(workspace.doc.drawer.tab).toBe('team');
-    workspace.dispose();
-  });
-
-  it('moves the drawer off a calendar tab the queue does not offer', () => {
-    const workspace = workspaceOn('gantt');
-    workspace.setPlanning('queue');
-    expect(workspace.doc.drawer.tab).toBe('table');
-    workspace.dispose();
   });
 });
 

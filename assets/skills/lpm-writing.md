@@ -189,9 +189,8 @@ be used together."
 
 ## Templates
 
-A board defines a body template for each type, and its headings win. Use the
-rules above for the text in each section. If the type has no template, use
-these.
+A board defines a body template for each type. Use the headings of that
+template, and use the rules above for the text in each section.
 
 ### Titles
 
@@ -203,69 +202,15 @@ these.
 - Do not write a topic ("Guest checkout") or a sales line ("Supercharge the
   sync engine").
 
-### Story, task or feature
+### Bodies
 
-```markdown
-## Context
-The problem in two or three sentences. What happens today, and what that costs
-(a number if you have one).
+Two skills give the content of a body for each type of item, with complete
+examples:
 
-## Requirements
-- Each requirement is one testable statement that uses "must".
-- Include the limits, the formats and the error cases.
-
-## Definition of done
-- [ ] Each item has a yes or no answer that someone else can check.
-- [ ] Which tests, at which level.
-
-## Out of scope
-- What a developer could reasonably add, but must not.
-
-## Notes
-- Files to start from (`src/...`), decisions already made, links.
-```
-
-### Bug
-
-```markdown
-## Summary
-One sentence: what is wrong, and when.
-
-## Steps to reproduce
-1. Exact command or action.
-2. ...
-
-## Expected
-What the system must do.
-
-## Actual
-What it does. Paste the output or the error.
-
-## Environment
-Version (`lpm --version`), OS, and the config if it matters.
-
-## Notes
-Suspected cause, labelled as an assumption.
-```
-
-### Epic
-
-```markdown
-## Goal
-One sentence: what is true when the epic is finished.
-
-## Why
-The problem, with numbers if you have them.
-
-## Scope
-- The features it contains.
-
-## Out of scope
-- ...
-
-## Done when
-- [ ] Checkable statements.
-```
+| To write | Load |
+| --- | --- |
+| An epic, a feature, a user story, a task, a bug, a test, a research issue or a sub-task | `lpm-writing-items` |
+| A review request, or the decision of a review | `lpm-writing-reviews` |
 
 ### Comments
 

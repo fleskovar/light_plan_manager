@@ -5,7 +5,8 @@ import { buildBoard } from '../board/load.js';
 import { parseConfigText } from '../config/schema.js';
 import { BoardError } from '../errors.js';
 import { installContextTemplates } from '../instructions/instructions.js';
-import type { BoardConfig } from '../model/types.js';
+import { planningOf } from '../config/lookup.js';
+import type { BoardConfig, PlanningMode } from '../model/types.js';
 import { hasPeriods, hasResources } from '../model/types.js';
 import { gitInit, isGitRepo } from '../storage/git.js';
 import { ensureLocalIgnored } from '../storage/local.js';
@@ -14,6 +15,7 @@ import { LPM_DIR, boardPathsFor } from '../storage/paths.js';
 import { writeState } from '../storage/state.js';
 import { writeBoardIndex } from './board-index.js';
 import { createPeriod } from './create.js';
+import { configWithPlanning } from './planning.js';
 
 export const BUILTIN_TEMPLATES = ['scrum', 'kanban', 'blank'] as const;
 export type BuiltinTemplate = (typeof BUILTIN_TEMPLATES)[number];
@@ -92,6 +94,13 @@ export interface InitOptions {
   omni?: boolean;
   /** `YYYY-MM-DD` the omni periods start on; today when omitted. */
   today?: string;
+  /**
+   * The planning mode the board starts in (default `queue`). On a template
+   * with period types, `queue` writes the key `planning` with the value `queue`
+   * into the new config, and `periods` leaves the key out. A template with no
+   * period types is in queue mode whatever is passed, and gets no key.
+   */
+  planning?: PlanningMode;
 }
 
 export interface InitResult {
@@ -104,6 +113,10 @@ export interface InitResult {
   contextTemplates: string[];
   /** The omni periods seeded, outermost first; empty when none were. */
   omniPeriods: { id: string; title: string }[];
+  /** The planning mode the new board is in. */
+  planning: PlanningMode;
+  /** True when the template declares period types, so the mode can be switched. */
+  hasPeriods: boolean;
 }
 
 export function initBoard(options: InitOptions): InitResult {
@@ -123,7 +136,21 @@ export function initBoard(options: InitOptions): InitResult {
     );
   }
 
-  const configText = withPrefix(text, prefix);
+  const prefixed = withPrefix(text, prefix);
+  const template = parseConfigText(prefixed);
+  if (!template.config) {
+    throw new BoardError(`Template "${name}" is not a valid board config`, template.errors);
+  }
+
+  // A new board starts in queue mode: most projects begin without a sprint
+  // plan, and `lpm planning periods` is one command when a team wants one. A
+  // template that already states `planning:` keeps its own value, and a
+  // template with no period types needs no key at all.
+  const startsInQueue =
+    (options.planning ?? 'queue') === 'queue' &&
+    hasPeriods(template.config) &&
+    !/^planning:/m.test(prefixed);
+  const configText = startsInQueue ? configWithPlanning(prefixed, 'queue') : prefixed;
   const { config, errors } = parseConfigText(configText);
   if (!config) {
     throw new BoardError(`Template "${name}" is not a valid board config`, errors);
@@ -173,7 +200,17 @@ export function initBoard(options: InitOptions): InitResult {
     if (isGitRepo(root)) gitignoreUpdated = ensureGitignoreEntry(root);
   }
 
-  return { paths, template: name, prefix, gitInitialized, gitignoreUpdated, contextTemplates, omniPeriods };
+  return {
+    paths,
+    template: name,
+    prefix,
+    gitInitialized,
+    gitignoreUpdated,
+    contextTemplates,
+    omniPeriods,
+    planning: planningOf(config),
+    hasPeriods: hasPeriods(config),
+  };
 }
 
 /** How long the omni chain runs. A year on, `lpm period <id> --start-now` renews it. */

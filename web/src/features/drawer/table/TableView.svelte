@@ -173,7 +173,9 @@
   const facetStatuses = $derived(scheduling ? availableStatuses(workspace.config) : []);
   const facetTypes = $derived(availableTypes(workspace.config));
   const facetAssignees = $derived(scheduling ? availableAssignees(workspace.nodes) : []);
-  const facetPeriods = $derived(scheduling ? availablePeriods(workspace.nodes) : []);
+  // A board working as one queue draws no period anywhere, the table included.
+  const periodColumn = $derived(scheduling && workspace.planning === 'periods');
+  const facetPeriods = $derived(periodColumn ? availablePeriods(workspace.nodes) : []);
 
   function toggle(id: string): void {
     if (collapsed[id]) {
@@ -362,9 +364,11 @@
             <th class="sortable" onclick={() => sortBy('assignee')}>
               Assignee{sortIndicator('assignee')}
             </th>
-            <th class="sortable" onclick={() => sortBy('period')}>
-              Period{sortIndicator('period')}
-            </th>
+            {#if periodColumn}
+              <th class="sortable" onclick={() => sortBy('period')}>
+                Period{sortIndicator('period')}
+              </th>
+            {/if}
           {/if}
           {#each visibleColumns as column (column.name)}
             <th class="sortable" onclick={() => sortBy(column.name)}>

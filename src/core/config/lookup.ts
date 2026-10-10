@@ -1,5 +1,13 @@
-import type { AttributeDef, BoardConfig, GitSyncConfig, NodeKind, RemoteConfig, TypeDef } from '../model/types.js';
-import { TEMPLATE_FOLDER_DEF, TEMPLATE_FOLDER_TYPE } from '../model/types.js';
+import type {
+  AttributeDef,
+  BoardConfig,
+  GitSyncConfig,
+  NodeKind,
+  PlanningMode,
+  RemoteConfig,
+  TypeDef,
+} from '../model/types.js';
+import { TEMPLATE_FOLDER_DEF, TEMPLATE_FOLDER_TYPE, hasPeriods } from '../model/types.js';
 import type { StatusRules } from '../../shared/rollup.js';
 import { BoardError } from '../errors.js';
 
@@ -230,4 +238,22 @@ export function remoteNamed(config: BoardConfig, name: string): RemoteConfig | n
  */
 export function gitSyncOf(config: BoardConfig): GitSyncConfig | null {
   return config.git_sync;
+}
+
+/**
+ * How the board plans, as it is in force: `queue` on a board with no period
+ * types, whatever `planning:` says, because there is nothing to plan with.
+ * The one place `planning` is read.
+ */
+export function planningOf(config: BoardConfig): PlanningMode {
+  return hasPeriods(config) ? config.planning : 'queue';
+}
+
+/**
+ * Whether the queue reads the board as one continuous run, ignoring every
+ * period: no schedule rank, no parked switch, no squad owning a sprint. The
+ * documents keep their `period:` either way. @see operations/planning.ts
+ */
+export function ignoresPeriods(config: BoardConfig): boolean {
+  return planningOf(config) === 'queue';
 }

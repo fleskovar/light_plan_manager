@@ -11,11 +11,14 @@
     buildQueue,
     claimantFor,
     laneStatus,
+    markerOf,
+    markerTitle,
     queueSections,
     type QueueCard,
     type QueueSection,
     type SectionId,
   } from './queue.js';
+  import { QueueSequence } from './sequence.svelte.js';
 
   /**
    * The queue, down the left edge: what to pick up next, whether or not the
@@ -33,6 +36,14 @@
    * `lpm task next --user` would offer them, plus what they have in progress
    * and how much open work is routed to them — so a lead can read anybody's
    * queue, their own included, without switching identity.
+   *
+   * Above all of it sits the board's planning mode, because it decides what
+   * this panel is: the queue inside the running sprints, or the whole board as
+   * one continuous run. It is board config (`lpm planning`), so flipping it
+   * here changes what every teammate and agent is offered, and the "?" beside
+   * it says so before anybody does.
+   *
+   * The numbers are the engine's (`QueueSequence`), not this file's.
    */
   interface Props {
     /** The width the workspace fitted this panel to; it scales the contents. */
@@ -50,6 +61,8 @@
   ] as const;
 
   let search = $state('');
+  let explaining = $state(false);
+  let switching = $state(false);
   let hovering = $state<SectionId | null>(null);
   /** Sections somebody opened or closed. Absent means the section's default. */
   let toggled = $state<Partial<Record<SectionId, boolean>>>({});
@@ -60,14 +73,34 @@
   const queueFor = $derived(
     audience.some((option) => option.id === shell.queueFor) ? shell.queueFor : null,
   );
+  // The engine's sequence for whoever the queue is for, asked again only when
+  // the board on disk, the mode or the reader changed.
+  const sequence = new QueueSequence();
+  $effect(() => {
+    const snapshot = workspace.snapshot;
+    if (snapshot) void sequence.refresh(snapshot, queueFor);
+  });
+
   const queue = $derived(
     buildQueue(
       workspace.nodes,
       workspace.config,
-      { search, resourceId: queueFor },
+      { search, resourceId: queueFor, sequence: sequence.steps },
       workspace.index,
     ),
   );
+  const sequenced = $derived(sequence.steps !== null);
+  const queueMode = $derived(workspace.planning === 'queue');
+
+  async function choose(planning: 'periods' | 'queue'): Promise<void> {
+    if (switching || planning === workspace.planning) return;
+    switching = true;
+    try {
+      await workspace.setPlanning(planning);
+    } finally {
+      switching = false;
+    }
+  }
   const sections = $derived(queueSections(queue));
 
   const isFolded = (section: QueueSection): boolean => toggled[section.id] ?? section.folded;
@@ -118,12 +151,84 @@
   aria-label="Queue"
   style="width: {width}px; --ui-scale: {paneScale(width, DEFAULT_QUEUE_WIDTH)}"
 >
+  <div class="mode">
+    <div class="switch" role="group" aria-label="Planning mode">
+      <button
+        type="button"
+        aria-pressed={!queueMode}
+        disabled={switching || !workspace.canPlanWithPeriods}
+        title={workspace.canPlanWithPeriods
+          ? 'Plan with sprints and increments'
+          : 'This board declares no period types, so the queue is its only mode'}
+        onclick={() => choose('periods')}
+      >
+        Sprints &amp; PIs
+      </button>
+      <button
+        type="button"
+        aria-pressed={queueMode}
+        disabled={switching}
+        title="Work the whole board as one continuous queue"
+        onclick={() => choose('queue')}
+      >
+        Queue
+      </button>
+    </div>
+    <button
+      class="help"
+      class:on={explaining}
+      type="button"
+      aria-expanded={explaining}
+      aria-controls="planning-help"
+      title="What do these modes do?"
+      onclick={() => (explaining = !explaining)}
+    >
+      ?
+    </button>
+  </div>
+
+  {#if explaining}
+    <div class="explain" id="planning-help">
+      <p>
+        <strong>Sprints &amp; PIs</strong> — the queue follows the timeline. Work in the running
+        sprint comes first and later sprints wait their turn. A switched-off period holds its work
+        back, and a squad's sprint is offered only to that squad.
+      </p>
+      <p>
+        <strong>Queue</strong> — the whole board is one big PI holding one big sprint, with
+        everything inside it. Every period is ignored, so the order is priority, then column, then
+        the feature already under way, then how much finishing a task unblocks.
+      </p>
+      <p>
+        Switching changes no issue. Periods, dates and switches stay on every document, and switching
+        back gives the plan back exactly as it was. It is a board setting, so it changes what
+        everybody is offered — <code>lpm task next</code>, agents and this panel alike. From a
+        terminal: <code>lpm planning queue</code> or <code>lpm planning periods</code>.
+      </p>
+      <p>
+        The numbers are the engine's own sequence (<code>lpm queue simulate</code>): the order
+        developers and agents will be handed the work.
+      </p>
+      <button type="button" class="dismiss" onclick={() => (explaining = false)}>Got it</button>
+    </div>
+  {/if}
+
   <header class="top">
     <div class="heading">
       <h2>Queue</h2>
       <span class="summary">
         {queue.active.length} in progress · {queue.ready.length} next · {queue.blocked.length} waiting
       </span>
+      {#if queueMode}
+        <!-- The omni reading said out loud: no sprint is drawn anywhere in
+             this mode, so the panel names the one run everything is in. -->
+        <span class="omni" title="Every period is ignored: the board is one continuous run">
+          One PI › one sprint › all {queue.total} work units
+        </span>
+      {/if}
+      {#if sequence.error}
+        <span class="stale" title={sequence.error}>Order is approximate: the engine did not answer</span>
+      {/if}
     </div>
     <button class="collapse" type="button" title="Hide the queue" onclick={collapse}>◂</button>
   </header>
@@ -217,8 +322,8 @@
                     event.dataTransfer?.setData('text/plain', card.issue.title);
                   }}
                 >
-                  <span class="marker" aria-hidden="true">
-                    {#if section.numbered}{position + 1}{:else if section.id === 'done'}✓{/if}
+                  <span class="marker" title={markerTitle(card, section, sequenced)}>
+                    {markerOf(card, section, position, sequenced)}
                   </span>
 
                   <div class="box">
@@ -251,7 +356,7 @@
 
                     {#if section.id !== 'done'}
                       <div class="foot">
-                        {#if section.id === 'waiting' && card.issue.flag}
+                        {#if (section.id === 'waiting' || section.id === 'now') && card.issue.flag}
                           <span class="blockers">⚑ {flagLabel(card.issue.flag)}</span>
                         {:else if section.id === 'waiting'}
                           <span
@@ -300,6 +405,118 @@
     flex-direction: column;
     min-height: 0;
     background: var(--surface-1);
+  }
+
+  .mode {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+
+  .switch {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 2px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-0);
+  }
+
+  .switch button {
+    min-width: 0;
+    padding: 0.2rem 0.4rem;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--ink-muted);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .switch button:hover:not(:disabled) {
+    color: var(--ink);
+  }
+
+  .switch button[aria-pressed='true'] {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  .switch button:disabled:not([aria-pressed='true']) {
+    opacity: 0.5;
+  }
+
+  .help {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 1.4rem;
+    height: 1.4rem;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--surface-1);
+    color: var(--ink-muted);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .help:hover,
+  .help.on {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .explain {
+    flex: none;
+    max-height: 45%;
+    overflow: auto;
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border);
+    background: var(--accent-soft);
+    color: var(--ink);
+    font-size: var(--text-xs);
+    line-height: 1.45;
+  }
+
+  .explain p {
+    margin: 0 0 var(--space-2);
+  }
+
+  .explain code {
+    font-family: var(--font-mono);
+  }
+
+  .dismiss {
+    padding: 0 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-1);
+    font-size: var(--text-xs);
+  }
+
+  .omni {
+    color: var(--accent);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .stale {
+    color: var(--warn);
+    font-size: var(--text-xs);
   }
 
   .top {
@@ -568,6 +785,10 @@
 
   .now .marker {
     background: var(--tone);
+    /* The marker is filled, so its step number takes the panel's surface
+       colour. With the default `--tone` the number had the colour of its own
+       background and could not be read. */
+    color: var(--surface-1);
     animation: pulse 2s ease-out infinite;
   }
 

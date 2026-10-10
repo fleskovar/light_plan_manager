@@ -1,5 +1,5 @@
 import type { ConfigDto, IssueDto, PeriodDto } from '$shared';
-import { statusOf } from '$shared';
+import { plansWithPeriods, statusOf } from '$shared';
 import {
   ancestorsOf,
   blockersOf,
@@ -28,7 +28,8 @@ import type { NodeIndex } from '$lib/board/index.js';
  *
  * Three questions, and they are deliberately different ones. *Now* is the
  * calendar's answer: the increment and sprint that are running today, and what
- * is in them. *Just added* is the board's own churn, so a plan somebody else
+ * is in them — or, on a board working as one queue, the whole board, which is
+ * the one run everything is in. *Just added* is the board's own churn, so a plan somebody else
  * has been filling in is visible on arrival. *Open pathways* ignores the
  * calendar entirely and asks the graph instead: which epics and features could
  * be started, because nothing they rest on is unfinished.
@@ -55,6 +56,11 @@ export interface Focus {
   /** The increment the work below came from, and the sprint inside it. */
   increment: PeriodDto | null;
   sprint: PeriodDto | null;
+  /**
+   * The board works as one queue: the work below is all of it, and there is
+   * no period to name.
+   */
+  continuous: boolean;
   /** It has not started yet: today's period is finished, or there is none. */
   upcoming: boolean;
   /** Work already under way in that period. */
@@ -175,6 +181,7 @@ export function currentFocus(
   const empty: Focus = {
     increment: null,
     sprint: null,
+    continuous: false,
     upcoming: false,
     active: [],
     ready: [],
@@ -182,10 +189,18 @@ export function currentFocus(
     open: 0,
     effort: 0,
   };
-  if (!candidates.length) return empty;
-
   const dependents = dependentsIndex(nodes, index);
   const units = workUnitsOf(nodes, config, index);
+
+  // One queue: the omni period is the whole board.
+  if (!plansWithPeriods(config)) {
+    const open = units
+      .filter((issue) => !isTerminal(config, issue))
+      .map((issue) => line(nodes, config, dependents, issue, index));
+    return { ...empty, continuous: true, ...summarise(nodes, config, open, limit, index) };
+  }
+  if (!candidates.length) return empty;
+
   const openIn = (period: PeriodDto): TaskLine[] => {
     const scope = periodScope(nodes, period.id, index);
     return units
@@ -207,17 +222,29 @@ export function currentFocus(
   const covers = isRunning(nodes, chosen.period, today);
 
   const { increment, sprint } = placeOf(nodes, chosen.period, index);
-  const started = open.filter((entry) => isActive(config, entry.issue));
-  const waiting = open.filter((entry) => !isActive(config, entry.issue));
-  const ready = waiting
-    .filter((entry) => !entry.blockedBy.length)
-    .sort(byReadiness(config, cohesionOrder(nodes, config, index)));
-
   return {
     ...empty,
     increment,
     sprint,
     upcoming: !covers,
+    ...summarise(nodes, config, open, limit, index),
+  };
+}
+
+/** What is moving, what is ready and what waits, among the open work of one run. */
+function summarise(
+  nodes: WorkingNodes,
+  config: ConfigDto,
+  open: TaskLine[],
+  limit: number,
+  index?: NodeIndex,
+): Pick<Focus, 'active' | 'ready' | 'blocked' | 'open' | 'effort'> {
+  const started = open.filter((entry) => isActive(config, entry.issue));
+  const waiting = open.filter((entry) => !isActive(config, entry.issue));
+  const ready = waiting
+    .filter((entry) => !entry.blockedBy.length)
+    .sort(byReadiness(config, cohesionOrder(nodes, config, index)));
+  return {
     active: started.sort((a, b) => b.unblocks - a.unblocks),
     ready: ready.slice(0, limit),
     blocked: waiting.length - ready.length,

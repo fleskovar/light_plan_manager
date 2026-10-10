@@ -15,15 +15,16 @@
    *
    * Gantt and Periods are the two halves of the timeline: one reads the plan on
    * a date scale, the other fills the increments and sprints that produce it.
-   * A board that does not plan with dates — Options ▸ Planning, or simply a
-   * config with no period types — drops both, and leaves the queue down the
-   * left edge (`features/queue`) to ask the dependency graph the question the
-   * calendar was answering.
+   * A board that does not plan with dates — switched to Queue at the top of
+   * the queue panel (`lpm planning queue`), or simply a config with no period
+   * types — drops both, and leaves the queue down the left edge
+   * (`features/queue`) to ask the dependency graph the question the calendar
+   * was answering.
    */
   const workspace = useWorkspace();
 
   /** The calendar tabs are offered only when the board plans with one. */
-  const scheduling = $derived(workspace.config.hasPeriods && workspace.planning === 'periods');
+  const scheduling = $derived(workspace.planning === 'periods');
 
   /*
    * A registry view has one reading and only one. Periods, Gantt, Queue and

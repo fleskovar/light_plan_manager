@@ -123,9 +123,9 @@ const viewSchema = z.object({
     })
     .default({ open: true, width: DEFAULT_QUEUE_WIDTH }),
   // Levels the canvas draws as a badge on their children rather than as nodes.
+  // (`planning` used to sit here too; it is board config now, `planning:` in
+  // config.yml, and a view file still carrying it opens with the key dropped.)
   display: z.record(z.string(), z.enum(['node', 'badge'])).default({}),
-  // Planning with the calendar, or straight off the queue.
-  planning: z.enum(['periods', 'queue']).default('periods'),
   // A canvas over the board, or over the template registry. A view written
   // before this existed is a board view, which is what every one of them was.
   mode: z.enum(['board', 'templates']).default('board'),

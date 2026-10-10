@@ -1,0 +1,22 @@
+[
+  {
+    "name": "Alice",
+    "cli": ["--user", "Alice"],
+    "queue_for": "RS-2"
+  },
+  {
+    "name": "Bob",
+    "cli": ["--user", "Bob"],
+    "queue_for": "RS-3"
+  },
+  {
+    "name": "QA",
+    "cli": ["--role", "QA"],
+    "queue_for": "RS-1"
+  },
+  {
+    "name": "Everyone",
+    "cli": ["--team"],
+    "queue_for": null
+  }
+]

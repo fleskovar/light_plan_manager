@@ -5,7 +5,9 @@
  * (link), saying that work has stopped and why (flag), writing down how the work
  * went (comment), deleting them (remove), carrying a status up to the containers
  * above it (rollup), and remembering who is at the keyboard (user) and which
- * profile they run under (profile).
+ * profile they run under (profile). `planning` switches the board between
+ * planning with its periods and working as one queue — a config edit, never a
+ * document edit.
  * Each validates its inputs up front and only then touches the filesystem, so
  * a rejected operation leaves nothing half-written. The ones that add, remove,
  * move or rename a document also rewrite `.lpm/INDEX.md` (board-index), which
@@ -36,6 +38,7 @@ export * from './remotes-off.js';
 export * from './init.js';
 export * from './link.js';
 export * from './move.js';
+export * from './planning.js';
 export * from './profile.js';
 export * from './remove.js';
 export * from './retype.js';

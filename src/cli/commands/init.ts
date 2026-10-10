@@ -7,6 +7,7 @@ import {
   expandHome,
   initBoard,
   loadConfig,
+  parsePlanningMode,
   projectRepository,
 } from '../../core/index.js';
 import { bold, cyan, dim, out, pad, yellow } from '../ui.js';
@@ -23,6 +24,7 @@ Options
       --prefix <PREFIX>       Issue id prefix, e.g. LP  (default: from the folder name)
       --no-git                Skip making .lpm its own git repo
       --no-omni               Skip the standing omni periods (see below)
+      --planning <mode>       queue | periods  (default: queue, see below)
 
 By default .lpm becomes an independent git repository and is added to the
 surrounding repo's .gitignore, so the board has its own history and remote.
@@ -32,6 +34,13 @@ per level (an Omni Product Increment holding an Omni Sprint on scrum) and points
 default_period at the innermost. Until you create a period of your own, every
 new issue is scheduled there, so a simple project never has to plan sprints.
 From your first own period on, new issues arrive unscheduled for you to place.
+
+A new board starts in queue mode. In queue mode, \`lpm task next\`, the agents
+and the web app ignore every sprint and increment, and order work by priority
+and by dependencies. init writes the key \`planning\` with the value \`queue\`
+into .lpm/config.yml. To plan with sprints, pass --planning periods, or run
+\`lpm planning periods\` at any time. No issue changes when you switch. A
+template with no period types is always in queue mode.
 
 ${BOARD_ENV_VAR} is ignored here: init always creates the board in this folder.`;
 
@@ -43,6 +52,16 @@ function shadowedBy(lpmDir: string, root: string): string | null {
   return target === lpmDir || target === root ? null : ref;
 }
 
+/** The planning mode the board starts in, and the command that changes it. */
+function planningLine(planning: 'periods' | 'queue', canSwitch: boolean): string {
+  if (!canSwitch) {
+    return `queue  ${dim('(this template has no period types, so the queue is the only mode)')}`;
+  }
+  return planning === 'queue'
+    ? `queue  ${dim('(sprints and increments are ignored; plan with them with')} ${cyan('lpm planning periods')}${dim(')')}`
+    : `periods  ${dim('(sprints and increments order the work; ignore them with')} ${cyan('lpm planning queue')}${dim(')')}`;
+}
+
 export function run(args: string[]): number {
   const { values, positionals } = parseArgs({
     args,
@@ -52,6 +71,7 @@ export function run(args: string[]): number {
       prefix: { type: 'string' },
       'no-git': { type: 'boolean' },
       'no-omni': { type: 'boolean' },
+      planning: { type: 'string' },
     },
   });
 
@@ -61,6 +81,7 @@ export function run(args: string[]): number {
     prefix: values.prefix,
     git: !values['no-git'],
     omni: !values['no-omni'],
+    planning: values.planning === undefined ? undefined : parsePlanningMode(values.planning),
   });
 
   const rootType = loadConfig(result.paths).config?.hierarchy[0]?.[0] ?? 'task';
@@ -75,6 +96,9 @@ export function run(args: string[]): number {
     const chain = result.omniPeriods.map((period) => `${period.id} ${period.title}`).join(' > ');
     out(`  ${pad('timeline', 11)}${chain}  ${dim('(new issues land here until you plan your own)')}`);
   }
+  // Said on every init, because the mode decides what `lpm task next` offers
+  // and a new board no longer starts in the mode older boards are in.
+  out(`  ${pad('planning', 11)}${planningLine(result.planning, result.hasPeriods)}`);
   if (result.contextTemplates.length) {
     out(`  ${pad('briefs', 11)}${result.contextTemplates.length} context templates in .lpm/templates/context`);
   }

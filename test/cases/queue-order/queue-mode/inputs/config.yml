@@ -1,0 +1,58 @@
+# The board this case is solved against. It is the smallest config that the
+# queue rules need: two levels of issues, three statuses, one priority
+# attribute, one level of sprints, people and one pool.
+version: 1
+
+key_prefix: LP
+
+statuses:
+  - id: todo
+    label: To do
+  - id: doing
+    label: Doing
+    active: true
+  - id: done
+    label: Done
+    terminal: true
+
+default_status: todo
+
+hierarchy:
+  - feature
+  - story
+
+issue_types:
+  feature:
+    label: Feature
+  story:
+    label: Story
+    attributes:
+      priority:
+        type: enum
+        values: [high, medium, low]
+
+# The queue ranks a story by the position of its priority in the list above.
+priority_attribute: priority
+
+period_prefix: SP
+
+period_hierarchy:
+  - sprint
+
+period_types:
+  sprint:
+    label: Sprint
+
+resource_prefix: RS
+
+resource_hierarchy:
+  - [person, role]
+
+resource_types:
+  person:
+    label: Person
+  # A role is a pool: work assigned to it is offered to every person who
+  # covers it.
+  role:
+    label: Role
+    generic: true

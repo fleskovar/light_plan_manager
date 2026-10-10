@@ -39,6 +39,13 @@ Increment** holding an **Omni Sprint**, and every new issue lands in that sprint
 until you create a period of your own, so a simple project never has to plan
 sprints at all ([the omni periods](#the-omni-periods); `--no-omni` skips them).
 
+A new board starts in **queue mode**. In queue mode, `lpm task next`, the agents
+and the web app ignore every sprint and increment. They order the work by
+priority and by dependencies. `lpm init` prints the mode, and `lpm planning
+periods` switches the board to sprint planning at any time
+([planning by queue](#planning-by-queue-lpm-planning); `--planning periods`
+starts the board in that mode).
+
 `lpm ui` starts a local server on `http://localhost:4571` and opens the editor
 in your browser. What you change there is held as a draft until you press
 **Push**, which writes it to `.lpm/`. Stop the server with Ctrl-C. To build a
@@ -412,6 +419,51 @@ A pull from a tracker never uses the catch-all: an issue the tracker holds
 unscheduled arrives unscheduled. The full rules are in
 [docs/periods.md](docs/periods.md#the-omni-periods).
 
+### Planning by queue: `lpm planning`
+
+Some teams plan in sprints and increments. Others work through the board in
+order, and do not care which sprint a ticket is in. A board has a planning mode
+for each way of working, and can switch between the two at any time.
+
+The key `planning` in `.lpm/config.yml` stores the mode:
+
+| Value of `planning` | Mode | Who writes it |
+| --- | --- | --- |
+| `queue` | Queue mode: the queue ignores every period | `lpm init` (the default for a new board), `lpm planning queue`, the switch in the web queue panel |
+| `periods`, or the key is absent | Periods mode: sprints and increments order the work | `lpm init --planning periods`, `lpm planning periods`, the same switch |
+
+A new board starts in queue mode, because most projects start without a sprint
+plan. A board that light-plan 0.1.2 or an earlier version created has no
+`planning` key, so that board stays in periods mode until somebody switches it.
+A board with no period types is always in queue mode.
+
+```bash
+lpm planning            # which mode the board is in
+lpm planning queue      # work the board as one continuous queue
+lpm planning periods    # plan with sprints and increments again (also: pi)
+```
+
+In **queue mode** the whole board reads as one increment holding one sprint
+holding everything. `lpm task next`, `lpm queue simulate`, `lpm queue agent`, the
+MCP tools and the web queue ignore every period:
+
+- No sprint ranks ahead of another.
+- A switched-off period no longer holds its work back.
+- No squad owns a sprint, so anybody routed the work can take it.
+
+The order is priority, then column, then the feature already under way, then how
+much finishing a task unblocks. The web app stops drawing periods too: the
+Periods and Gantt tabs, the period badges on the canvas, and the period field and
+column all go away until you switch back.
+
+**Switching is non-destructive.** No document changes. Every issue keeps its
+`period:`, and every period keeps its dates and its switch. `lpm planning
+periods` removes the key `planning` and its two comment lines from
+`.lpm/config.yml`, and `lpm planning queue` adds them again. The mode is board
+config, so the team shares it, and a board shared through git commits and
+pushes the change. The rules are in
+[docs/periods.md](docs/periods.md#planning-by-queue).
+
 ### Which period is running
 
 A period runs when today falls inside it, and that is all most boards ever need.
@@ -773,8 +825,12 @@ that they could pick up:
 lpm queue simulate                      # you
 lpm queue simulate --user "Alice Smith" # a person on the roster
 lpm queue simulate --role "QA engineer" # a pool: anyone working out of it
+lpm queue simulate --team               # everybody: every open work unit, whoever holds it
 lpm queue simulate --user alice --skipped --unassigned --limit 20
 ```
+
+`--team` is the sequence the web queue panel numbers its cards by when it shows
+everyone's queue.
 
 ```
 $ lpm queue simulate --user alice
@@ -1415,6 +1471,7 @@ issue_types:
 # --- time hierarchy (optional, same shape) ---
 period_prefix: TL        # period ids: TL-1, TL-2, ... must differ from key_prefix
 default_period: TL-2     # optional: where unscheduled new issues land (lpm init writes it)
+planning: queue          # optional: queue | periods. lpm init writes queue; absent means periods
 
 period_hierarchy:
   - increment
@@ -2602,7 +2659,7 @@ still refused.
 
 | Command | What it does |
 | --- | --- |
-| `lpm init [dir]` | Create a board. `--template`, `--prefix`, `--no-git` |
+| `lpm init [dir]` | Create a board, in queue mode by default. `--template`, `--prefix`, `--no-git`, `--no-omni`, `--planning <queue\|periods>` |
 | `lpm new <type> [title]` | Create an issue, period or resource. `-t/--title`, `-p/--parent`, `-s/--status`, `--period`, `--assignee`, `--depends-on`, `--relates-to`, `--related`, `--starts`, `--ends`, `--capacity`, `--covers`, `--set k=v` |
 | `lpm set <id>` | Edit content. `-t/--title`, `--body`, `--body-file`, `--set k=v`, `--related`, `--unrelated`, `--starts`, `--ends`, `--capacity` |
 | `lpm move <id>` | `-s/--status <id>`, `-p/--parent <id>\|root`, `--period <id>\|none`, `--assignee <id>\|none` |
@@ -2620,9 +2677,10 @@ still refused.
 | `lpm task <sub>` | `next`, `current`, `prev`, `start [id]`, `done [id]`. `--limit`, `--unassigned`, `--parked`, `--force` |
 | `lpm upstream <id>` | Everything that must be finished first. `--schedule`, `--period`, `--assignee`, `--unscheduled`, `--unassigned`, `--dry-run`. Aliases: `lpm blockers`, `lpm prerequisites` |
 | `lpm period <id>` | How it stands. `--on`, `--off`, `--dates`, `--start-now`, `--complete`, `--carry-over`, `--dry-run` |
+| `lpm planning [periods\|queue]` | Plan with sprints and increments, or work the board as one continuous queue that ignores every period. No argument says which. Alias: `lpm mode` |
 | `lpm instructions [<id>]` | Print the working brief for an issue. `--id`, `--template`, `--no-comments`, `--list`, `--init`, `--force`. Aliases: `lpm brief`, `lpm context` |
 | `lpm team` | Roster and load. `--period <id>`, `--open`. Alias: `lpm roster` |
-| `lpm queue simulate` | Work the queue through as one person. `--user <id\|name>`, `--role <id\|name>`, `--unassigned`, `--parked`, `--limit <n>`, `--skipped` |
+| `lpm queue simulate` | Work the queue through as one person, or the whole team. `--user <id\|name>`, `--role <id\|name>`, `--team`, `--unassigned`, `--parked`, `--limit <n>`, `--skipped` |
 | `lpm queue agent` | Drain the queue with the pi coding agent. `--user`, `--max-tasks`, `--model`, `--effort`, `--commit`, `--unassigned`, `--parked`, `--timeout`, `--command-timeout`, `--plain`, `--file`, `--dry-run` |
 | `lpm remote [<sub>]` | Mirror the board onto an external tracker. No subcommand lists the remotes. `connect`, `push [<id>…]`, `pull [<key>…]`, `sync`, `status`, `ledger`, and the less common `add`, `login`, `setup`, `rm`, `log`, `resolve`, `link`, `unlink`, `decouple`, `relink`, `rebase`. `--remote <name>`, `--all`, `--children`, `--recursive`, `--parent <id>`, `--scope <id>`, `--force`, `--purge`, `--dry-run`, `--changed`, `--limit N`, `--yes`, `--refresh`, `--since <iso>`, `--json` |
 | `lpm check` | Validate. `--fix` repairs, `--strict` also fails on warnings |
@@ -2884,14 +2942,18 @@ teammate who pulls your branch sees the same canvas you were looking at.
   its badge stays a node, and the choice is saved with the view (and published
   with it). The canvas is laid out again when it changes, because badging a
   level moves everything below it.
-- **Options ▸ Planning** — whether this view plans with a calendar at all.
-  *Sprints and increments* is the default and gives the drawer its Periods and
-  Gantt tabs. *Queue* is for the way plenty of teams actually work — nobody
-  plans a fortnight, work is taken off the top as the graph unblocks it — and
-  drops both tabs, leaving the queue panel on the left to plan by. Nothing about the board changes either way:
-  the same documents, the same dependencies, a different question in front of
-  you. A board whose config declares no period types is always in the second
-  mode, because there is nothing to plan with.
+- **Sprints & PIs / Queue** — the switch at the very top of the queue panel,
+  with a **?** beside it that explains the two modes. It is the board's planning
+  mode (`lpm planning`), not a view setting, so it changes what every teammate
+  and agent is offered. *Sprints & PIs* is the default, and gives the drawer its
+  Periods and Gantt tabs. *Queue* is for teams that do not plan a fortnight at a
+  time: they take work off the top as the graph unblocks it. The whole board
+  becomes one PI holding one sprint, and the panel says so. The Periods and
+  Gantt tabs, the period badges on nodes, the period field, the table's period
+  column and the "Schedule into" menu go away, and the landing page's *Now* card
+  shows the whole board. No document changes either way, so switching back
+  restores the plan exactly. A board whose config declares no period types is
+  always in queue mode, because there is nothing to plan with.
 - **Dropping something where it does not fit** — a story dragged onto a program
   skips two levels, and there are exactly two honest answers, so the app asks
   rather than guessing: *change its type*, and the story becomes an epic, or
@@ -2982,13 +3044,21 @@ teammate who pulls your branch sees the same canvas you were looking at.
 - **Queue** — what to pick up next, as a column down the left edge read top to
   bottom, whether or not the team plans in sprints. *In progress* is the head of the
   queue, what is being worked on. *Up next* is every unstarted work unit with no
-  unfinished blocker, numbered in the order `lpm task next` would offer them:
-  priority first, then how much finishing one would release. The first of them
-  is marked *Next*. *Waiting* says what each blocked issue is waiting on rather
+  unfinished blocker, numbered in the order `lpm task next` would offer them.
+  The first of them is marked *Next*. *Waiting* says what each blocked issue is waiting on rather
   than hiding it, and *Recently finished* is the tail, folded until you open it.
   Drag a card between sections, or press *Start* and *Finish* — either way it is
-  one status change. Every board view has it; choosing Options ▸ Planning ▸
-  Queue opens it if it was folded.
+  one status change. Every board view has it; switching the board to Queue opens
+  it if it was folded.
+
+  **The order and the numbers are the engine's.** The panel asks the server for
+  the queue sequence (`lpm queue simulate`, or `--team` for everyone) and numbers
+  every card with its step. The numbering runs through every section:
+  *In progress* reads 1–3, *Up next* carries on from 4, and a waiting card shows
+  where it comes up once its blockers are done. So the order on screen is the
+  order developers and agents will get the work in. A card nobody has pushed yet
+  shows a dash until its edit lands. If the server cannot answer, the panel falls
+  back to its own ordering and says that the order is approximate.
 
   **Queue for** at the top narrows it to one person or role, including *Me*
   when `lpm user` (or `LPM_USER`, or your profile) names somebody on the roster.

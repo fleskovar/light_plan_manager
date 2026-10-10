@@ -202,7 +202,8 @@ export function bulkEntries(context: MenuContext, ids: string[]): MenuEntry[] {
   // rather than three permanently greyed-out submenus.
   if (context.workspace.mode === 'templates') return [];
   const entries: MenuEntry[] = [statusEntry(context, ids), assignEntry(context, ids)];
-  if (context.workspace.config.hasPeriods) entries.push(scheduleEntry(context, ids));
+  // A board working as one queue has no sprint to schedule into.
+  if (context.workspace.planning === 'periods') entries.push(scheduleEntry(context, ids));
   return entries;
 }
 

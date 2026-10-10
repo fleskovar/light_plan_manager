@@ -73,7 +73,8 @@ Build **top-down**: the container first, then the leaves that carry the work.
 
 Load `lpm-writing` before you write a title or a body. It defines the style:
 short sentences, facts instead of adjectives, no figurative or promotional
-language, and templates for each type.
+language. Load `lpm-writing-items` for what the body of each type must contain.
+Load `lpm-writing-reviews` before you write a `review` issue.
 
 A ticket is ready when someone who has never met you can read it and know what to
 build, why, and when to stop.

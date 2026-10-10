@@ -18,6 +18,7 @@ lpm init --template blank             # types you define yourself
 lpm init --template ./our-config.yml  # your own config as the starting point
 lpm init --no-git                     # skip the nested git repo
 lpm init --no-omni                    # skip the standing omni periods (below)
+lpm init --planning periods           # start in sprint planning, not in queue mode
 ```
 
 Three built-ins ship: **scrum** (program > epic > feature > story/bug/test/review/
@@ -30,6 +31,11 @@ standing period per level (`TL-1 Omni Product Increment` > `TL-2 Omni Sprint` on
 scrum), and `default_period: TL-2` in the config. Every new issue lands in that
 sprint until somebody builds a period of their own. So a simple project needs no
 calendar at all — see [The timeline](#the-timeline-optional).
+
+A new board starts in **queue mode**: `lpm init` writes the key `planning` with
+the value `queue` into `.lpm/config.yml`. In queue mode the work queue ignores
+every period. If the team plans in sprints, run `lpm planning periods`, or pass
+`--planning periods` to `lpm init`.
 
 **A new board is not finished until it has a roster.** Before any ticket is
 written, seed the people who will do the work. The minimum is a human supervisor
@@ -257,6 +263,25 @@ from day one.
 - **Renew it** after a year with `lpm period TL-2 --start-now`.
 
 Full rules: `docs/periods.md`, "The omni periods".
+
+### Planning by queue: ignore the timeline without deleting it
+
+Queue mode is the default for a new board. A team that plans in sprints
+switches to periods mode, and can switch back at any time:
+
+```bash
+lpm planning queue      # every period is ignored by the queue
+lpm planning periods    # the timeline decides again
+```
+
+In queue mode, `lpm task next`, MCP `next_tasks` and `lpm queue agent` ignore
+every period. No sprint ranks first, a switched-off period holds nothing back,
+and no squad owns a sprint. No document changes, so switching back restores the
+plan exactly. `board_overview` reports the mode as `planning`. Do not delete
+periods to get this effect, and do not switch the mode without asking: it
+changes what every teammate and agent is offered.
+
+Full rules: `docs/periods.md`, "Planning by queue".
 
 ## The roster (optional)
 

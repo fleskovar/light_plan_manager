@@ -384,6 +384,36 @@ Test Files  19 passed (19)
 
 Drop sections that would be empty. Never pad one to look thorough.
 
+### Asking for a review
+
+When a senior developer or engineer must approve your work or decide
+something, create an issue of the board's review type. The reviewer has 5 to
+10 minutes and did not see your work. Load the `lpm-writing-reviews` skill for
+the full structure and two complete examples. The short version:
+
+- Put the request first: the decision, the possible answers, the date, the
+  reading time, and the file and lines to look at first.
+- Give the context in 120 words or fewer: the situation today, what the change
+  does, and why a review is necessary.
+- List each item under review with its location and its size. Name what is not
+  under review.
+- Write each approval criterion as a statement that is true or false, and give
+  its evidence.
+- Show the results that you collected, as a table. The reviewer must not run a
+  command to learn a fact that you already have.
+- Add a section "Attachments". For each result, give the command, the commit,
+  the environment, the date and the path of the full output.
+- Give numbered validation steps with exact commands and expected results. Run
+  them from a clean state before you send the request.
+- Name what you did not verify, and the part that you are least sure of.
+- Put the issues under review in `dependsOn`, the files to read in
+  `relatedFiles` and the reviewer in `assignee`. Make the waiting work depend
+  on the review.
+
+When you find a defect or an open question during the work, write a bug or a
+research issue. Load the `lpm-writing-items` skill for what each type must
+contain.
+
 ### Handing a ticket back
 
 If you cannot finish it, do not just abandon it. **Flag it** (see above) with what

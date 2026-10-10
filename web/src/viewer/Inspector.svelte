@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { NodeDto } from '$shared';
-  import { flagLabel } from '$shared';
+  import { flagLabel, plansWithPeriods } from '$shared';
   import { dependentsIndex, rolledUpEffort } from '$lib/board/selectors.js';
   import StatusChip from '$lib/ui/StatusChip.svelte';
   import TypeIcon from '$lib/ui/TypeIcon.svelte';
@@ -84,7 +84,7 @@
           </dd>
         {/if}
 
-        {#if config.hasPeriods}
+        {#if plansWithPeriods(config)}
           <dt>Period</dt>
           <dd>
             {#if issue.period}

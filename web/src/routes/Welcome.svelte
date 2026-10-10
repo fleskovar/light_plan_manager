@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { BoardSnapshot, ViewMode, ViewSummary } from '$shared';
+  import { plansWithPeriods } from '$shared';
   import { ApiError, api } from '$lib/api/client.js';
   import { goToView } from '$lib/app/router.svelte.js';
   import { appearanceEntries } from '$lib/app/options.js';
@@ -103,10 +104,15 @@
             <dt>Issues</dt>
             <dd>{board.issues.length}</dd>
           </div>
-          {#if board.config.hasPeriods}
+          {#if plansWithPeriods(board.config)}
             <div>
               <dt>Periods</dt>
               <dd>{board.periods.length}</dd>
+            </div>
+          {:else if board.config.hasPeriods}
+            <div title="Every period is ignored: the board is one continuous queue (lpm planning)">
+              <dt>Planning</dt>
+              <dd>Queue</dd>
             </div>
           {/if}
           {#if board.config.hasResources}

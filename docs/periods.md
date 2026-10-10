@@ -14,6 +14,7 @@ stops running with work still in it.
 - [What "running" changes](#what-running-changes)
 - [Restarting a period](#restarting-a-period)
 - [When a period overruns](#when-a-period-overruns)
+- [Planning by queue](#planning-by-queue)
 - [Where the rules live](#where-the-rules-live)
 
 ## The two controls
@@ -302,12 +303,114 @@ Three rules hold for both:
 Over MCP both are `correct_period` with `mode: 'complete' | 'carry'`, and both
 take `dryRun`.
 
+## Planning by queue
+
+The omni periods give a board without a calendar one running sprint to hold
+everything. Planning by queue goes one step further: the board **reads as if it
+had no timeline at all**, while every document keeps its own.
+
+```bash
+lpm planning queue      # one continuous queue
+lpm planning periods    # back to the timeline (also: pi, sprints)
+lpm planning            # which one is in force
+```
+
+The key `planning` in `.lpm/config.yml` stores the mode. The key holds one of
+two values:
+
+| Value | Mode |
+| --- | --- |
+| `queue` | The queue ignores every period. |
+| `periods` | Sprints and increments order the work. |
+
+When the key is absent, the board is in `periods` mode. A board with no
+`period_types` is always in `queue` mode, whatever the key holds (`planningOf`
+in `config/lookup.ts`).
+
+### A new board starts in queue mode
+
+`lpm init` writes the key `planning` with the value `queue` into the config of
+a new board. `initBoard` (`operations/init.ts`) adds the same four lines that
+`lpm planning queue` adds, so `lpm planning periods` removes them exactly. The
+command prints the mode in its summary:
+
+```text
+  planning   queue  (sprints and increments are ignored; plan with them with lpm planning periods)
+```
+
+Three cases write no key:
+
+- `lpm init --planning periods` starts the board in `periods` mode.
+- A template with no period types (`blank`) is in `queue` mode without a key.
+- A template that already has a `planning` key keeps its own value.
+
+A board that light-plan 0.1.2 or an earlier version created has no `planning`
+key and stays in `periods` mode. `lpm init` still seeds the omni
+periods, and `default_period` still schedules each new issue in the innermost
+one. Queue mode ignores those periods. They take effect when the board switches
+to `periods` mode.
+
+### What queue mode changes
+
+Every rule a period steers asks `scheduleOf` (`board/tasks/ranking.ts`), which
+returns no period in queue mode. So for every reader of the queue (`lpm task
+next`, `lpm task start`, MCP `next_tasks`, `lpm queue simulate`, `lpm queue
+agent` and the web queue panel), the following changes:
+
+| Rule | Periods mode | Queue mode |
+| --- | --- | --- |
+| Schedule rank | The running period first, then unscheduled work, then later periods | One bucket: the order is priority, column, cohesion, then the graph |
+| The `active` switch | `off` withholds the work (`isParked`) | Nothing is parked; `--parked` has nothing to add |
+| A squad owning a sprint | Only its members are offered the work (`squadBars`) | No squad gate |
+| `period` on a candidate | The period it is scheduled in | `null`, so no printer names one |
+| `lpm check` "scheduled before what it waits on" | A warning | Not asked |
+
+The web app follows the same key through `ConfigDto.planning` and
+`plansWithPeriods`. In queue mode it hides the Periods and Gantt tabs, the period
+badge on each node, the period field in the side panel, the period column and
+filter in the table, and the "Schedule into" menu. The landing page's *Now* card
+covers the whole board instead of a sprint.
+
+### What it never changes
+
+No document. `setPlanning` (`operations/planning.ts`) edits the config as text,
+not through the `yaml` document `editConfig` uses, because re-rendering the file
+would reformat its flow collections. It appends one commented `planning: queue`
+line, and switching back removes exactly that line. The config file returns to
+its original bytes, and every `period:`, `starts`, `ends` and `active` was never
+touched. A `planning:` line somebody wrote by hand is edited in place instead.
+
+Things that still work in queue mode, because they are edits to documents:
+
+- `lpm period`, which switches, restarts and corrects periods.
+- Scheduling an issue with `lpm move --period`.
+- `default_period`, which keeps placing new issues in the omni sprint.
+
+They take effect when the board plans with its periods again.
+
+### The queue the panel shows
+
+The web queue panel numbers its cards with the engine's own sequence,
+`GET /api/queue`, which returns `simulateQueue`. For "Everyone" it simulates the
+whole team: `nextTasks(board, null)` routes every open work unit to the reader,
+and `lpm queue simulate --team` prints the same run. The panel never ranks work
+itself. It falls back to its own order only for a card the engine has not seen
+(an edit not pushed yet), or when the server does not answer.
+
+Two case folders under `test/cases/queue-order/` check this rule on a board of
+ten stories: `queue-mode/` and `periods-mode/`. For each of four readers, the
+test `web/test/queue-cases.test.ts` compares the output of
+`lpm queue simulate` with the cards of the panel, and with a sequence that a
+person derived by hand. `test/cases/queue-order/REVIEW.md` explains how to
+repeat each step in a terminal and a browser.
+
 ## Where the rules live
 
 | Rule | Engine | Browser |
 | --- | --- | --- |
 | Stance, running, overdue | `src/shared/period-stance.ts` (single copy; both adapt) | same function |
-| Ranking by bucket | `src/core/board/tasks.ts` (`scheduleRank`) | `web/src/features/queue/` |
+| Ranking by bucket | `src/core/board/tasks.ts` (`scheduleRank`) | read from the engine (`GET /api/queue`) |
+| Planning mode | `planningOf` / `scheduleOf` | `plansWithPeriods` over `ConfigDto.planning` |
 | Start now | `src/shared/plans.ts` (`planStartNow`) | the same function |
 | Complete / carry over | `src/shared/plans.ts` | the same functions |
 

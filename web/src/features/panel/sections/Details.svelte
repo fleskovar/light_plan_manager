@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ConfigDto, NodeDto } from '$shared';
+  import { plansWithPeriods } from '$shared';
   import { nodesOfKind } from '$lib/board/selectors.js';
   import type { WorkingNodes } from '$lib/board/working.js';
   import { conversionOptions } from '$features/canvas/menus.js';
@@ -69,7 +70,9 @@
       </label>
     {/if}
 
-    {#if config.hasPeriods}
+    <!-- Queue mode keeps every issue's period on disk and out of sight: the
+         board is one run, and switching back restores the plan unchanged. -->
+    {#if plansWithPeriods(config)}
       <label>
         <span>Period</span>
         <select

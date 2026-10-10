@@ -9,6 +9,7 @@ import { boardRoutes } from './routes/board.js';
 import { commentRoutes } from './routes/comments.js';
 import { flagRoutes } from './routes/flags.js';
 import { meRoutes } from './routes/me.js';
+import { planningRoutes } from './routes/planning.js';
 import { gitRoutes } from './routes/git.js';
 import { remoteRoutes } from './routes/remotes.js';
 import { viewRoutes } from './routes/views.js';
@@ -74,6 +75,7 @@ export function buildRouter(paths: BoardPaths, options: RouterOptions = {}): Rou
   commentRoutes(router, paths);
   flagRoutes(router, paths);
   meRoutes(router, paths);
+  planningRoutes(router, paths);
   viewRoutes(router, paths);
   // Not registered at all rather than refused per request: the web app hides
   // the tracker surface when `experimental` is false, and a route that is not

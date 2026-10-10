@@ -1,5 +1,5 @@
 import type { ConfigDto, IssueDto, NodeDto, SyncBadge, TypeDisplay } from '$shared';
-import { isDerivedFlag } from '$shared';
+import { isDerivedFlag, plansWithPeriods } from '$shared';
 import type { Placement } from '$lib/board/periods.js';
 import { currentPeriodIds, placementOf, todayIso } from '$lib/board/periods.js';
 import type { StatusTone } from '$lib/board/selectors.js';
@@ -140,6 +140,9 @@ function countHiddenChildren(input: GraphInput, tree: VisibleTree, id: string): 
 
 export function buildNodes(input: GraphInput, tree: VisibleTree): CanvasNode[] {
   const current = currentPeriodIds(input.nodes, input.today ?? todayIso());
+  // A board working as one queue draws no period badge: everything is in the
+  // one run, and the period each issue keeps is for when the board switches back.
+  const scheduled = plansWithPeriods(input.config);
 
   const levelOf = (id: string): number => {
     let level = 0;
@@ -185,7 +188,7 @@ export function buildNodes(input: GraphInput, tree: VisibleTree): CanvasNode[] {
         effort: effortOf(input.config, node),
         flag: node.kind === 'issue' ? node.flag : null,
         flaggedInside: countFlaggedInside(input, tree, id),
-        schedule: placementOf(input.nodes, node, current),
+        schedule: scheduled ? placementOf(input.nodes, node, current) : null,
         templateRoot: node.kind === 'template' && node.root,
         templateDescription: node.kind === 'template' ? node.description : '',
         ...(node.kind === 'issue' && input.syncBadges?.[id]

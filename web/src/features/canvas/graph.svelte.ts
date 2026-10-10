@@ -70,7 +70,8 @@ export class CanvasGraph {
       )
       .join(';');
 
-    return `${members}|${periods}|${this.#displayDigest()}`;
+    // And the planning mode, which decides whether any of that is drawn at all.
+    return `${members}|${periods}|${source.config.planning}|${this.#displayDigest()}`;
   }
 
   /** Which levels are drawn as badges, in a form two syncs can compare. */

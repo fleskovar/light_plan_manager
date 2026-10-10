@@ -1,5 +1,6 @@
 import {
   effortAttributeOf,
+  ignoresPeriods,
   isActiveStatus,
   isTerminalStatus,
   priorityAttributeOf,
@@ -210,17 +211,44 @@ export function upstreamOf(board: LoadedBoard, issue: Issue): UpstreamIssue[] {
 }
 
 /**
+ * The period the queue reads for an issue: the one it is scheduled in, or none
+ * on a board that plans as one continuous queue (`planning: queue`).
+ *
+ * This is the whole of queue mode as far as ranking is concerned. Every rule
+ * a period steers — the schedule rank, the parked switch, the squad that owns
+ * a sprint — asks this rather than `periodOf`, so turning the mode on reads
+ * every issue as if the board had no timeline at all, while the documents keep
+ * their `period:` and switching back restores the plan exactly.
+ */
+export function scheduleOf(board: LoadedBoard, issue: Issue): Period | null {
+  return ignoresPeriods(board.config) ? null : periodOf(board, issue);
+}
+
+/**
  * Work sitting in a period somebody switched off — including one nested inside
  * a switched-off period, since `periodStance` cascades the way parking an
- * increment parks the sprints in it.
+ * increment parks the sprints in it. Never true in queue mode, where no period
+ * is read at all.
  *
  * This is the one definition of "parked", and `candidatesFor` is the one place
  * that acts on it, so `lpm task next`, `lpm task start`, MCP `next_tasks` and
  * `simulateQueue` cannot disagree about whether a parked sprint is on offer.
  */
 export function isParked(board: LoadedBoard, issue: Issue): boolean {
-  const period = periodOf(board, issue);
+  const period = scheduleOf(board, issue);
   return period ? periodStance(board, period) === 'off' : false;
+}
+
+/**
+ * Whether the squad owning the sprint an issue is scheduled in keeps it from
+ * this resource. A period with no squad is the normal case and bars nobody;
+ * the whole team (`null`) and a board planning by queue are never barred,
+ * because neither reads a sprint.
+ */
+export function squadBars(board: LoadedBoard, issue: Issue, resourceId: string | null): boolean {
+  if (resourceId === null || !issue.period || ignoresPeriods(board.config)) return false;
+  const members = board.periodSquadMembers.get(issue.period);
+  return Boolean(members && !members.has(resourceId));
 }
 
 /** Effort declared on an issue, when the board measures effort at all. */
@@ -255,7 +283,9 @@ function priorityRank(board: LoadedBoard, issue: Issue): number {
  * switch moves work down.
  */
 function scheduleRank(board: LoadedBoard, issue: Issue, now: string): [number, string] {
-  const period = periodOf(board, issue);
+  // In queue mode every issue reads as unscheduled, so this is one bucket and
+  // the order falls through to priority, column, cohesion and the graph.
+  const period = scheduleOf(board, issue);
   if (!period) return [1, ''];
 
   const stance = periodStance(board, period);
@@ -374,14 +404,32 @@ export function routeOf(
   return routeFor(board, issue, resource, options);
 }
 
-/** Everything a resource could pick up, blocked or not, in recommended order. */
+/**
+ * How a piece of work reaches the whole team: everything does. Work in a pool
+ * says which one, so a reader can tell it from work somebody holds.
+ */
+function teamRoute(board: LoadedBoard, issue: Issue): { route: TaskRoute; pool: Resource | null } {
+  if (!issue.assignee) return { route: 'unassigned', pool: null };
+  const holder = board.resourcesById.get(issue.assignee);
+  if (holder && isGenericResource(board, holder)) return { route: 'pool', pool: holder };
+  return { route: 'direct', pool: null };
+}
+
+/**
+ * Everything a resource could pick up, blocked or not, in recommended order.
+ *
+ * `resourceId: null` asks for the whole team: every open work unit, whoever it
+ * is assigned to or parked with. It is the same queue with routing taken out —
+ * scope, blockers, flags and the period rules still apply — which is what the
+ * web queue panel shows as "Everyone" and `lpm queue simulate --team` replays.
+ */
 function candidatesFor(
   board: LoadedBoard,
-  resourceId: string,
+  resourceId: string | null,
   options: TaskOptions,
 ): TaskCandidate[] {
-  const resource = board.resourcesById.get(resourceId);
-  if (!resource) return [];
+  const resource = resourceId === null ? null : board.resourcesById.get(resourceId);
+  if (resourceId !== null && !resource) return [];
 
   const units = new Set(workUnits(board).map((issue) => issue.id));
   const candidates: TaskCandidate[] = [];
@@ -400,22 +448,18 @@ function candidatesFor(
     if (options.scope && !inScope(options.scope, issue)) continue;
     if (!options.includeParked && isParked(board, issue)) continue;
 
-    const route = routeFor(board, issue, resource, options);
+    const route = resource ? routeFor(board, issue, resource, options) : teamRoute(board, issue);
     if (!route) continue;
 
     // Squad gate: when an issue's period is owned by a squad, only that
-    // squad's members can be offered work from it. A period with no squad
-    // is the normal case and applies no filter.
-    if (issue.period) {
-      const members = board.periodSquadMembers.get(issue.period);
-      if (members && !members.has(resourceId)) continue;
-    }
+    // squad's members can be offered work from it.
+    if (squadBars(board, issue, resourceId)) continue;
 
     candidates.push({
       issue,
       route: route.route,
       pool: route.pool,
-      period: periodOf(board, issue),
+      period: scheduleOf(board, issue),
       blockedBy: blockersOf(board, issue),
     });
   }
@@ -423,10 +467,10 @@ function candidatesFor(
   return candidates.sort(compareCandidates(board, today(options), options.focusParent));
 }
 
-/** What to work on next: ready, unblocked work, best first. */
+/** What to work on next: ready, unblocked work, best first. `null` is the whole team. */
 export function nextTasks(
   board: LoadedBoard,
-  resourceId: string,
+  resourceId: string | null,
   options: TaskOptions = {},
 ): TaskCandidate[] {
   const ready = candidatesFor(board, resourceId, options).filter(
@@ -438,7 +482,7 @@ export function nextTasks(
 /** Work that would be next if something else were finished first. */
 export function blockedTasks(
   board: LoadedBoard,
-  resourceId: string,
+  resourceId: string | null,
   options: TaskOptions = {},
 ): TaskCandidate[] {
   return candidatesFor(board, resourceId, options).filter(
@@ -471,7 +515,7 @@ export function blockedTasks(
  */
 export function resumableTasks(
   board: LoadedBoard,
-  resourceId: string,
+  resourceId: string | null,
   options: TaskOptions = {},
 ): TaskCandidate[] {
   const units = new Set(workUnits(board).map((issue) => issue.id));
@@ -480,16 +524,23 @@ export function resumableTasks(
     .filter((issue) => !issue.flag)
     .map((issue) => ({
       issue,
-      route: 'direct' as TaskRoute,
-      pool: null,
-      period: periodOf(board, issue),
+      ...(resourceId === null
+        ? teamRoute(board, issue)
+        : { route: 'direct' as TaskRoute, pool: null }),
+      period: scheduleOf(board, issue),
       blockedBy: blockersOf(board, issue),
     }));
   return rankCandidates(board, candidates, options);
 }
 
-/** What a resource is working on right now: assigned to it, in an active status. */
-export function currentTasks(board: LoadedBoard, resourceId: string): Issue[] {
+/**
+ * What a resource is working on right now: assigned to it, in an active
+ * status. `null` is the whole team — everything in an active status.
+ */
+export function currentTasks(board: LoadedBoard, resourceId: string | null): Issue[] {
+  if (resourceId === null) {
+    return board.issues.filter((issue) => isActiveStatus(board.config, issue.status));
+  }
   const resource = board.resourcesById.get(resourceId);
   if (!resource) return [];
   return board.issues.filter(

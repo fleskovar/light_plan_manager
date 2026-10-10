@@ -40,6 +40,7 @@ const config: ConfigDto = {
   hasSquads: false,
   priorityAttribute: '',
   effortAttribute: '',
+  planning: 'periods',
 };
 
 function issue(id: string, parentId: string | null = null, depth = 0): IssueDto {

@@ -150,6 +150,10 @@ const rawConfigSchema = z.object({
     })
     .strict()
     .optional(),
+
+  // Planning with the calendar (the default), or as one continuous queue that
+  // ignores every period. Absent means `periods`. @see operations/planning.ts
+  planning: z.enum(['periods', 'queue']).optional(),
 });
 
 type RawConfig = z.infer<typeof rawConfigSchema>;
@@ -536,6 +540,7 @@ export function parseConfigText(text: string): ConfigResult {
       remotes: raw.remotes,
       remotes_off: raw.remotes_off,
       git_sync: raw.git_sync ?? null,
+      planning: raw.planning ?? 'periods',
     },
     errors: [],
   };

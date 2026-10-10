@@ -47,8 +47,14 @@ function lpmIn(dir: string, env: Record<string, string>, ...args: string[]): Run
   return { status: result.status ?? 0, stdout, stderr, all: stdout + stderr };
 }
 
+/**
+ * A board in `periods` mode with no omni periods. `lpm init` starts a board in
+ * `queue` mode, which ignores every sprint, and most cases below build a
+ * timeline to check what a sprint does. The cases about the default call
+ * `lpm('init', ...)` themselves.
+ */
 function init(...args: string[]): Run {
-  return lpm('init', '--no-git', '--no-omni', ...args);
+  return lpm('init', '--no-git', '--no-omni', '--planning', 'periods', ...args);
 }
 
 describe('lpm', () => {
@@ -620,6 +626,63 @@ describe('lpm upstream', () => {
   });
 });
 
+describe('lpm init --planning', () => {
+  const configText = (): string => readFileSync(path.join(cwd, '.lpm', 'config.yml'), 'utf8');
+
+  it('starts a new board in queue mode, writes the key and says so', () => {
+    const run = lpm('init', '--no-git', '--prefix', 'LP');
+    expect(run.status).toBe(0);
+    expect(run.stdout).toMatch(/planning\s+queue/);
+    expect(run.stdout).toContain('lpm planning periods');
+    expect(configText()).toMatch(/^planning: queue$/m);
+    expect(lpm('planning').stdout).toContain('Planning  queue');
+  });
+
+  it('starts in periods mode with --planning periods, and writes no key', () => {
+    const run = lpm('init', '--no-git', '--prefix', 'LP', '--planning', 'periods');
+    expect(run.stdout).toMatch(/planning\s+periods/);
+    expect(configText()).not.toMatch(/^planning:/m);
+    expect(lpm('planning').stdout).toContain('Planning  periods');
+  });
+
+  it('writes no key for a template with no period types', () => {
+    const run = lpm('init', '--no-git', '--prefix', 'LP', '--template', 'blank');
+    expect(run.stdout).toContain('this template has no period types');
+    expect(configText()).not.toMatch(/^planning:/m);
+  });
+
+  it('refuses a mode it does not know, and creates no board', () => {
+    const run = lpm('init', '--no-git', '--planning', 'kanban');
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain('Unknown planning mode');
+    expect(existsSync(path.join(cwd, '.lpm'))).toBe(false);
+  });
+});
+
+describe('lpm planning', () => {
+  it('says the mode, switches to one queue and back, and leaves the config as it was', () => {
+    init('--prefix', 'LP');
+    const original = readFileSync(path.join(cwd, '.lpm', 'config.yml'), 'utf8');
+
+    expect(lpm('planning').stdout).toContain('Planning  periods');
+    const queue = lpm('planning', 'queue');
+    expect(queue.status).toBe(0);
+    expect(queue.stdout).toContain('no document was changed');
+    expect(lpm('planning').stdout).toContain('Planning  queue');
+    expect(lpm('planning', 'queue').stdout).toContain('Already');
+
+    expect(lpm('planning', 'pi').status).toBe(0);
+    expect(readFileSync(path.join(cwd, '.lpm', 'config.yml'), 'utf8')).toBe(original);
+  });
+
+  it('refuses a mode it does not know', () => {
+    init('--prefix', 'LP');
+    const run = lpm('planning', 'kanban');
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain('Unknown planning mode');
+  });
+});
+
 describe('lpm queue simulate', () => {
   /** Alice covering the junior pool, Bob, and a feature to hang stories off. */
   function seed(): void {
@@ -658,6 +721,21 @@ describe('lpm queue simulate', () => {
     expect(run.stdout).toContain('2 tasks');
   });
 
+  it('simulates the whole team with --team, whoever holds the work', () => {
+    seed();
+    story('Alices', '--assignee', 'RS-1');
+    story('Bobs', '--assignee', 'RS-2');
+    story('Nobodys');
+
+    const run = lpm('queue', 'simulate', '--team');
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain('the whole team');
+    expect(run.stdout).toContain('3 tasks');
+    expect(lpm('queue', 'simulate', '--team', '--user', 'Alice').stderr).toContain(
+      'Pass one of --user, --role or --team',
+    );
+  });
+
   it('simulates a pool with --role', () => {
     seed();
     story('Pooled', '--assignee', 'RS-3');
@@ -680,7 +758,7 @@ describe('lpm queue simulate', () => {
       'is a person, not a pool',
     );
     expect(lpm('queue', 'simulate', '--user', 'a', '--role', 'b').stderr).toContain(
-      'not both',
+      'Pass one of --user, --role or --team',
     );
   });
 

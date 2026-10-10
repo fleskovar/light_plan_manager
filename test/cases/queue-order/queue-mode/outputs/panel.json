@@ -1,0 +1,41 @@
+{
+  "Alice": {
+    "in_progress": [{ "number": 1, "id": "LP-3" }],
+    "up_next": [
+      { "number": 2, "id": "LP-9" },
+      { "number": 3, "id": "LP-4" },
+      { "number": 5, "id": "LP-6" }
+    ],
+    "waiting": [
+      { "number": 4, "id": "LP-5" },
+      { "number": null, "id": "LP-7" },
+      { "number": null, "id": "LP-8" }
+    ]
+  },
+  "Bob": {
+    "in_progress": [],
+    "up_next": [{ "number": 1, "id": "LP-11" }],
+    "waiting": [{ "number": null, "id": "LP-10" }]
+  },
+  "QA": {
+    "in_progress": [],
+    "up_next": [{ "number": 1, "id": "LP-6" }],
+    "waiting": []
+  },
+  "Everyone": {
+    "in_progress": [{ "number": 1, "id": "LP-3" }],
+    "up_next": [
+      { "number": 2, "id": "LP-12" },
+      { "number": 3, "id": "LP-9" },
+      { "number": 5, "id": "LP-11" },
+      { "number": 6, "id": "LP-4" },
+      { "number": 8, "id": "LP-6" }
+    ],
+    "waiting": [
+      { "number": 4, "id": "LP-10" },
+      { "number": 7, "id": "LP-5" },
+      { "number": null, "id": "LP-7" },
+      { "number": null, "id": "LP-8" }
+    ]
+  }
+}

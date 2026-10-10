@@ -79,6 +79,9 @@ export function registerReadTools(server: McpServer, context: BoardContext): voi
         defaultStatus: config.defaultStatus,
         priorityAttribute: config.priorityAttribute || null,
         effortAttribute: config.effortAttribute || null,
+        // `queue` means every period is ignored by next_tasks: the board is one
+        // continuous run, ordered by priority and the dependency graph.
+        planning: config.planning,
         hasSquads: config.hasSquads || undefined,
         counts: {
           issues: snapshot.issues.length,

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { AttributeDto, ConfigDto, NodeDto } from '$shared';
-  import { flagLabel } from '$shared';
+  import { flagLabel, plansWithPeriods } from '$shared';
   import AttributeField from '$lib/ui/fields/AttributeField.svelte';
   import LazySelect from '$lib/ui/fields/LazySelect.svelte';
   import StatusChip from '$lib/ui/StatusChip.svelte';
@@ -139,15 +139,17 @@
       {/if}
     </td>
 
-    <td>
-      {#if issue && config.hasPeriods}
-        <LazySelect
-          value={issue.period ?? ''}
-          options={periodOptions}
-          onchange={(value) => onedit(row.node.id, { period: value || null })}
-        />
-      {/if}
-    </td>
+    {#if plansWithPeriods(config)}
+      <td>
+        {#if issue}
+          <LazySelect
+            value={issue.period ?? ''}
+            options={periodOptions}
+            onchange={(value) => onedit(row.node.id, { period: value || null })}
+          />
+        {/if}
+      </td>
+    {/if}
   {/if}
 
   {#each columns as column (column.name)}

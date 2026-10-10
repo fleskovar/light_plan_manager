@@ -2,10 +2,19 @@ import { isActiveStatus, isTerminalStatus, terminalStatusId } from '../config/lo
 import { BoardError } from '../errors.js';
 import type { Issue, Period, Resource } from '../model/types.js';
 import type { LoadedBoard } from './load.js';
-import { periodOf, workUnits } from './query.js';
+import { workUnits } from './query.js';
 import { inScope } from './scope.js';
 import type { TaskCandidate, TaskOptions, TaskRoute } from './tasks.js';
-import { blockersOf, effortOf, isParked, nextTasks, resumableTasks, routeOf } from './tasks.js';
+import {
+  blockersOf,
+  effortOf,
+  isParked,
+  nextTasks,
+  resumableTasks,
+  routeOf,
+  scheduleOf,
+  squadBars,
+} from './tasks.js';
 
 /**
  * "If this one person were the only contributor, what would they do, and in
@@ -53,6 +62,12 @@ import { blockersOf, effortOf, isParked, nextTasks, resumableTasks, routeOf } fr
  * `board/tasks/ranking.ts`, and `lpm queue agent` resumes through exactly the
  * same call. A private copy here is how the two came to disagree — the run
  * predicted a sequence starting from work the agent could never pick back up.
+ *
+ * The resource may be `null`, which is the whole team worked through as one
+ * contributor: every open work unit, whoever holds it, in the order the board
+ * would offer it. That is the sequence the web queue panel numbers its
+ * "Everyone" cards by, and `lpm queue simulate --team` prints — the same
+ * `nextTasks` with routing taken out, so it cannot be a second opinion either.
  */
 
 /** Why a piece of work was never picked up. */
@@ -109,7 +124,8 @@ export interface SimulationSkip {
 }
 
 export interface QueueSimulation {
-  resource: Resource;
+  /** Who the run is about, or null for the whole team. */
+  resource: Resource | null;
   /** The sequence, in the order the board would offer it. */
   steps: SimulationStep[];
   /** Open work units the run never reached, with the reason for each. */
@@ -171,7 +187,7 @@ function unblockedBy(before: LoadedBoard, after: LoadedBoard, issue: Issue): Iss
 function classify(
   board: LoadedBoard,
   issue: Issue,
-  resource: Resource,
+  resource: Resource | null,
   options: SimulateOptions,
 ): SimulationSkip {
   const holder = issue.assignee ? (board.resourcesById.get(issue.assignee) ?? null) : null;
@@ -180,7 +196,7 @@ function classify(
     reason,
     blockedBy,
     holder,
-    period: periodOf(board, issue),
+    period: scheduleOf(board, issue),
   });
 
   // Ahead of everything: a flag is a statement that this work has stopped and
@@ -189,9 +205,8 @@ function classify(
   if (issue.flag) return skip('flagged');
   if (isActiveStatus(board.config, issue.status)) return skip('active');
   if (options.scope && !inScope(options.scope, issue)) return skip('scope');
-  if (!routeOf(board, issue, resource, options)) return skip('routing');
-  const squadGate = issue.period ? board.periodSquadMembers.get(issue.period) : undefined;
-  if (squadGate && !squadGate.has(resource.id)) return skip('squad');
+  if (resource && !routeOf(board, issue, resource, options)) return skip('routing');
+  if (squadBars(board, issue, resource?.id ?? null)) return skip('squad');
   // Ahead of 'blocked': parked work was never a candidate, so saying what it is
   // waiting on would answer a question the queue never got as far as asking.
   if (!options.includeParked && isParked(board, issue)) return skip('parked');
@@ -205,13 +220,14 @@ function classify(
  *
  * The caller resolves the resource, because naming somebody is the CLI's job
  * (`findResource` takes a name as readily as an id) and a report about a person
- * who does not exist has nothing to say.
+ * who does not exist has nothing to say. `null` simulates the whole team.
  */
 export function simulateQueue(
   board: LoadedBoard,
-  resource: Resource,
+  resource: Resource | null,
   options: SimulateOptions = {},
 ): QueueSimulation {
+  const resourceId = resource?.id ?? null;
   const done = terminalStatusId(board.config);
   if (!done) {
     throw new BoardError('This board has no end state, so nothing can be simulated as finished', [
@@ -252,7 +268,7 @@ export function simulateQueue(
   // that pretended it was not there would leave its dependents blocked forever.
   // `resumableTasks` is the same call `lpm queue agent` makes to resume its own
   // work, which is what keeps the prediction and the run in step.
-  for (const candidate of resumableTasks(board, resource.id, options)) {
+  for (const candidate of resumableTasks(board, resourceId, options)) {
     if (steps.length >= limit) {
       truncated = true;
       break;
@@ -263,7 +279,7 @@ export function simulateQueue(
   // Then the queue itself, re-asked after every step — the whole point being
   // that finishing one thing changes what the board offers next.
   while (!truncated) {
-    const [top] = nextTasks(state, resource.id, { ...options, limit: 1 });
+    const [top] = nextTasks(state, resourceId, { ...options, limit: 1 });
     if (!top) break;
     if (steps.length >= limit) {
       truncated = true;
@@ -287,7 +303,7 @@ export function simulateQueue(
     truncated,
     parked: skipped.filter((skip) => skip.reason === 'parked').length,
     flagged: skipped.filter(
-      (skip) => skip.reason === 'flagged' && skip.issue.assignee === resource.id,
+      (skip) => skip.reason === 'flagged' && (resource === null || skip.issue.assignee === resource.id),
     ).length,
   };
 }

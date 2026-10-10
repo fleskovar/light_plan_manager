@@ -1,6 +1,7 @@
 import type { LoadedBoard } from '../../board/load.js';
 import { periodOf } from '../../board/query.js';
 import { blockingLookupFor } from '../../board/tasks.js';
+import { ignoresPeriods } from '../../config/lookup.js';
 import { findCyclesIn, formatCycle } from '../../model/links.js';
 import type { Issue, Problem } from '../../model/types.js';
 import { effectiveDependencies } from '../../../shared/blocking.js';
@@ -28,8 +29,13 @@ function gatingGraph(board: LoadedBoard): Map<string, string[]> {
   return graph;
 }
 
-/** Work scheduled before the work it waits on is a plan that cannot run. */
+/**
+ * Work scheduled before the work it waits on is a plan that cannot run. Not
+ * asked on a board planning by queue, where no sprint runs and the order is
+ * the graph's alone; the warning comes back with the periods.
+ */
 function checkSchedule(board: LoadedBoard, issue: Issue, problems: Problem[]): void {
+  if (ignoresPeriods(board.config)) return;
   const own = periodOf(board, issue);
   if (!own?.starts) return;
   for (const id of issue.depends_on) {

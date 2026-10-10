@@ -20,6 +20,7 @@ import * as move from './commands/move.js';
 import * as newIssue from './commands/new.js';
 import * as open from './commands/open.js';
 import * as period from './commands/period.js';
+import * as planning from './commands/planning.js';
 import * as profile from './commands/profile.js';
 import * as queue from './commands/queue.js';
 import * as remote from './commands/remote.js';
@@ -57,6 +58,7 @@ const commands: Record<string, Command> = {
   task,
   upstream,
   period,
+  planning,
   instructions,
   team,
   template,
@@ -80,6 +82,7 @@ const aliases: Record<string, string> = {
   prerequisites: 'upstream',
   sprint: 'period',
   periods: 'period',
+  mode: 'planning',
   brief: 'instructions',
   context: 'instructions',
   roster: 'team',
@@ -116,6 +119,7 @@ const summaries: Record<string, string> = {
   task: 'What to work on next, and pick it up',
   upstream: 'Everything that must be finished before an issue can be; schedule it',
   period: 'Switch a sprint or increment on or off, restart it, correct an overrun',
+  planning: 'Plan with sprints and increments, or work the board as one queue',
   instructions: 'Print the working brief for an issue: the context to start it',
   team: 'Show the roster and how loaded everyone is',
   template: 'Reusable pieces of plan: the registry, and putting one on the board',

@@ -255,6 +255,11 @@ it.
 Load `lpm-writing` before you write a comment. It has the style rules and a
 template for each kind of comment: claim, progress, flag, handover, clear.
 
+When your work needs the approval of a senior developer or engineer, create a
+`review` issue and load `lpm-writing-reviews`. When you find a defect or a
+question during the work, load `lpm-writing-items` before you write the bug or
+the research issue.
+
 You are writing for two people who are not in your conversation: the **senior
 reviewer** judging the change without re-deriving it, and the **developer in four
 months** who has hit a bug here. Neither can see your terminal.

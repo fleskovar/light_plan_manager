@@ -56,6 +56,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:web": "cd web && npm run test",
+    "test:queue-cases": "cd web && npx vitest run test/queue-cases.test.ts",
     "dev:web": "cd web && npm run dev",
     "install:web": "cd web && npm install",
     "lpm": "node dist/cli/index.js",

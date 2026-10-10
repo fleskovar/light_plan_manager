@@ -82,6 +82,7 @@ export const config: ConfigDto = {
   hasSquads: true,
   priorityAttribute: 'priority',
   effortAttribute: 'story_points',
+  planning: 'periods',
 };
 
 /**

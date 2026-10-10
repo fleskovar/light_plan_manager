@@ -15,7 +15,9 @@ import {
   findResource,
   flagLabel,
   fullScope,
+  hasPeriods,
   hasResources,
+  ignoresPeriods,
   isGenericResource,
   requireCurrentUser,
   simulateQueue,
@@ -42,6 +44,8 @@ Usage
 Simulate options
       --user <id|name>   Simulate a person on the roster
       --role <id|name>   Simulate a pool (a generic resource), e.g. "jr. developer"
+      --team             Simulate the whole team as one contributor: every open
+                         work unit, whoever holds it (the web queue's "Everyone")
       --unassigned       Also pick up work nobody is assigned to
       --parked           Also work through periods somebody switched off
       --limit <n>        Stop after this many steps
@@ -103,7 +107,12 @@ Commits target the project repo, not the .lpm board — commit the board yoursel
 
 How simulate works
 
-With neither --user nor --role, it simulates you (\`lpm me\`).
+With neither --user nor --role, it simulates you (\`lpm me\`). --team simulates
+everybody at once, which is the sequence the web queue panel numbers its cards by.
+
+On a board planning by queue (\`lpm planning queue\`) every period is ignored:
+no sprint ranks ahead of another, none is switched off, and no squad owns one.
+The whole board is one continuous run.
 
 The run takes the top of \`lpm task next\`, marks it finished in memory, and asks
 again -- until nothing is left that this person could pick up. Work already in
@@ -141,6 +150,7 @@ board: you do not hold their profile.
 Examples
   lpm queue simulate
   lpm queue simulate --user alice
+  lpm queue simulate --team
   lpm queue simulate --role "jr. software developer" --unassigned
   lpm queue simulate --user RS-2 --skipped
   lpm queue simulate --user RS-2 --parked
@@ -148,13 +158,14 @@ Examples
   lpm queue agent --model anthropic:claude-opus-4-5 --effort high --commit task
   lpm queue agent --file agent.yml --dry-run`;
 
-/** The resource the run is about, and how it was named. */
-function subject(board: LoadedBoard, values: Values): Resource {
-  if (values.user && values.role) {
-    throw new BoardError('Pass --user or --role, not both', [
-      '--user names a person on the roster; --role names a pool.',
+/** The resource the run is about, and how it was named — null for the whole team. */
+function subject(board: LoadedBoard, values: Values): Resource | null {
+  if ([values.user, values.role, values.team].filter(Boolean).length > 1) {
+    throw new BoardError('Pass one of --user, --role or --team', [
+      '--user names a person on the roster; --role names a pool; --team is everybody.',
     ]);
   }
+  if (values.team) return null;
 
   const wanted = values.user ?? values.role;
   if (!wanted) return requireCurrentUser(board);
@@ -187,9 +198,9 @@ function subject(board: LoadedBoard, values: Values): Resource {
  * Whose profile applies. Your own scope is the queue you are actually offered,
  * so it belongs in a simulation of you; nobody else's is yours to apply.
  */
-function scopeFor(board: LoadedBoard, resource: Resource): ResolvedScope {
+function scopeFor(board: LoadedBoard, resource: Resource | null): ResolvedScope {
   const me = currentUser(board)?.resource;
-  return me && me.id === resource.id ? currentScope(board) : fullScope();
+  return me && resource && me.id === resource.id ? currentScope(board) : fullScope();
 }
 
 function limitOf(value: string | undefined): number | undefined {
@@ -278,17 +289,26 @@ function parkedNotice(run: QueueSimulation): void {
  */
 function flaggedNotice(run: QueueSimulation): void {
   if (!run.flagged) return;
+  const whose = run.resource ? ' of theirs' : '';
   out(
-    dim(`  ${plural(run.flagged, 'issue')} of theirs flagged, so the run cannot start from them — see `) +
+    dim(`  ${plural(run.flagged, 'issue')}${whose} flagged, so the run cannot start from them — see `) +
       cyan('lpm flag list'),
   );
 }
 
 function report(board: LoadedBoard, run: QueueSimulation, scope: ResolvedScope, values: Values): void {
-  const kind = isGenericResource(board, run.resource) ? 'pool' : 'person';
-  out(
-    `${bold('Queue simulation for')} ${bold(run.resource.id)} ${run.resource.title} ${dim(`(${kind})`)}`,
-  );
+  if (run.resource) {
+    const kind = isGenericResource(board, run.resource) ? 'pool' : 'person';
+    out(
+      `${bold('Queue simulation for')} ${bold(run.resource.id)} ${run.resource.title} ${dim(`(${kind})`)}`,
+    );
+  } else {
+    out(`${bold('Queue simulation for the whole team')} ${dim('(every open work unit, whoever holds it)')}`);
+  }
+  // Said once, because it is why no period appears anywhere below.
+  if (hasPeriods(board.config) && ignoresPeriods(board.config)) {
+    out(`  ${dim('planning by queue — every period is ignored; see')} ${cyan('lpm planning')}`);
+  }
   if (scope.active) {
     out(`  ${dim(`scope ${describeScope(scope)}`)}`);
     if (scope.unknown.length) {
@@ -328,6 +348,7 @@ function report(board: LoadedBoard, run: QueueSimulation, scope: ResolvedScope, 
 interface Values {
   user?: string;
   role?: string;
+  team?: boolean;
   unassigned?: boolean;
   parked?: boolean;
   limit?: string;
@@ -336,7 +357,9 @@ interface Values {
 
 function runSimulate(values: Values): number {
   const board = requireBoard();
-  if (!hasResources(board.config)) {
+  // The whole team needs no roster: with nobody on it, every issue is simply
+  // unassigned, and the sequence is still the order the board offers work in.
+  if (!values.team && !hasResources(board.config)) {
     throw new BoardError('This board has no team roster, so there is nobody to simulate', [
       'Add resource_types, resource_hierarchy and resource_prefix to .lpm/config.yml.',
     ]);
@@ -374,6 +397,7 @@ function parseSimulateValues(args: string[]): Values {
     options: {
       user: { type: 'string' },
       role: { type: 'string' },
+      team: { type: 'boolean' },
       unassigned: { type: 'boolean' },
       parked: { type: 'boolean' },
       limit: { type: 'string' },

@@ -6,7 +6,7 @@
  *
  * - `ranking.ts` — ranking work: `nextTasks`, `blockedTasks`, `resumableTasks`,
  *   `currentTasks`, `previousTasks`, `rankCandidates`, `routeOf`, `isParked`,
- *   `blockersOf`, `isBlocked`, `upstreamOf`, `effortOf`, `TaskOptions`,
+ *   `scheduleOf`, `squadBars`, `blockersOf`, `isBlocked`, `upstreamOf`, `effortOf`, `TaskOptions`,
  *   `TaskCandidate`, `TaskRoute`, `UpstreamIssue`.
  *
  * - `roster.ts` — reporting load: `resourceLoad`, `LoadRow`, `LoadReport`.
@@ -15,7 +15,7 @@
  * `lpm task` and `lpm team` are thin printers over these functions.
  *
  * The export surface is load-bearing: `simulate.ts` deliberately imports
- * `resumableTasks`, `routeOf` and `isParked` so the simulator can never
+ * `resumableTasks`, `routeOf`, `isParked` and `squadBars` so the simulator can never
  * disagree with the queue — and `src/runner/loop.ts` imports `resumableTasks`
  * for the same reason, so `lpm queue agent` resumes exactly the work
  * `lpm queue simulate` says it will. `test/simulate.test.ts` and

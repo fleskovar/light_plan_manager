@@ -83,6 +83,34 @@ export interface ConfigDto {
   priorityAttribute: string;
   /** Attribute name the board measures effort with, or an empty string. */
   effortAttribute: string;
+  /**
+   * How the board plans, as it is in force — `queue` on a board with no period
+   * types. Board truth, read from `planning:` in config.yml, so every view and
+   * every teammate works the same queue. A file `lpm export` wrote before this
+   * existed has none; read it through `plansWithPeriods`.
+   */
+  planning: Planning;
+}
+
+/**
+ * How a board decides what happens next.
+ *
+ * `periods` plans with the calendar: increments, sprints, and the drawer's
+ * Periods and Gantt tabs. `queue` reads the whole board as one increment holding
+ * one sprint holding everything — the queue ignores every period and the app
+ * stops drawing them — while every document keeps its `period:`, so switching
+ * back is lossless.
+ */
+export type Planning = 'periods' | 'queue';
+
+/**
+ * Whether the app should show the timeline at all: period badges, period
+ * fields, the Periods and Gantt tabs. A board planning by queue has them on
+ * disk and out of sight. Absent `planning` is an older export, which planned
+ * with its periods because nothing else existed.
+ */
+export function plansWithPeriods(config: Pick<ConfigDto, 'hasPeriods' | 'planning'>): boolean {
+  return config.hasPeriods && config.planning !== 'queue';
 }
 
 export interface NodeDtoBase {
@@ -310,4 +338,40 @@ export interface CurrentUserDto {
   id: string | null;
   /** The reference as written, or null when no user is set. */
   ref: string | null;
+}
+
+/**
+ * What `GET /api/queue` answers: the engine's own sequence for one resource or
+ * for the whole team — `simulateQueue`, which is `lpm task next` asked again
+ * after every step. The queue panel numbers its cards by it, so the order a
+ * reviewer reads in the browser is the order developers and agents will be
+ * handed work in, and not a second opinion about it.
+ *
+ * It answers for the board on disk. Work the browser has not pushed yet is not
+ * in it, which the panel says rather than guessing a position for.
+ */
+export interface QueueSequenceDto {
+  /** The resource the sequence is for, or null for the whole team. */
+  resource: string | null;
+  planning: Planning;
+  /** The sequence, first step first. */
+  steps: QueueStepDto[];
+  /** Open work units the sequence never reaches, and why. */
+  skipped: QueueSkipDto[];
+}
+
+export interface QueueStepDto {
+  id: string;
+  /** 1-based position in the sequence. */
+  order: number;
+  /** Already in progress when the sequence was worked out. */
+  started: boolean;
+}
+
+export interface QueueSkipDto {
+  id: string;
+  /** `SkipReason` in `board/simulate.ts`: flagged, active, routing, squad, parked, blocked, scope, ready. */
+  reason: string;
+  /** Unfinished blockers left at the end, for `blocked`. */
+  blockedBy: string[];
 }

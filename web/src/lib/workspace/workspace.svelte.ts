@@ -13,7 +13,14 @@ import type {
   ViewDocument,
   ViewMode,
 } from '$shared';
-import { appendChange, completeView, isTempId, summarizePushFailures, tempId } from '$shared';
+import {
+  appendChange,
+  completeView,
+  isTempId,
+  plansWithPeriods,
+  summarizePushFailures,
+  tempId,
+} from '$shared';
 import { ApiError, api } from '$lib/api/client.js';
 import type { WorkingNodes } from '$lib/board/working.js';
 import { applyChange, replay } from '$lib/board/working.js';
@@ -160,29 +167,57 @@ export class Workspace {
   }
 
   /**
-   * Whether this view plans with periods or works off the queue. A board with
-   * no period types has no choice to make, so it is always the queue.
+   * Whether the board plans with its periods or works as one queue. Board
+   * truth — `planning:` in config.yml, which `lpm task next` reads too — so
+   * every view and every teammate sees the same mode. A board with no period
+   * types has no choice to make, so it is always the queue.
    *
    * A registry view is always on the queue: a template has no dates and never
    * will, since scheduling is decided when it is instantiated, not written.
    */
   get planning(): Planning {
     if (this.mode === 'templates') return 'queue';
-    if (!this.snapshot?.config.hasPeriods) return 'queue';
-    return this.view?.planning ?? 'periods';
+    const config = this.snapshot?.config;
+    return config && plansWithPeriods(config) ? 'periods' : 'queue';
   }
 
-  setPlanning(planning: Planning): void {
-    const view = this.doc;
-    view.planning = planning;
+  /** Whether the board has a choice of mode at all. */
+  get canPlanWithPeriods(): boolean {
+    return this.mode !== 'templates' && this.snapshot?.config.hasPeriods === true;
+  }
+
+  /**
+   * Switch the board between its periods and one queue.
+   *
+   * Written straight through rather than queued, like a flag: it is config,
+   * not a change to the plan, and `setPlanning` in core touches no document —
+   * every `period:` stays where it is, so switching back is lossless. The board
+   * is re-read afterwards because the snapshot's config is what every surface
+   * reads the mode from.
+   */
+  async setPlanning(planning: Planning): Promise<boolean> {
+    if (planning === this.planning) return true;
+    try {
+      await api.setPlanning(planning);
+    } catch (error) {
+      this.report(error);
+      return false;
+    }
     // The drawer remembers a tab that the other mode does not offer; sending it
     // somewhere that exists is friendlier than opening on an empty pane. And
     // choosing the queue is asking to see it, so its panel opens.
-    if (planning === 'queue') {
+    const view = this.view;
+    if (view && planning === 'queue') {
       if (view.drawer.tab === 'periods' || view.drawer.tab === 'gantt') view.drawer.tab = 'table';
       view.queue.open = true;
+      this.scheduleSave();
     }
-    this.scheduleSave();
+    await this.pull(true);
+    this.notify(
+      'info',
+      planning === 'queue' ? 'Working the board as one queue' : 'Planning with periods again',
+    );
+    return true;
   }
 
   /**

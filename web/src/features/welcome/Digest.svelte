@@ -62,7 +62,9 @@
 <section class="card now">
   <h2>
     Now
-    {#if focus.sprint || focus.increment}
+    {#if focus.continuous}
+      <span class="where"><strong>The whole board</strong><span class="when">one continuous queue</span></span>
+    {:else if focus.sprint || focus.increment}
       <span class="where">
         {#if focus.increment}<strong>{focus.increment.title}</strong>{/if}
         {#if focus.sprint}<span class="sep">›</span><strong>{focus.sprint.title}</strong>{/if}
@@ -72,7 +74,7 @@
     {/if}
   </h2>
 
-  {#if !focus.increment && !focus.sprint}
+  {#if !focus.continuous && !focus.increment && !focus.sprint}
     <p class="hint">
       No current period. Add dates to a sprint.
     </p>
@@ -107,7 +109,7 @@
       </ul>
     {:else}
       <p class="hint">
-        Nothing ready in this period{#if focus.blocked}; {focus.blocked} blocked{/if}.
+        Nothing ready {focus.continuous ? 'on the board' : 'in this period'}{#if focus.blocked}; {focus.blocked} blocked{/if}.
       </p>
     {/if}
   {/if}

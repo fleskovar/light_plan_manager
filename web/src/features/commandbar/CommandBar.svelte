@@ -67,22 +67,6 @@
         },
       ],
     },
-    {
-      label: 'Planning',
-      items: [
-        {
-          label: 'Sprints and increments',
-          hint: workspace.planning === 'periods' ? '✓' : undefined,
-          disabled: !workspace.config.hasPeriods,
-          onSelect: () => workspace.setPlanning('periods'),
-        },
-        {
-          label: 'Queue',
-          hint: workspace.planning === 'queue' ? '✓' : undefined,
-          onSelect: () => workspace.setPlanning('queue'),
-        },
-      ],
-    },
   ]);
 </script>
 

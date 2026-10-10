@@ -1,4 +1,4 @@
-import { owningSquad, routeWork, type WorkRoute } from '$shared';
+import { owningSquad, plansWithPeriods, routeWork, type WorkRoute } from '$shared';
 import type { ConfigDto, IssueDto, NodeDto, PeriodDto, ResourceDto, StatusDto } from '$shared';
 import {
   blockersOf,
@@ -9,6 +9,7 @@ import {
   isTerminal,
   issueEffort,
   priorityRank,
+  statusRank,
   subtreeIds,
   workUnitsOf,
 } from '$lib/board/selectors.js';
@@ -16,18 +17,27 @@ import type { WorkingNodes } from '$lib/board/working.js';
 import type { NodeIndex } from '$lib/board/index.js';
 
 /**
- * Planning without a calendar: the model behind the queue panel.
+ * The model behind the queue panel: what to pick up next, in the order the
+ * engine will hand it out.
  *
  * Not every team runs sprints. Plenty of boards are a dependency graph and a
  * queue: you take the next thing nothing is blocking, you finish it, something
  * else becomes takeable. This is that board — the same three questions the
  * periods view answers, asked of the graph instead of of the dates.
  *
+ * The *lanes* are decided here, over the working copy, so a card moves the
+ * moment somebody starts or finishes it. The *order* is the engine's: the
+ * sequence `GET /api/queue` returns (`simulateQueue`, which is `lpm task next`
+ * asked again after every step) is passed in as `sequence`, and every card it
+ * holds is sorted and numbered by its step. Only a card the engine has not
+ * seen — created in the browser and not pushed yet — falls back to the local
+ * order below, after the ones it has. Mirroring the engine's ranking here was
+ * how the panel and `lpm task next` came to disagree; asking it cannot.
+ *
  * Three lanes, and the middle one is the only place work is *promised*:
  *
  *   - **Ready** — unstarted work units with no unfinished blocker, in the
- *     engine's own order: priority first, then how much finishing one would
- *     release.
+ *     engine's order.
  *   - **In progress** — whatever sits in a status the board calls active.
  *   - **Blocked** — unstarted work with a blocker, so the queue says why it is
  *     not offering something rather than silently dropping it.
@@ -55,6 +65,12 @@ export interface QueueCard {
   route: WorkRoute | null;
   /** The pool the work is parked in, when `route` is `pool`. */
   pool: ResourceDto | null;
+  /**
+   * The card's step in the engine's sequence, 1-based — the order it will be
+   * handed out in. Null when no sequence was supplied, or the engine never
+   * reaches it (blocked for good, flagged) or has not seen it (not pushed).
+   */
+  step: number | null;
 }
 
 /**
@@ -132,6 +148,13 @@ export interface QueueOptions {
    * nobody on the roster, is everybody's queue.
    */
   resourceId?: string | null;
+  /**
+   * The engine's sequence for the same resource (or the whole team): issue id
+   * to 1-based step. It decides the order of every section and the number on
+   * every card. Absent — the server is unreachable, or has not answered yet —
+   * the local order stands in.
+   */
+  sequence?: ReadonlyMap<string, number> | null;
 }
 
 export const DONE_LIMIT = 8;
@@ -164,7 +187,11 @@ export function buildQueue(
   const dependents = dependentsIndex(nodes, index);
   const units = workUnitsOf(nodes, config, index);
   const focus = resourceNamed(nodes, options.resourceId);
-  const routing = focus ? routingFor(nodes, focus) : null;
+  // A board planning by queue reads no period at all: nothing is parked and no
+  // squad owns a sprint, exactly as `scheduleOf` has it in the engine.
+  const periods = plansWithPeriods(config);
+  const routing = focus ? routingFor(nodes, focus, periods) : null;
+  const sequence = options.sequence ?? null;
 
   const card = (issue: IssueDto): QueueCard => {
     const route = routing?.route(issue) ?? null;
@@ -177,6 +204,7 @@ export function buildQueue(
       lineage: lineageOf(nodes, issue),
       route,
       pool,
+      step: sequence?.get(issue.id) ?? null,
     };
   };
 
@@ -196,16 +224,24 @@ export function buildQueue(
     )
     .map(card);
 
-  // Stay inside the feature that is already moving, exactly as the engine's
-  // queue does: below the priority somebody set by hand, above the heuristics.
-  // @see src/shared/cohesion.ts
+  // The fallback for a card the engine has not ranked: its own order with the
+  // schedule taken out — priority, column, the feature already moving, then
+  // how much finishing one releases. @see src/shared/cohesion.ts
   const stayPut = cohesionOrder(nodes, config, index);
-
-  const byQueueOrder = (a: QueueCard, b: QueueCard): number =>
+  const byLocalOrder = (a: QueueCard, b: QueueCard): number =>
     priorityRank(config, a.issue) - priorityRank(config, b.issue) ||
+    statusRank(config, a.issue) - statusRank(config, b.issue) ||
     stayPut(a.issue, b.issue) ||
     b.unblocks - a.unblocks ||
     idSerial(a.issue.id) - idSerial(b.issue.id);
+
+  // The engine's step first; whatever it has not ranked comes after, locally.
+  const byQueueOrder = (a: QueueCard, b: QueueCard): number => {
+    if (a.step !== null && b.step !== null) return a.step - b.step;
+    if (a.step !== null) return -1;
+    if (b.step !== null) return 1;
+    return byLocalOrder(a, b);
+  };
 
   const open = cards.filter((entry) => !isTerminal(config, entry.issue));
   const active = open.filter((entry) => isActive(config, entry.issue));
@@ -221,7 +257,7 @@ export function buildQueue(
   //
   // Walks the parent chain: parking an increment parks its sprints too.
   const parked = (issue: IssueDto): boolean => {
-    if (!issue.period) return false;
+    if (!periods || !issue.period) return false;
     const seen = new Set<string>();
     let current: string | null = issue.period;
     while (current && !seen.has(current)) {
@@ -286,10 +322,11 @@ interface Routing {
 
 /**
  * The engine's routing rule over the working copy: `routeWork` for whose work
- * it is, and the squad owning its sprint for whether this resource may take it.
+ * it is, and the squad owning its sprint for whether this resource may take it
+ * — which only applies while the board plans with its periods.
  * @see src/shared/routing.ts
  */
-function routingFor(nodes: WorkingNodes, resource: ResourceDto): Routing {
+function routingFor(nodes: WorkingNodes, resource: ResourceDto, periods: boolean): Routing {
   const isPool = (id: string): boolean => {
     const node = nodes[id];
     return node?.kind === 'resource' && node.generic;
@@ -299,7 +336,7 @@ function routingFor(nodes: WorkingNodes, resource: ResourceDto): Routing {
     return node?.kind === 'period' ? node : undefined;
   };
   const squadAdmits = (issue: IssueDto): boolean => {
-    if (!issue.period) return true;
+    if (!periods || !issue.period) return true;
     const squadId = owningSquad(issue.period, periodOf);
     const squad = squadId ? nodes[squadId] : undefined;
     // A squad the board no longer has filters nothing, exactly as in the engine.
@@ -355,7 +392,11 @@ export interface QueueSection {
   cards: QueueCard[];
   /** The lane a card dropped here moves into, or null where a drop means nothing. */
   dropsInto: 'ready' | 'active' | 'done' | null;
-  /** Whether the position in the queue is worth a number: only the line itself. */
+  /**
+   * Whether the position in the queue is worth a number. Without the engine's
+   * sequence only the line itself is numbered, by position; with it, every
+   * card the sequence reaches carries its step — see `markerOf`.
+   */
   numbered: boolean;
   /** Folded until somebody opens it. */
   folded: boolean;
@@ -446,4 +487,46 @@ export function wouldRelease(
     .filter((waiting) =>
       blockersOf(nodes, config, waiting, index).every((blocker) => finished.has(blocker.id)),
     );
+}
+
+/**
+ * What the round marker beside a card says.
+ *
+ * With the engine's sequence, a card's step: one numbering that runs through
+ * every section, so "In progress" reads 1–3, "Up next" carries on from 4, and a
+ * waiting card says where it will come up once what it waits on is done. A
+ * card the sequence does not hold says nothing in a waiting section (the engine
+ * never reaches it) and a dash in the line (it has not been pushed yet).
+ * Without a sequence, the line is numbered by position as it always was.
+ */
+export function markerOf(
+  card: QueueCard,
+  section: QueueSection,
+  position: number,
+  sequenced: boolean,
+): string {
+  if (section.id === 'done') return '✓';
+  if (!sequenced) return section.numbered ? `${position + 1}` : '';
+  if (card.step !== null) return `${card.step}`;
+  return section.id === 'next' ? '–' : '';
+}
+
+/** The tooltip on a card's marker, so the number explains itself. */
+export function markerTitle(card: QueueCard, section: QueueSection, sequenced: boolean): string {
+  if (section.id === 'done') return 'Finished';
+  if (!sequenced) return section.numbered ? 'Position in the queue' : '';
+  if (card.step !== null) {
+    return section.id === 'waiting'
+      ? `Step ${card.step} in the queue, once what it waits on is finished`
+      : `Step ${card.step} in the order the queue hands work out (lpm queue simulate)`;
+  }
+  if (section.id === 'next') return 'Not on the board yet: it is numbered once the edit is pushed';
+  if (section.id === 'now') {
+    return card.issue.flag
+      ? 'Flagged: the queue does not carry on with it until somebody clears the flag'
+      : '';
+  }
+  return section.id === 'waiting'
+    ? 'Never reached: it waits on work this queue does not finish, or is flagged'
+    : '';
 }

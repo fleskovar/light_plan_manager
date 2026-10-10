@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { BoardPaths, LoadedBoard } from '../src/core/index.js';
+import type { BoardPaths, LoadedBoard, PlanningMode } from '../src/core/index.js';
 import { ISSUE_FILE, initBoard, loadBoard } from '../src/core/index.js';
 
 const created: string[] = [];
@@ -11,11 +11,27 @@ const created: string[] = [];
  *
  * Without the omni periods `lpm init` seeds by default, so a test states its
  * own timeline; pass `{ omni: true }` to get the board a person would.
+ *
+ * In `periods` mode, although `lpm init` starts a board in `queue` mode: most
+ * tests build a timeline to check what a sprint does to the queue, and queue
+ * mode ignores every sprint. Pass `{ planning: 'queue' }` for the default board.
  */
-export function makeBoard(template = 'scrum', prefix = 'LP', options: { omni?: boolean } = {}): BoardPaths {
+export function makeBoard(
+  template = 'scrum',
+  prefix = 'LP',
+  options: { omni?: boolean; planning?: PlanningMode } = {},
+): BoardPaths {
   const root = mkdtempSync(path.join(os.tmpdir(), 'lpm-test-'));
   created.push(root);
-  return initBoard({ root, template, prefix, git: false, omni: options.omni ?? false, today: '2026-08-10' }).paths;
+  return initBoard({
+    root,
+    template,
+    prefix,
+    git: false,
+    omni: options.omni ?? false,
+    planning: options.planning ?? 'periods',
+    today: '2026-08-10',
+  }).paths;
 }
 
 export function cleanupBoards(): void {

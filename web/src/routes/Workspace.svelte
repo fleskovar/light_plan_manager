@@ -281,7 +281,9 @@
           <button
             class="reveal side start"
             type="button"
-            title="Show the queue"
+            title={workspace.planning === 'queue'
+              ? 'Show the queue — the board is one continuous queue'
+              : 'Show the queue'}
             onclick={() => {
               workspace.doc.queue.open = true;
               workspace.scheduleSave();

@@ -65,6 +65,7 @@ const config: ConfigDto = {
   hasSquads: false,
   priorityAttribute: '',
   effortAttribute: '',
+  planning: 'periods',
 };
 
 function issue(

@@ -77,17 +77,6 @@ export const DEFAULT_QUEUE_WIDTH = 300;
 export type TypeDisplay = 'node' | 'badge';
 
 /**
- * How this board decides what happens next.
- *
- * `periods` plans with the calendar: increments, sprints, and the drawer's
- * Periods and Gantt tabs. `queue` does not plan at all — work is taken off a
- * queue as the graph unblocks it, and the drawer offers that queue instead.
- * Both read the same documents; the difference is which question the app puts
- * in front of you, and a board with no period types only ever has the second.
- */
-export type Planning = 'periods' | 'queue';
-
-/**
  * Which collection this view is a canvas over.
  *
  * `board` is the ordinary one: issues, arranged and scheduled. `templates`
@@ -114,8 +103,6 @@ export interface ViewDocument {
   queue: QueuePanelState;
   /** Issue type -> how the canvas draws it. A type that is absent is a node. */
   display: Record<string, TypeDisplay>;
-  /** Whether this view plans with periods or works straight from the queue. */
-  planning: Planning;
   /** Whether this view is a canvas over the board or over the registry. */
   mode: ViewMode;
 }
@@ -144,7 +131,6 @@ export function emptyView(id: string, name: string, now = new Date().toISOString
     panel: { open: false, pinned: false, width: DEFAULT_PANEL_WIDTH },
     queue: { open: true, width: DEFAULT_QUEUE_WIDTH },
     display: {},
-    planning: 'periods',
     mode: 'board',
   };
 }
