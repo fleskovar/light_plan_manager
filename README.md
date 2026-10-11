@@ -6,6 +6,11 @@ A lightweight, file-based issue tracker. Your Agile board lives in your repo as
 folders and markdown files, versioned with git — no server, no database, no
 account.
 
+Specifically designed for agentic workflows:
+- Ships with an MCP server and agent skills.
+- Integrated work queue that provides agents with optimized context on the tasks to perform.
+- Helps the human in the loop to review work, implement control gates and determine how the development pipline get executed.
+
 ## Install
 
 Requires Node 20+. The package is `light-plan` and the command it installs is
@@ -3158,7 +3163,10 @@ teammate who pulls your branch sees the same canvas you were looking at.
   allowed values, the default and the description.
 
   **Statuses** shows each status in board order, with its label, its id, its
-  flags and the number of issues in the status.
+  flags and the number of issues in the status. **Set as default** on a status
+  writes its id to the key `default_status`, so each new issue gets that
+  status. The button is disabled on a terminal status, because each new issue
+  would start finished.
 
   **Templates** saves the config as a [board template](#templates) and selects
   the template that `lpm init` uses by default.
@@ -3179,7 +3187,7 @@ teammate who pulls your branch sees the same canvas you were looking at.
   The server refuses these changes, and the dialog disables the button:
 
   - Removing a type that a document has, or a status that an issue holds.
-  - Removing the default status.
+  - Removing the default status. Make another status the default first.
   - Removing an enum value that a document holds.
   - Inserting a level above existing documents. A document keeps its folder, so
     each document at that depth then sits one level above the level of its
@@ -3193,10 +3201,20 @@ teammate who pulls your branch sees the same canvas you were looking at.
   pushed, because an unpushed change can name the old type.
 
   The dialog does not edit the flags `atomic`, `generic`, `active` and
-  `terminal`, the keys `default_status`, `priority_attribute` and
-  `effort_attribute`, the body of a type, or the default of an attribute. Edit
-  those in `.lpm/config.yml`. A renamed enum value is also a hand edit: the
-  dialog adds and removes values and does not rename one.
+  `terminal`, the keys `priority_attribute` and `effort_attribute`, the body of
+  a type, or the default of an attribute. Edit those in `.lpm/config.yml`. A
+  renamed enum value is also a hand edit: the dialog adds and removes values
+  and does not rename one.
+
+  Two buttons at the top of the dialog take you to that file. **Open** opens
+  `.lpm/config.yml` with the program that the computer uses for a YAML file.
+  **Show in explorer** shows the file in the file manager: Explorer on Windows
+  and Finder on macOS. On Linux the button opens the folder `.lpm`, because
+  `xdg-open` cannot select a file. Both buttons act on the computer that runs
+  `lpm ui`. The app reads the board again every five seconds, so the dialog
+  shows a change about five seconds after you save the file. While the file
+  does not validate, the app cannot read the board: the dialog keeps the last
+  valid values and shows no message. `lpm check` prints the reason.
 
   A config edit writes the file through the `yaml` library. Comments and key
   order stay. A flow mapping loses the spaces inside its braces: `{ a: b }`

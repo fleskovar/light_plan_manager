@@ -8,7 +8,8 @@
   /**
    * The statuses of the board, in the order of the key `statuses` in
    * `.lpm/config.yml`. The tab changes the label and the id of a status, adds a
-   * status at a position, and removes a status that no issue holds.
+   * status at a position, removes a status that no issue holds, and chooses
+   * the default status, which each new issue gets.
    */
   interface Props {
     editor: ConfigEditor;
@@ -52,6 +53,13 @@
     if (done) open = null;
   }
 
+  async function setDefault(row: StatusRow): Promise<void> {
+    await editor.apply(
+      [{ op: 'set-default-status', status: row.id }],
+      `Each new issue now gets the status "${row.id}".`,
+    );
+  }
+
   async function remove(row: StatusRow): Promise<void> {
     if (await editor.apply([{ op: 'remove-status', status: row.id }], `Removed the status "${row.id}".`)) {
       open = null;
@@ -62,7 +70,7 @@
     row.issues > 0
       ? `${count(row.issues, 'issue')} in this status. Move them to another status first.`
       : row.isDefault
-        ? 'Each new issue gets this status. Change default_status in .lpm/config.yml first.'
+        ? 'Each new issue gets this status. Make another status the default first.'
         : 'Remove this status';
 </script>
 
@@ -77,6 +85,18 @@
         {#if row.terminal}<span class="flag" title="Work in this status is finished">terminal</span>{/if}
         <span class="uses">{count(row.issues, 'issue')}</span>
         <span class="grow"></span>
+        {#if !row.isDefault}
+          <Button
+            size="sm"
+            disabled={editor.busy || row.terminal}
+            title={row.terminal
+              ? 'A terminal status cannot be the default: each new issue would start finished.'
+              : `Give each new issue the status "${row.id}"`}
+            onclick={() => setDefault(row)}
+          >
+            Set as default
+          </Button>
+        {/if}
         <Button size="sm" disabled={editor.busy} onclick={() => (open = { form: 'rename', status: row.id })}>
           Rename
         </Button>
@@ -139,8 +159,8 @@
 {/if}
 
 <p class="note">
-  The flags <code>active</code> and <code>terminal</code> and the key <code>default_status</code> are edited in
-  <code>.lpm/config.yml</code>.
+  The flags <code>active</code> and <code>terminal</code> are edited in <code>.lpm/config.yml</code>. The button
+  <strong>Open</strong> at the top of the dialog opens that file.
 </p>
 
 <style>

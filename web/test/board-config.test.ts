@@ -213,6 +213,8 @@ describe('the editor', () => {
       saveBoardTemplate: vi.fn(async () => templates),
       setDefaultBoardTemplate: vi.fn(async (name: string) => ({ ...templates, default: name })),
       removeBoardTemplate: vi.fn(async () => templates),
+      openConfigFile: vi.fn(async () => ({ path: '/work/.lpm/config.yml' })),
+      revealConfigFile: vi.fn(async () => ({ path: '/work/.lpm/config.yml' })),
       ...overrides,
     };
   }
@@ -291,6 +293,50 @@ describe('the editor', () => {
       details: ['2 documents have this type.'],
     });
     expect(editor.done).toBeNull();
+  });
+
+  it('asks the server to open the config file and to show it, and reports the path', async () => {
+    const workspace = makeWorkspace();
+    const client = clientOf();
+    const editor = new ConfigEditor({ workspace, workspaces: () => [workspace] }, client);
+
+    expect(await editor.openFile()).toBe(true);
+    expect(client.openConfigFile).toHaveBeenCalledTimes(1);
+    expect(editor.done?.notes[0]).toBe('/work/.lpm/config.yml');
+
+    expect(await editor.revealFile()).toBe(true);
+    expect(client.revealConfigFile).toHaveBeenCalledTimes(1);
+    expect(editor.done).toEqual({
+      message: 'Asked the file manager to show the config file.',
+      notes: ['/work/.lpm/config.yml'],
+    });
+  });
+
+  it('keeps the reason when the desktop program does not start', async () => {
+    const workspace = makeWorkspace();
+    const client = clientOf({
+      openConfigFile: vi.fn(async () => {
+        throw new ApiError('Could not open the file', ['The file is /work/.lpm/config.yml'], 400);
+      }),
+    });
+    const editor = new ConfigEditor({ workspace, workspaces: () => [workspace] }, client);
+
+    expect(await editor.openFile()).toBe(false);
+    expect(editor.problem).toEqual({
+      message: 'Could not open the file',
+      details: ['The file is /work/.lpm/config.yml'],
+    });
+  });
+
+  it('sends the edit that makes a status the default', async () => {
+    serverRenamed();
+    const workspace = makeWorkspace();
+    const client = clientOf();
+    const editor = new ConfigEditor({ workspace, workspaces: () => [workspace] }, client);
+
+    await editor.apply([{ op: 'set-default-status', status: 'in_review' }], 'Each new issue now gets the status "in_review".');
+
+    expect(client.editConfig).toHaveBeenCalledWith([{ op: 'set-default-status', status: 'in_review' }]);
   });
 
   it('reads the templates, saves one and sets the default', async () => {

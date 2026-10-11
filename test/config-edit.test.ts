@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { BoardPaths } from '../src/core/index.js';
 import {
@@ -292,10 +292,52 @@ describe('statuses', () => {
     expect(reload(paths).config.statuses.map((status) => status.id)).not.toContain('ready');
   });
 
+  it('makes another status the default by writing the key `default_status`', () => {
+    const paths = seed();
+    const result = editBoardConfig(paths, [{ op: 'set-default-status', status: 'ready' }]);
+
+    expect(reload(paths).config.default_status).toBe('ready');
+    expect(configOf(paths)).toMatch(/^default_status: ready$/m);
+    expect(result.rewritten).toBe(0);
+    // A new issue gets the new default, and the old default can now be removed once it is empty.
+    expect(createIssue(reload(paths), { type: 'program', title: 'Later' }).status).toBe('ready');
+  });
+
+  it('adds the key after `statuses` when the config has none', () => {
+    const paths = makeBoard('scrum', 'LP');
+    writeFileSync(paths.configPath, configOf(paths).replace(/^default_status: backlog\n/m, ''), 'utf8');
+    expect(reload(paths).config.default_status).toBe('backlog');
+
+    editBoardConfig(paths, [{ op: 'set-default-status', status: 'ready' }]);
+
+    const text = configOf(paths);
+    expect(reload(paths).config.default_status).toBe('ready');
+    expect(text.indexOf('default_status: ready')).toBeGreaterThan(text.indexOf('statuses:'));
+    expect(text.indexOf('default_status: ready')).toBeLessThan(text.indexOf('hierarchy:'));
+  });
+
+  it('writes nothing when the status is the default already, and refuses a terminal status', () => {
+    const paths = seed();
+    const before = configOf(paths);
+
+    editBoardConfig(paths, [{ op: 'set-default-status', status: 'backlog' }]);
+    expect(configOf(paths)).toBe(before);
+
+    const error = refusal(() => editBoardConfig(paths, [{ op: 'set-default-status', status: 'done' }]));
+    expect(error.message).toBe('Cannot make "done" the default status');
+    expect(refusal(() => editBoardConfig(paths, [{ op: 'set-default-status', status: 'nope' }])).message).toBe(
+      'No status with the id "nope"',
+    );
+    expect(configOf(paths)).toBe(before);
+  });
+
   it('refuses to remove the default status', () => {
     const paths = makeBoard('scrum', 'LP');
     const error = refusal(() => editBoardConfig(paths, [{ op: 'remove-status', status: 'backlog' }]));
-    expect(error.details[0]).toBe('It is the default status, which each new issue gets.');
+    expect(error.details).toEqual([
+      'It is the default status, which each new issue gets.',
+      'Make another status the default first.',
+    ]);
   });
 });
 

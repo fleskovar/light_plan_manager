@@ -49,10 +49,21 @@
   const tab = $derived<ConfigTab>(shell.configTab ?? 'types');
 
   const config = $derived(workspace.config);
+
+  /** The scrolling pane. A new tab starts at its top, not where the last tab was scrolled. */
+  let pane = $state<HTMLElement | null>(null);
+  $effect(() => {
+    void tab;
+    if (pane) pane.scrollTop = 0;
+  });
   const otherPlanning = $derived(workspace.planning === 'queue' ? 'periods' : 'queue');
 </script>
 
-<Modal title="Board configuration" size="lg" {onclose}>
+<Modal title="Board configuration" size="lg" fixedHeight {onclose}>
+  <!-- Three rows in a dialog of one height. The top row and the message row
+       keep their place, and only the pane of the tab scrolls. So the tabs and
+       the buttons above them do not move when the reader changes the tab. -->
+  <div class="top">
   <dl class="facts">
     <div><dt>Board</dt><dd>{config.boardName}</dd></div>
     <div>
@@ -88,6 +99,28 @@
     file at once. A new name for a type, a status or an attribute is also written to every document that
     holds the old name.
   </p>
+  <!-- The file holds more than the dialog edits: the flags of a type and of a
+       status, the body of a type and the default of an attribute. The two
+       buttons take the reader to the file itself. -->
+  <div class="file">
+    <Button
+      size="sm"
+      disabled={editor.busy}
+      title="Open .lpm/config.yml in the program that this computer uses for a YAML file"
+      onclick={() => void editor.openFile()}
+    >
+      Open
+    </Button>
+    <Button
+      size="sm"
+      disabled={editor.busy}
+      title="Show .lpm/config.yml in the file manager of this computer"
+      onclick={() => void editor.revealFile()}
+    >
+      Show in explorer
+    </Button>
+    <span class="hint">Edit the YAML file yourself. The dialog shows what you save.</span>
+  </div>
 
   <Tabs
     tabs={[
@@ -99,7 +132,24 @@
     active={tab}
     onselect={(id) => shell.openConfig(id)}
   />
+  </div>
 
+  <div class="pane" bind:this={pane}>
+    {#if tab === 'types'}
+      <TypesTab {editor} />
+    {:else if tab === 'statuses'}
+      <StatusesTab {editor} />
+    {:else if tab === 'remote'}
+      <RemoteBoardTab />
+    {:else}
+      <TemplatesTab {editor} />
+    {/if}
+  </div>
+
+  <!-- The message of the last action sits under the pane and above the footer.
+       There it is on screen wherever the pane is scrolled, and it takes its
+       room from the bottom of the pane, so the content of the pane does not
+       shift. -->
   {#if editor.problem}
     <div class="strip problem" role="alert">
       <strong>{editor.problem.message}</strong>
@@ -123,18 +173,6 @@
       {/if}
     </div>
   {/if}
-
-  <div class="pane">
-    {#if tab === 'types'}
-      <TypesTab {editor} />
-    {:else if tab === 'statuses'}
-      <StatusesTab {editor} />
-    {:else if tab === 'remote'}
-      <RemoteBoardTab />
-    {:else}
-      <TemplatesTab {editor} />
-    {/if}
-  </div>
 
   {#snippet footer()}
     <Button variant="primary" onclick={onclose}>Done</Button>
@@ -182,13 +220,33 @@
   }
 
   .lede {
-    margin: 0 0 var(--space-3);
+    margin: 0 0 var(--space-2);
     color: var(--ink-muted);
     font-size: var(--text-sm);
     line-height: 1.5;
   }
 
+  .file {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+
+  .hint {
+    color: var(--ink-faint);
+    font-size: var(--text-xs);
+  }
+
+  .top {
+    flex: none;
+  }
+
   .strip {
+    flex: none;
+    max-height: 30%;
+    overflow: auto;
     margin-top: var(--space-3);
     padding: var(--space-2) var(--space-3);
     border-radius: var(--radius-md);
@@ -213,6 +271,11 @@
   }
 
   .pane {
-    margin-top: var(--space-4);
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    margin-top: var(--space-3);
+    /* Room for the scroll bar, so it does not cover the buttons at the right edge. */
+    padding-right: var(--space-2);
   }
 </style>

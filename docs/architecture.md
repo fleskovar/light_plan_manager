@@ -1023,6 +1023,26 @@ Things to keep true here:
   of the open dialogs and only the newest one closes on Escape. Before the
   stack, each dialog listened on the window and one key press closed them all.
 
+  The configuration dialog has one height, which the prop `fixedHeight` of
+  `Modal.svelte` sets: the lesser of 85% of the window and 48rem. Without the
+  prop a dialog is as tall as its content, so this dialog changed height with
+  each tab and its tabs moved under the pointer. With the prop, the body of the
+  dialog does not scroll. `BoardConfigDialog.svelte` holds three rows: the top
+  row with the tabs, the pane of the open tab, and the message of the last
+  action. Only the pane scrolls. A dialog with tabs must set `fixedHeight` and
+  mark its scrolling part with `flex: 1; min-height: 0; overflow: auto`.
+
+  **Two routes start a program on the desktop, and neither takes a path.**
+  `POST /api/config/file/open` and `POST /api/config/file/reveal` open
+  `.lpm/config.yml` and show it in the file manager, through
+  `server/desktop.ts`. A browser page cannot do either, and `lpm ui` runs on
+  the machine of its user, so the server does. The file is always
+  `paths.configPath`. A route that read the path from the request would let
+  any page that reaches the port start a program on any file, so do not add
+  one: add a route for the one file that the feature needs. `desktopCommand`
+  holds the command of each platform as data. `ServerOptions.desktopLauncher`
+  is the seam that `test/server.test.ts` uses, so no test opens an editor.
+
   No CLI command and no MCP tool calls `editBoardConfig` yet. Each one that is
   added must call that function and must not edit the config another way.
 - **A board template is a config file, and the user folder holds the ones a

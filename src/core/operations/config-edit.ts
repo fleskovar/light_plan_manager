@@ -442,12 +442,33 @@ function removeStatus(work: Work, edit: Extract<ConfigEdit, { op: 'remove-status
   if (work.config.default_status === edit.status) {
     throw new BoardError(`Cannot remove the status "${edit.status}"`, [
       'It is the default status, which each new issue gets.',
-      `Set default_status in ${LPM_DIR}/${CONFIG_FILE} to another status first.`,
+      'Make another status the default first.',
     ]);
   }
   const seq = statusSeq(work);
   seq.items.splice(seq.items.indexOf(node), 1);
   followInRemotes(work, 'statuses', edit.status, null);
+}
+
+function setDefaultStatus(work: Work, edit: Extract<ConfigEdit, { op: 'set-default-status' }>): void {
+  statusNode(work, edit.status);
+  const status = work.config.statuses.find((entry) => entry.id === edit.status)!;
+  if (status.terminal) {
+    throw new BoardError(`Cannot make "${edit.status}" the default status`, [
+      'It is a terminal status. Each new issue gets the default status, so each new issue would start finished.',
+    ]);
+  }
+  if (work.config.default_status === edit.status) return;
+
+  const root = work.doc.contents as YAMLMap;
+  if (root.has('default_status')) {
+    setScalar(root, 'default_status', edit.status);
+    return;
+  }
+  // The key is absent, so the first status was the default. The new key goes
+  // after `statuses`, where the shipped configs hold it.
+  const after = root.items.findIndex((pair) => keyOf(pair) === 'statuses');
+  root.items.splice(after + 1, 0, work.doc.createPair('default_status', edit.status));
 }
 
 // -- attributes --------------------------------------------------------------
@@ -602,6 +623,8 @@ function applyEdit(work: Work, edit: ConfigEdit): void {
       return updateStatus(work, edit);
     case 'remove-status':
       return removeStatus(work, edit);
+    case 'set-default-status':
+      return setDefaultStatus(work, edit);
     case 'add-attribute':
       return addAttribute(work, edit);
     case 'update-attribute':
@@ -632,6 +655,8 @@ export function describeConfigEdit(edit: ConfigEdit): string {
         : `relabel the status ${edit.status}`;
     case 'remove-status':
       return `remove the status ${edit.status}`;
+    case 'set-default-status':
+      return `make ${edit.status} the default status`;
     case 'add-attribute':
       return `add the attribute ${edit.name} to ${edit.type}`;
     case 'update-attribute':

@@ -5,6 +5,7 @@ import type { ServerInfoDto } from '../shared/index.js';
 import { sendError, sendJson } from './http/respond.js';
 import { Router } from './http/router.js';
 import { staticServer } from './http/static.js';
+import type { DesktopLauncher } from './desktop.js';
 import { boardRoutes } from './routes/board.js';
 import { commentRoutes } from './routes/comments.js';
 import { configRoutes } from './routes/config.js';
@@ -55,11 +56,17 @@ export interface ServerOptions {
    * sharing and nothing else; `lpm ui --experimental` turns it on.
    */
   experimental?: boolean;
+  /**
+   * Starts the program that opens a file or shows it in the file manager. The
+   * default starts a real program. A test passes a recorder.
+   */
+  desktopLauncher?: DesktopLauncher;
 }
 
 /** What `buildRouter` needs to know about how the server was started. */
 export interface RouterOptions {
   experimental?: boolean;
+  desktopLauncher?: DesktopLauncher;
 }
 
 export const DEFAULT_PORT = 4571;
@@ -77,7 +84,7 @@ export function buildRouter(paths: BoardPaths, options: RouterOptions = {}): Rou
   flagRoutes(router, paths);
   meRoutes(router, paths);
   planningRoutes(router, paths);
-  configRoutes(router, paths);
+  configRoutes(router, paths, options.desktopLauncher);
   viewRoutes(router, paths);
   // Not registered at all rather than refused per request: the web app hides
   // the tracker surface when `experimental` is false, and a route that is not
@@ -119,7 +126,10 @@ function isLoopbackOrigin(origin: string): boolean {
 }
 
 export function createBoardServer(paths: BoardPaths, options: ServerOptions = {}): Server {
-  const router = buildRouter(paths, { experimental: options.experimental });
+  const router = buildRouter(paths, {
+    experimental: options.experimental,
+    desktopLauncher: options.desktopLauncher,
+  });
   const assets = options.serveApp === false ? null : staticServer();
 
   return createServer((req, res) => {

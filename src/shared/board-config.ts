@@ -57,6 +57,8 @@ export type ConfigEdit =
   | { op: 'update-status'; status: string; id?: string; label?: string }
   /** Remove a status that no issue holds. */
   | { op: 'remove-status'; status: string }
+  /** Make a status the one that each new issue gets. Writes the key `default_status`. */
+  | { op: 'set-default-status'; status: string }
   | {
       op: 'add-attribute';
       kind: ConfigNamespace;
@@ -93,6 +95,15 @@ export interface ConfigEditResultDto {
   renamedTypes: Record<string, string>;
   /** Each file outside the documents that the edits also changed, and each reference that the edits did not follow. */
   notes: string[];
+}
+
+/**
+ * The answer of `POST /api/config/file/open` and `POST /api/config/file/reveal`:
+ * the file that the desktop was asked to open or to show.
+ */
+export interface ConfigFileDto {
+  /** The absolute path of `.lpm/config.yml`. */
+  path: string;
 }
 
 /** One board template that `lpm init --template` accepts by name. */

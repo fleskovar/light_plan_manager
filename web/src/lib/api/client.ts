@@ -5,6 +5,7 @@ import type {
   CommentDto,
   ConfigEdit,
   ConfigEditResultDto,
+  ConfigFileDto,
   CurrentUserDto,
   GitDisableRequest,
   GitSetupRequest,
@@ -188,6 +189,14 @@ export const api = {
   // document that holds a renamed name in the same call.
   editConfig: (edits: ConfigEdit[]): Promise<ConfigEditResultDto> =>
     request('/api/config/edits', send('POST', { edits })),
+
+  // Open `.lpm/config.yml` with the program that the desktop uses for a YAML
+  // file, or show the file in the file manager. The server does it, on the
+  // machine that runs `lpm ui`, because a browser page cannot. The request
+  // names no path: the file is always the config of the served board.
+  openConfigFile: (): Promise<ConfigFileDto> => request('/api/config/file/open', send('POST')),
+
+  revealConfigFile: (): Promise<ConfigFileDto> => request('/api/config/file/reveal', send('POST')),
 
   // The board templates of the user folder, which `lpm init` accepts by name.
   boardTemplates: (): Promise<BoardTemplatesDto> => request('/api/board-templates'),

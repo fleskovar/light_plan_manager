@@ -16,12 +16,21 @@
     title: string;
     /** Width of the dialog; wide dialogs (the import table) ask for 'lg'. */
     size?: 'sm' | 'md' | 'lg';
+    /**
+     * Give the dialog one height, whatever it holds. Without it the dialog is
+     * as tall as its content, up to 85% of the window. A dialog with tabs sets
+     * this, or the dialog changes height with each tab and its controls move.
+     *
+     * With it, the body does not scroll. The body is a column, and the caller
+     * marks the part that scrolls with `flex: 1; min-height: 0; overflow: auto`.
+     */
+    fixedHeight?: boolean;
     onclose: () => void;
     children: Snippet;
     footer?: Snippet;
   }
 
-  let { title, size = 'md', onclose, children, footer }: Props = $props();
+  let { title, size = 'md', fixedHeight = false, onclose, children, footer }: Props = $props();
 
   const self = Symbol('modal');
 
@@ -49,12 +58,19 @@
   role="presentation"
   onclick={(event) => event.target === event.currentTarget && onclose()}
 >
-  <div class="dialog {size}" role="dialog" aria-modal="true" aria-label={title} tabindex="-1">
+  <div
+    class="dialog {size}"
+    class:fixed={fixedHeight}
+    role="dialog"
+    aria-modal="true"
+    aria-label={title}
+    tabindex="-1"
+  >
     <header>
       <h2>{title}</h2>
       <button class="close" type="button" onclick={onclose} aria-label="Close">×</button>
     </header>
-    <div class="body">{@render children()}</div>
+    <div class="body" class:column={fixedHeight}>{@render children()}</div>
     {#if footer}
       <footer>{@render footer()}</footer>
     {/if}
@@ -81,6 +97,12 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
+  }
+
+  /* The lesser of 85% of the window and 48rem: a tall monitor does not get a
+     dialog that is mostly empty, and a small window still shows the footer. */
+  .dialog.fixed {
+    height: min(85vh, 48rem);
   }
 
   .sm {
@@ -120,6 +142,13 @@
     flex: 1;
     overflow: auto;
     padding: var(--space-4);
+  }
+
+  .body.column {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
   }
 
   footer {

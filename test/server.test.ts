@@ -14,6 +14,7 @@ import {
   setCurrentUser,
 } from '../src/core/index.js';
 import { startBoardServer } from '../src/server/index.js';
+import { desktopCommand, type DesktopCommand } from '../src/server/desktop.js';
 import { parseView } from '../src/server/views/schema.js';
 import { applyChanges } from '../src/sync/apply.js';
 import type {
@@ -938,6 +939,54 @@ describe('the board configuration routes', () => {
       });
 
       expect((await send(`${running.url}/api/config/edits`, 'POST', { edits: [] })).status).toBe(400);
+    } finally {
+      running.server.close();
+    }
+  });
+
+  it('asks the desktop to open the config file and to show it, and never takes a path from the request', async () => {
+    const paths = seed();
+    const started: DesktopCommand[] = [];
+    const running = await startBoardServer(paths, {
+      port: 0,
+      serveApp: false,
+      desktopLauncher: async (command) => {
+        started.push(command);
+      },
+    });
+    try {
+      const opened = await send(`${running.url}/api/config/file/open`, 'POST', { path: '/etc/passwd' });
+      expect(opened.status).toBe(200);
+      expect(await opened.json()).toEqual({ path: paths.configPath });
+
+      const shown = await send(`${running.url}/api/config/file/reveal`, 'POST');
+      expect(await shown.json()).toEqual({ path: paths.configPath });
+
+      expect(started).toEqual([
+        desktopCommand('open', paths.configPath),
+        desktopCommand('reveal', paths.configPath),
+      ]);
+      expect(JSON.stringify(started)).not.toContain('passwd');
+    } finally {
+      running.server.close();
+    }
+  });
+
+  it('answers 400 with the path when the desktop program does not start', async () => {
+    const paths = seed();
+    const running = await startBoardServer(paths, {
+      port: 0,
+      serveApp: false,
+      desktopLauncher: async () => {
+        throw new Error('spawn ENOENT');
+      },
+    });
+    try {
+      const response = await send(`${running.url}/api/config/file/open`, 'POST');
+      expect(response.status).toBe(400);
+      const body = (await response.json()) as { error: string; details: string[] };
+      expect(body.error).toBe('Could not open the file');
+      expect(body.details.at(-1)).toBe(`The file is ${paths.configPath}`);
     } finally {
       running.server.close();
     }

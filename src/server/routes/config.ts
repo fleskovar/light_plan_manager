@@ -11,9 +11,12 @@ import {
 import type {
   BoardTemplatesDto,
   ConfigEditRequest,
+  ConfigFileDto,
   ConfigEditResultDto,
   SaveBoardTemplateRequest,
 } from '../../shared/index.js';
+import type { DesktopAction, DesktopLauncher } from '../desktop.js';
+import { onDesktop } from '../desktop.js';
 import { pullBeforeWrite } from '../git.js';
 import { HttpError, readJson, sendJson } from '../http/respond.js';
 import type { Router } from '../http/router.js';
@@ -32,8 +35,15 @@ import { renameViewTypes } from '../views/store.js';
  * The four `/api/board-templates` routes read and write the user folder
  * (`~/.light-plan`), which holds the templates that `lpm init` accepts by name
  * and the template that `lpm init` uses by default. They change no board.
+ *
+ * `POST /api/config/file/open` opens `.lpm/config.yml` with the program that
+ * the desktop uses for a YAML file, and `POST /api/config/file/reveal` shows
+ * the file in the file manager. Both act on the machine that runs `lpm ui`.
+ * Neither reads a path from the request: the file is always the config of the
+ * board that the server serves. `launcher` is a seam for the tests, which must
+ * not start a program.
  */
-export function configRoutes(router: Router, paths: BoardPaths): void {
+export function configRoutes(router: Router, paths: BoardPaths, launcher?: DesktopLauncher): void {
   const templates = (): BoardTemplatesDto => ({
     templates: listBoardTemplates().map(({ name, source }) => ({ name, source })),
     default: defaultBoardTemplate(),
@@ -50,6 +60,14 @@ export function configRoutes(router: Router, paths: BoardPaths): void {
     renameViewTypes(paths, result.renamedTypes);
     sendJson(res, 200, result);
   });
+
+  const desktop = (action: DesktopAction) => async ({ res }: { res: Parameters<typeof sendJson>[0] }) => {
+    await onDesktop(action, paths.configPath, launcher);
+    const dto: ConfigFileDto = { path: paths.configPath };
+    sendJson(res, 200, dto);
+  };
+  router.post('/api/config/file/open', desktop('open'));
+  router.post('/api/config/file/reveal', desktop('reveal'));
 
   router.get('/api/board-templates', ({ res }) => {
     sendJson(res, 200, templates());

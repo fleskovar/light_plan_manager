@@ -17,7 +17,13 @@ import type { Workspace } from '$lib/workspace/workspace.svelte.js';
 /** The parts of the API client that the editor calls. A test passes a fake. */
 export type ConfigClient = Pick<
   typeof api,
-  'editConfig' | 'boardTemplates' | 'saveBoardTemplate' | 'setDefaultBoardTemplate' | 'removeBoardTemplate'
+  | 'editConfig'
+  | 'boardTemplates'
+  | 'saveBoardTemplate'
+  | 'setDefaultBoardTemplate'
+  | 'removeBoardTemplate'
+  | 'openConfigFile'
+  | 'revealConfigFile'
 >;
 
 export interface EditorHost {
@@ -129,6 +135,31 @@ export class ConfigEditor {
     return this.#run(async () => {
       this.templates = await this.#client.removeBoardTemplate(name);
       this.done = { message: `Deleted the template "${name}".`, notes: [] };
+      return true;
+    });
+  }
+
+  /**
+   * Ask the server to open `.lpm/config.yml` in the program that the desktop
+   * uses for a YAML file. The app reads the board again every five seconds, so
+   * a change that a person saves in that program reaches the dialog.
+   */
+  async openFile(): Promise<boolean> {
+    return this.#run(async () => {
+      const { path } = await this.#client.openConfigFile();
+      this.done = {
+        message: 'Asked the desktop to open the config file.',
+        notes: [path, 'The dialog shows a change about five seconds after you save the file.'],
+      };
+      return true;
+    });
+  }
+
+  /** Ask the server to show `.lpm/config.yml` in the file manager. */
+  async revealFile(): Promise<boolean> {
+    return this.#run(async () => {
+      const { path } = await this.#client.revealConfigFile();
+      this.done = { message: 'Asked the file manager to show the config file.', notes: [path] };
       return true;
     });
   }
