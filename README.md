@@ -9,7 +9,7 @@ account.
 Specifically designed for agentic workflows:
 - Ships with an MCP server and agent skills.
 - Integrated work queue that provides agents with optimized context on the tasks to perform.
-- Helps the human in the loop to review work, implement control gates and determine how the development pipline get executed.
+- Helps the human in the loop to review work, implement control gates and determine how the development pipeline gets executed.
 
 ## Install
 
