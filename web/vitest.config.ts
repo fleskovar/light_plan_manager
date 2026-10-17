@@ -12,9 +12,21 @@ const here = path.dirname(fileURLToPath(import.meta.url));
  *
  * The svelte plugin is here for the `.svelte.ts` stores: runes are a compile
  * step, so a class using `$state` has to go through it even outside a browser.
+ *
+ * Vitest runs these tests in the Vite environment whose consumer is `server`.
+ * Two settings make that environment run runes the way the browser does:
+ *
+ * - The plugin compiles each module with `generate: 'server'` by default. In
+ *   that output `$effect` and `$effect.root` do nothing. The option
+ *   `dynamicCompileOptions` sets `generate: 'client'`.
+ * - `resolve.conditions` applies only to the client environment. Without the
+ *   `ssr.resolve` conditions, `import { flushSync } from 'svelte'` loads the
+ *   server build, where `flushSync` does nothing.
+ *
+ * `test/flag-form.svelte.test.ts` depends on both settings.
  */
 export default defineConfig({
-  plugins: [svelte()],
+  plugins: [svelte({ dynamicCompileOptions: () => ({ generate: 'client' }) })],
   resolve: {
     conditions: ['browser'],
     alias: {
@@ -23,5 +35,6 @@ export default defineConfig({
       $features: path.resolve(here, 'src/features'),
     },
   },
+  ssr: { resolve: { conditions: ['browser'], externalConditions: ['browser'] } },
   test: { include: ['test/**/*.test.ts'] },
 });

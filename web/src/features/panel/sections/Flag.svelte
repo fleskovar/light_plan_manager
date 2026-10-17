@@ -2,6 +2,7 @@
   import type { IssueDto } from '$shared';
   import { FLAG_REASONS, flagLabel, isTempId } from '$shared';
   import Button from '$lib/ui/Button.svelte';
+  import { FlagForm } from './flag-form.svelte.js';
 
   /**
    * Raising and clearing the flag on an issue.
@@ -19,27 +20,16 @@
 
   let { issue, onflag }: Props = $props();
 
-  let open = $state(false);
-  let reason = $state<string>('blocked');
-  let note = $state('');
-
   // Per issue: clicking to another one closes the form rather than carrying a
-  // half-written note across.
-  $effect(() => {
-    void issue.id;
-    open = false;
-    note = '';
-    reason = 'blocked';
-  });
+  // half-written note across. `FlagForm` explains why it takes the id and not
+  // the issue object.
+  const form = new FlagForm(() => issue.id);
 
   const unsaved = $derived(isTempId(issue.id));
 
   function submit(clearing: boolean): void {
-    const comment = note.trim();
-    if (!comment) return;
-    onflag(clearing ? null : reason, comment);
-    open = false;
-    note = '';
+    const submission = form.submit(clearing);
+    if (submission) onflag(submission.reason, submission.comment);
   }
 </script>
 
@@ -53,12 +43,12 @@
 
 {#if unsaved}
   <p class="hint">Push this issue before flagging it.</p>
-{:else if open}
+{:else if form.open}
   <div class="form">
     {#if !issue.flag}
       <label>
         <span>Reason</span>
-        <select bind:value={reason}>
+        <select bind:value={form.reason}>
           {#each FLAG_REASONS as option (option)}
             <option value={option}>{flagLabel(option)}</option>
           {/each}
@@ -66,18 +56,18 @@
       </label>
     {/if}
     <textarea
-      bind:value={note}
+      bind:value={form.note}
       rows="3"
       placeholder={issue.flag
         ? 'What changed so work can resume?'
         : 'What stopped, and what would fix it?'}
     ></textarea>
     <div class="actions">
-      <Button size="sm" onclick={() => (open = false)}>Cancel</Button>
+      <Button size="sm" onclick={() => (form.open = false)}>Cancel</Button>
       <Button
         size="sm"
         variant={issue.flag ? 'primary' : 'danger'}
-        disabled={!note.trim()}
+        disabled={!form.note.trim()}
         onclick={() => submit(Boolean(issue.flag))}
       >
         {issue.flag ? 'Clear flag' : 'Flag'}
@@ -86,7 +76,7 @@
   </div>
 {:else}
   <div class="actions">
-    <Button size="sm" variant={issue.flag ? 'primary' : undefined} onclick={() => (open = true)}>
+    <Button size="sm" variant={issue.flag ? 'primary' : undefined} onclick={() => (form.open = true)}>
       {issue.flag ? 'Clear flag…' : 'Flag…'}
     </Button>
   </div>
