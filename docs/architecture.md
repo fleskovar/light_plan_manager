@@ -1802,6 +1802,15 @@ renderer `index.ts` uses) and sets `process.exitCode` itself. Do not reach for
 a second copy of that rendering; `test/cli.test.ts` holds a port and asserts
 the output carries no stack frames.
 
+`lpm ui` starts the server with `serveBoard` in `server/index.ts`. Without
+`--port`, `serveBoard` tries `DEFAULT_PORT_ATTEMPTS` (20) ports from 4571
+upward. With `--port`, it tries that port only. For each taken port,
+`serveBoard` reads `/api/health`. When the server on that port has the same
+board root, `serveBoard` returns the outcome `running` and starts no server.
+When every port is taken, it returns the outcome `taken` instead of a
+rejection, and `ui.ts` reports it through `reportError`.
+`test/server-port.test.ts` covers each outcome.
+
 `util.parseArgs` has no `--no-x` negation: a boolean that defaults on is
 declared as its own `'no-thing'` option (`lpm init --no-git`, `lpm ui
 --no-open`). `lpm ui` and `lpm mcp` are the commands that do not return after

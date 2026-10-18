@@ -54,7 +54,8 @@ periods` switches the board to sprint planning at any time
 starts the board in that mode).
 
 `lpm ui` starts a local server on `http://localhost:4571` and opens the editor
-in your browser. What you change there is held as a draft until you press
+in your browser. When port 4571 is taken, the server uses the next free port, up
+to 4590. What you change there is held as a draft until you press
 **Push**, which writes it to `.lpm/`. Stop the server with Ctrl-C. To build a
 board from the command line instead, see [Quick start](#quick-start).
 
@@ -2768,6 +2769,14 @@ lpm ui --port 8080     # somewhere else
 lpm ui --api-only      # just the JSON API, for the dev server below
 lpm ui --experimental  # also offer features that are not finished yet, for this run
 ```
+
+**Several boards at the same time.** Without `--port`, `lpm ui` tries the ports
+4571 to 4590 in order and serves on the first free port. Run `lpm ui` in each
+checkout, and each board gets its own address. For each taken port, `lpm ui`
+reads `/api/health` from the server on that port. When that server already
+serves the same board, `lpm ui` prints its address, opens it and starts no
+second server. With `--port <n>`, `lpm ui` tries only port `n` and exits with
+code 1 when that port is taken.
 
 The server binds to `127.0.0.1`, serves one board — the checkout it was started
 in — and has no notion of users or sessions. It is the same engine the CLI uses,

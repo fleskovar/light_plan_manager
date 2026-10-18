@@ -191,11 +191,14 @@ tells you what was touched.
 ## Looking at it
 
 ```bash
-lpm ui                 # local editor at 127.0.0.1:4571
-lpm ui --port 0        # pick a free port
+lpm ui                 # local editor at 127.0.0.1:4571, or the next free port up to 4590
+lpm ui --port 0        # let the system pick a free port
 lpm ui --no-open       # do not launch a browser
 lpm ui --api-only      # serve the API only (pair with `npm run dev:web`)
 ```
+
+When an `lpm ui` on one of those ports already serves this board, `lpm ui`
+prints its address and starts no second server.
 
 The server is local-only and edits this checkout's `.lpm`. **Editing is queued**:
 actions update a working copy and a pending list, and nothing is written until

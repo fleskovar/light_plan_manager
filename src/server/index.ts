@@ -1,5 +1,7 @@
 import { createServer } from 'node:http';
 import type { Server } from 'node:http';
+import { realpathSync } from 'node:fs';
+import path from 'node:path';
 import type { BoardPaths } from '../core/index.js';
 import type { ServerInfoDto } from '../shared/index.js';
 import { sendError, sendJson } from './http/respond.js';
@@ -176,6 +178,112 @@ export function createBoardServer(paths: BoardPaths, options: ServerOptions = {}
 export interface RunningServer {
   server: Server;
   url: string;
+}
+
+/**
+ * The number of ports `lpm ui` tries, from `DEFAULT_PORT` upward, when the
+ * command names no port. A second board in a second `lpm ui` takes 4572, a
+ * third board takes 4573, and so on up to 4590.
+ */
+export const DEFAULT_PORT_ATTEMPTS = 20;
+
+/** A bind address as somebody would type it into a browser. */
+export function displayHost(host: string): string {
+  return host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
+}
+
+/**
+ * True when two paths name the same folder. Symbolic links are resolved, and
+ * Windows compares without case.
+ */
+function samePath(a: string, b: string): boolean {
+  const real = (target: string): string => {
+    try {
+      return realpathSync.native(target);
+    } catch {
+      return path.resolve(target);
+    }
+  };
+  const left = real(a);
+  const right = real(b);
+  return process.platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
+
+/**
+ * The board root that an `lpm ui` on `port` serves, read from its
+ * `/api/health`. Returns null when the port answers with something else, or
+ * gives no answer within `timeoutMs`.
+ */
+export async function probeBoardServer(
+  host: string,
+  port: number,
+  timeoutMs = 1000,
+): Promise<string | null> {
+  try {
+    const response = await fetch(`http://${displayHost(host)}:${port}/api/health`, {
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok) return null;
+    const info = (await response.json()) as Partial<ServerInfoDto>;
+    return info.ok === true && typeof info.root === 'string' ? info.root : null;
+  } catch {
+    return null;
+  }
+}
+
+export interface ServeOptions extends ServerOptions {
+  /**
+   * The number of consecutive ports to try, from `port` upward. Defaults to 1:
+   * a taken `port` ends the search. Ignored when `port` is 0.
+   */
+  portAttempts?: number;
+}
+
+/** A taken port, and the board root that an `lpm ui` on it serves, if any. */
+export interface TakenPort {
+  port: number;
+  root: string | null;
+}
+
+export type ServeOutcome =
+  | { kind: 'started'; server: Server; url: string }
+  /** An `lpm ui` on a taken port already serves this board. */
+  | { kind: 'running'; url: string }
+  /** Every port was taken by something other than this board. */
+  | { kind: 'taken'; taken: TakenPort[] };
+
+/**
+ * Serve the board on the first free port from `options.port` upward.
+ *
+ * `serveBoard` tries `options.portAttempts` ports in order. For each taken
+ * port, it reads `/api/health` from the process on that port. When that
+ * process serves the same board, `serveBoard` returns its URL and starts no
+ * second server. Two servers on one board would each hold their own draft.
+ */
+export async function serveBoard(
+  paths: BoardPaths,
+  options: ServeOptions = {},
+): Promise<ServeOutcome> {
+  const host = options.host ?? DEFAULT_HOST;
+  const first = options.port ?? DEFAULT_PORT;
+  const attempts = first === 0 ? 1 : Math.max(1, options.portAttempts ?? 1);
+  const last = Math.min(first + attempts - 1, 65535);
+  const taken: TakenPort[] = [];
+
+  for (let port = first; port <= last; port++) {
+    try {
+      const running = await startBoardServer(paths, { ...options, port });
+      return { kind: 'started', ...running };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw error;
+      const root = await probeBoardServer(host, port);
+      if (root !== null && samePath(root, paths.root)) {
+        return { kind: 'running', url: `http://${displayHost(host)}:${port}` };
+      }
+      taken.push({ port, root });
+    }
+  }
+  return { kind: 'taken', taken };
 }
 
 /** Start the server and resolve once it is accepting connections. */

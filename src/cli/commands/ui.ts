@@ -1,7 +1,14 @@
 import { spawn } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { BoardError, experimentalOf, findBoardPaths, loadConfig } from '../../core/index.js';
-import { DEFAULT_HOST, DEFAULT_PORT, startBoardServer } from '../../server/index.js';
+import {
+  DEFAULT_HOST,
+  DEFAULT_PORT,
+  DEFAULT_PORT_ATTEMPTS,
+  displayHost,
+  serveBoard,
+} from '../../server/index.js';
+import type { TakenPort } from '../../server/index.js';
 import { noBoardFound } from '../context.js';
 import { bold, dim, out, reportError } from '../ui.js';
 
@@ -11,7 +18,9 @@ Usage
   lpm ui [options]
 
 Options
-      --port <n>        Port to listen on (default ${DEFAULT_PORT}; 0 picks a free one)
+      --port <n>        Port to listen on. 0 lets the system pick a free port.
+                        Without --port, the server takes the first free port
+                        from ${DEFAULT_PORT} to ${DEFAULT_PORT + DEFAULT_PORT_ATTEMPTS - 1}.
       --host <address>  Address to bind (default ${DEFAULT_HOST})
       --no-open         Do not launch a browser
       --api-only        Serve the API without the web app
@@ -25,14 +34,13 @@ The experimental features are also on when the key \`experimental\` in
 installs the packages that the features need. With the key absent and no
 --experimental, the Sync tab offers git sharing only.
 
+Each board in its own \`lpm ui\` gets its own port, so you can open several
+boards at the same time. When an \`lpm ui\` on one of those ports already serves
+this board, the command opens that server and starts no second one.
+
 The server is local-only and edits this checkout's .lpm folder. Stop it with
 Ctrl-C. The app writes each edit to the board about 1.5 seconds after you make
 it. On a board with no view, the app creates .lpm/views/default.json.`;
-
-/** A bind address as somebody would type it into a browser. */
-function displayHost(host: string): string {
-  return host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
-}
 
 /** Ask the desktop to open a URL, ignoring the failure when there is no desktop. */
 function openBrowser(url: string): void {
@@ -68,6 +76,9 @@ export function run(args: string[]): number {
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
     throw new BoardError(`Invalid port "${values.port}"`);
   }
+  // A port that the user names is the only port to try. Without --port, the
+  // server searches upward, so each board in its own `lpm ui` gets a port.
+  const portAttempts = values.port === undefined ? DEFAULT_PORT_ATTEMPTS : 1;
   const apiOnly = values['api-only'] === true;
   const host = values.host ?? DEFAULT_HOST;
   // The flag turns the features on for one run. The key `experimental` in
@@ -78,14 +89,28 @@ export function run(args: string[]): number {
   const fromConfig = config !== null && experimentalOf(config);
   const experimental = values.experimental === true || fromConfig;
 
-  void startBoardServer(paths, {
+  void serveBoard(paths, {
     port,
+    portAttempts,
     host,
     serveApp: !apiOnly,
     experimental,
   })
-    .then(({ url }) => {
+    .then((outcome) => {
+      if (outcome.kind === 'taken') {
+        reportError(portsTaken(outcome.taken, host, values.port !== undefined));
+        process.exitCode = 1;
+        return;
+      }
+      const { url } = outcome;
       out(`${bold('light-plan')} ${dim(paths.root)}`);
+      if (outcome.kind === 'running') {
+        // No socket is left open, so the process exits after this message.
+        out(`  ${url}`);
+        out(dim('  Another `lpm ui` already serves this board. No second server started.'));
+        if (!values['no-open'] && !apiOnly) openBrowser(url);
+        return;
+      }
       out(`  ${url}`);
       if (experimental) {
         out(
@@ -103,24 +128,38 @@ export function run(args: string[]): number {
       // Node printed the `BoardError` as an unhandled rejection, stack and all,
       // which reads as a crash for what is an ordinary answer ("something else
       // is on that port"). Everything async in the CLI reports through
-      // `reportError` and sets the exit code itself.
-      const taken = error.code === 'EADDRINUSE';
+      // `reportError` and sets the exit code itself. A taken port does not
+      // arrive here: `serveBoard` returns it as the outcome `taken`.
       reportError(
-        new BoardError(
-          taken ? `Port ${port} is already in use` : `Could not start the server: ${error.message}`,
-          taken
-            ? [
-                'Pass --port <n> to use a different port.',
-                // Nearly always another `lpm ui` on the same checkout, and the
-                // useful thing then is the address rather than a second server.
-                `If that is another \`lpm ui\`, it is already serving http://${displayHost(host)}:${port}`,
-              ]
-            : ['Pass --port <n> to use a different port.'],
-        ),
+        new BoardError(`Could not start the server: ${error.message}`, [
+          'Pass --port <n> to use a different port.',
+        ]),
       );
       process.exitCode = 1;
     });
 
   // The process stays alive on the listening socket until Ctrl-C.
   return 0;
+}
+
+/** The error for a search in which every port was taken by something other than this board. */
+function portsTaken(taken: TakenPort[], host: string, named: boolean): BoardError {
+  const first = taken[0]!;
+  const lastPort = taken[taken.length - 1]!.port;
+  const others = taken.filter((entry) => entry.root !== null);
+  const details = [
+    named
+      ? `Pass --port <n> to use a different port, or leave out --port to take the first free port from ${DEFAULT_PORT}.`
+      : 'Pass --port <n> to use a different port, or --port 0 to let the system pick one.',
+    // Each line names the address, so the user can open a board that already runs.
+    ...others.map(
+      (entry) =>
+        `http://${displayHost(host)}:${entry.port} is another \`lpm ui\`. It serves ${entry.root}`,
+    ),
+  ];
+  const message =
+    taken.length === 1
+      ? `Port ${first.port} is already in use`
+      : `Ports ${first.port} to ${lastPort} are all in use`;
+  return new BoardError(message, details);
 }

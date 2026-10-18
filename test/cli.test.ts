@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -45,6 +45,28 @@ function lpmIn(dir: string, env: Record<string, string>, ...args: string[]): Run
   const stdout = result.stdout ?? '';
   const stderr = result.stderr ?? '';
   return { status: result.status ?? 0, stdout, stderr, all: stdout + stderr };
+}
+
+/**
+ * `lpm` without blocking this process. A case that serves a board from this
+ * process needs it: `spawnSync` stops the event loop, so the server cannot
+ * answer the child.
+ */
+function lpmAsync(...args: string[]): Promise<Run> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [CLI, ...args], {
+      cwd,
+      env: { ...process.env, NO_COLOR: '1', LPM_BOARD_PATH: '' },
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8').on('data', (chunk: string) => (stdout += chunk));
+    child.stderr.setEncoding('utf8').on('data', (chunk: string) => (stderr += chunk));
+    child.once('error', reject);
+    child.once('close', (status) =>
+      resolve({ status: status ?? 0, stdout, stderr, all: stdout + stderr }),
+    );
+  });
 }
 
 /**
@@ -975,14 +997,29 @@ describe('lpm ui', () => {
       expect(run.status).toBe(1);
       expect(run.stderr).toContain(`Port ${port} is already in use`);
       expect(run.stderr).toContain('Pass --port <n>');
-      // The remedy names the address that is already serving, because the other
-      // process is nearly always another `lpm ui` on this same board.
-      expect(run.stderr).toContain(`http://127.0.0.1:${port}`);
       // Not a crash report: no stack frames, no raw object dump.
       expect(run.all).not.toContain('at file:');
       expect(run.all).not.toContain('details: [');
     } finally {
       await new Promise<void>((resolve) => blocker.close(() => resolve()));
+    }
+  });
+
+  it('opens the lpm ui that already serves this board, and starts no second server', async () => {
+    lpm('init', '--template', 'scrum', '--no-git', '--no-omni');
+    const { findBoardPaths } = await import('../src/core/index.js');
+    const { startBoardServer } = await import('../src/server/index.js');
+    const first = await startBoardServer(findBoardPaths(cwd)!, { port: 0, serveApp: false });
+    const port = new URL(first.url).port;
+
+    try {
+      // `lpm` waits for the process to exit, so a status means no socket stayed open.
+      const run = await lpmAsync('ui', '--port', port, '--no-open');
+      expect(run.status).toBe(0);
+      expect(run.stdout).toContain(`http://127.0.0.1:${port}`);
+      expect(run.stdout).toContain('already serves this board');
+    } finally {
+      await new Promise<void>((resolve) => first.server.close(() => resolve()));
     }
   });
 });
