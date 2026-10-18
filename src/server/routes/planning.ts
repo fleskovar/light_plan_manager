@@ -1,8 +1,9 @@
 import type { BoardPaths } from '../../core/index.js';
-import { findResource, loadBoard, planningOf, setPlanning, simulateQueue } from '../../core/index.js';
+import { findResource, planningOf, setPlanning, simulateQueue } from '../../core/index.js';
 import type { Planning, QueueSequenceDto } from '../../shared/index.js';
 import { toQueueSequence } from '../../sync/dto.js';
 import { pullBeforeWrite } from '../git.js';
+import { readBoard } from '../board-cache.js';
 import { HttpError, readJson, sendJson } from '../http/respond.js';
 import type { Router } from '../http/router.js';
 
@@ -22,7 +23,7 @@ import type { Router } from '../http/router.js';
  */
 export function planningRoutes(router: Router, paths: BoardPaths): void {
   router.get('/api/queue', ({ res, query }) => {
-    const board = loadBoard(paths);
+    const board = readBoard(paths);
     const wanted = query.get('resource');
     // The editor shows the whole board whoever is looking, as the panel always
     // has: no profile scope, and nothing parked asked back for.
@@ -39,7 +40,7 @@ export function planningRoutes(router: Router, paths: BoardPaths): void {
     }
     pullBeforeWrite(paths);
     const result = setPlanning(paths, body.planning);
-    const planning: Planning = planningOf(loadBoard(paths).config);
+    const planning: Planning = planningOf(readBoard(paths).config);
     sendJson(res, 200, { planning, changed: result.changed });
   });
 }

@@ -1,6 +1,7 @@
 import type { BoardPaths } from '../../core/index.js';
-import { currentUser, loadBoard } from '../../core/index.js';
+import { currentUser } from '../../core/index.js';
 import type { CurrentUserDto } from '../../shared/index.js';
+import { readBoard } from '../board-cache.js';
 import { sendJson } from '../http/respond.js';
 import type { Router } from '../http/router.js';
 
@@ -11,7 +12,7 @@ import type { Router } from '../http/router.js';
  */
 export function meRoutes(router: Router, paths: BoardPaths): void {
   router.get('/api/me', ({ res }) => {
-    const user = currentUser(loadBoard(paths));
+    const user = currentUser(readBoard(paths));
     const body: CurrentUserDto = { id: user?.resource?.id ?? null, ref: user?.ref ?? null };
     sendJson(res, 200, body);
   });

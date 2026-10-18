@@ -1,6 +1,7 @@
 import type { BoardPaths } from '../../core/index.js';
-import { addComment, listComments, loadBoard, removeComment } from '../../core/index.js';
+import { addComment, listComments, removeComment } from '../../core/index.js';
 import { pullBeforeWrite } from '../git.js';
+import { readBoard } from '../board-cache.js';
 import { HttpError, readJson, sendJson } from '../http/respond.js';
 import type { Router } from '../http/router.js';
 
@@ -16,7 +17,7 @@ import type { Router } from '../http/router.js';
  */
 export function commentRoutes(router: Router, paths: BoardPaths): void {
   router.get('/api/documents/:id/comments', ({ res, params }) => {
-    sendJson(res, 200, { comments: listComments(loadBoard(paths), params.id!) });
+    sendJson(res, 200, { comments: listComments(readBoard(paths), params.id!) });
   });
 
   router.post('/api/documents/:id/comments', async ({ req, res, params }) => {
@@ -24,7 +25,7 @@ export function commentRoutes(router: Router, paths: BoardPaths): void {
     if (!body.body?.trim()) throw new HttpError(400, 'A comment cannot be empty');
 
     pullBeforeWrite(paths);
-    const board = loadBoard(paths);
+    const board = readBoard(paths);
     const result = addComment(board, params.id!, { body: body.body, author: body.author });
     sendJson(res, 201, { comment: result.comment, total: result.total });
   });
@@ -33,7 +34,7 @@ export function commentRoutes(router: Router, paths: BoardPaths): void {
     const index = Number(params.index);
     if (!Number.isInteger(index) || index < 1) throw new HttpError(400, 'Invalid comment number');
     pullBeforeWrite(paths);
-    removeComment(loadBoard(paths), params.id!, index);
+    removeComment(readBoard(paths), params.id!, index);
     sendJson(res, 200, { ok: true });
   });
 }

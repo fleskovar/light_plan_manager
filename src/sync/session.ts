@@ -15,13 +15,20 @@ import { isTempId, remapPatch } from '../shared/index.js';
 export class PushSession {
   board: LoadedBoard;
 
-  /** Parse cache shared across every reload in this push. */
-  readonly #cache = new DocumentCache();
+  /**
+   * Parse cache shared across every reload in this push. A caller that keeps
+   * its own cache (the server) passes it, so the first load is cheap too.
+   */
+  readonly #cache: DocumentCache;
 
   /** Temporary id (`new:1`) -> the id the board allocated. */
   readonly idMap: Record<string, string> = {};
 
-  constructor(readonly paths: BoardPaths) {
+  constructor(
+    readonly paths: BoardPaths,
+    cache: DocumentCache = new DocumentCache(),
+  ) {
+    this.#cache = cache;
     this.board = loadBoard(paths, { cache: this.#cache });
   }
 

@@ -1,4 +1,4 @@
-import type { BoardPaths } from '../core/index.js';
+import type { BoardPaths, DocumentCache } from '../core/index.js';
 import { BoardError, removeNode, withBoardWrite } from '../core/index.js';
 import type { BoardSnapshot, Change, NodePatch, PushFailure } from '../shared/index.js';
 import { compactChanges, isTempId, patchReferences } from '../shared/index.js';
@@ -62,7 +62,11 @@ function awaitsCreate(session: PushSession, change: Change, upcoming: Set<string
  * and the caller is told exactly which survived — the client keeps those as
  * still-pending and shows the errors.
  */
-export function applyChanges(paths: BoardPaths, changes: Change[]): PushResult {
+export function applyChanges(
+  paths: BoardPaths,
+  changes: Change[],
+  options: { cache?: DocumentCache } = {},
+): PushResult {
   // The whole push, not one change at a time. A push is somebody's draft of the
   // plan replayed in order — a create whose links land three changes later, a
   // sprint the next four issues are scheduled into — and letting an agent claim
@@ -70,11 +74,11 @@ export function applyChanges(paths: BoardPaths, changes: Change[]): PushResult {
   // The operations inside take the same lock and find it already theirs.
   // On a board shared through git it is also one commit: the whole draft is
   // pushed to the remote, or refused, as the unit it was written as.
-  return withBoardWrite(paths, `push ${changes.length} change(s)`, () => push(paths, changes));
+  return withBoardWrite(paths, `push ${changes.length} change(s)`, () => push(paths, changes, options.cache));
 }
 
-function push(paths: BoardPaths, changes: Change[]): PushResult {
-  const session = new PushSession(paths);
+function push(paths: BoardPaths, changes: Change[], cache?: DocumentCache): PushResult {
+  const session = new PushSession(paths, cache);
   const applied: string[] = [];
   const failures: PushFailure[] = [];
   /** Links held back because they pointed at something created later. */

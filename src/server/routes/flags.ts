@@ -1,6 +1,7 @@
 import type { BoardPaths } from '../../core/index.js';
-import { clearFlag, currentUser, findIssue, flagIssue, loadBoard } from '../../core/index.js';
+import { clearFlag, currentUser, findIssue, flagIssue } from '../../core/index.js';
 import { pullBeforeWrite } from '../git.js';
+import { readBoard } from '../board-cache.js';
 import { HttpError, readJson, sendJson } from '../http/respond.js';
 import type { Router } from '../http/router.js';
 
@@ -23,7 +24,7 @@ export function flagRoutes(router: Router, paths: BoardPaths): void {
     if (!body.comment?.trim()) throw new HttpError(400, 'A flag needs a comment');
 
     pullBeforeWrite(paths);
-    const board = loadBoard(paths);
+    const board = readBoard(paths);
     const issue = findIssue(board, params.id!);
     if (!issue) throw new HttpError(404, `No issue with id "${params.id}"`);
 

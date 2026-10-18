@@ -24,10 +24,15 @@
 {/if}
 
 <style>
+  /*
+   * Sizes are in `em`, so a caller that sets a larger font-size on the
+   * `.prose` element (the issue window does) scales every heading and code
+   * span with it.
+   */
   .prose {
     font-size: var(--text-sm);
     line-height: 1.6;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
   }
 
   .empty {
@@ -37,95 +42,187 @@
     font-style: italic;
   }
 
+  .prose > :global(:first-child) {
+    margin-top: 0;
+  }
+
+  .prose > :global(:last-child) {
+    margin-bottom: 0;
+  }
+
   .prose :global(h1),
   .prose :global(h2),
   .prose :global(h3),
   .prose :global(h4),
   .prose :global(h5),
   .prose :global(h6) {
-    margin: var(--space-3) 0 var(--space-1);
-    font-size: var(--text-sm);
+    margin: 1.4em 0 0.5em;
     font-weight: 700;
     line-height: 1.3;
   }
 
   .prose :global(h1) {
-    font-size: var(--text-md);
+    font-size: 1.45em;
+    padding-bottom: 0.25em;
+    border-bottom: 1px solid var(--border);
   }
 
-  .prose :global(:first-child) {
-    margin-top: 0;
+  .prose :global(h2) {
+    font-size: 1.25em;
+    padding-bottom: 0.2em;
+    border-bottom: 1px solid var(--surface-3);
+  }
+
+  .prose :global(h3) {
+    font-size: 1.1em;
+  }
+
+  .prose :global(h4) {
+    font-size: 1em;
+  }
+
+  .prose :global(h5),
+  .prose :global(h6) {
+    font-size: 0.92em;
+    color: var(--ink-muted);
   }
 
   .prose :global(p) {
-    margin: 0 0 var(--space-2);
+    margin: 0 0 0.75em;
   }
 
   .prose :global(ul),
   .prose :global(ol) {
-    margin: 0 0 var(--space-2);
-    padding-left: 1.2rem;
+    margin: 0 0 0.75em;
+    padding-left: 1.5em;
+  }
+
+  /* A list inside an item sits close to the item's text. */
+  .prose :global(li > ul),
+  .prose :global(li > ol) {
+    margin: 0.2em 0;
   }
 
   .prose :global(li) {
-    margin: 0.1rem 0;
+    margin: 0.2em 0;
+  }
+
+  .prose :global(li > p) {
+    margin: 0 0 0.5em;
   }
 
   .prose :global(li.task) {
     list-style: none;
-    margin-left: -1.1rem;
+    margin-left: -1.3em;
   }
 
-  .prose :global(li.task input) {
-    margin-right: 0.35rem;
+  .prose :global(li.task > input) {
+    margin: 0 0.4em 0 0;
     vertical-align: -1px;
   }
 
-  /* A paragraph that continued a list item, not one of its own. */
-  .prose :global(p.loose) {
-    margin: 0 0 var(--space-1);
-    padding-left: 1.2rem;
+  .prose :global(li.task > input + p) {
+    display: inline;
   }
 
   .prose :global(blockquote) {
-    margin: 0 0 var(--space-2);
-    padding: 0.1rem 0 0.1rem var(--space-2);
+    margin: 0 0 0.75em;
+    padding: 0.25em 0 0.25em 0.9em;
     border-left: 3px solid var(--border-strong);
     color: var(--ink-muted);
   }
 
+  .prose :global(blockquote > :last-child) {
+    margin-bottom: 0;
+  }
+
   .prose :global(code) {
-    padding: 0.05rem 0.25rem;
+    padding: 0.1em 0.3em;
     border-radius: var(--radius-sm);
     background: var(--surface-3);
     font-family: var(--font-mono);
-    font-size: 0.92em;
+    font-size: 0.9em;
   }
 
   .prose :global(pre) {
-    margin: 0 0 var(--space-2);
-    padding: var(--space-2);
+    margin: 0 0 0.75em;
+    padding: 0.75em 0.9em;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    background: var(--surface-0);
+    background: var(--surface-2);
     overflow-x: auto;
   }
 
   .prose :global(pre code) {
     padding: 0;
     background: none;
-    font-size: var(--text-xs);
+    font-size: 0.88em;
     line-height: 1.5;
+    white-space: pre;
+  }
+
+  /* A wide table scrolls inside its own box rather than squeezing its columns. */
+  .prose :global(.table-wrap) {
+    margin: 0 0 0.9em;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+
+  .prose :global(table) {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95em;
+    line-height: 1.45;
+  }
+
+  .prose :global(th),
+  .prose :global(td) {
+    padding: 0.4em 0.7em;
+    border-bottom: 1px solid var(--surface-3);
+    text-align: left;
+    vertical-align: top;
+    /* Wraps at spaces first, so a column is never narrower than its longest word. */
+    overflow-wrap: normal;
+    min-width: 4em;
+  }
+
+  .prose :global(th + th),
+  .prose :global(td + td) {
+    border-left: 1px solid var(--surface-3);
+  }
+
+  .prose :global(th) {
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+
+  .prose :global(tbody tr:nth-child(even)) {
+    background: color-mix(in srgb, var(--surface-2) 45%, transparent);
+  }
+
+  .prose :global(tbody tr:last-child td) {
+    border-bottom: none;
+  }
+
+  .prose :global(.align-center) {
+    text-align: center;
+  }
+
+  .prose :global(.align-right) {
+    text-align: right;
   }
 
   .prose :global(hr) {
-    margin: var(--space-3) 0;
+    margin: 1.2em 0;
     border: none;
     border-top: 1px solid var(--border);
   }
 
   .prose :global(a) {
     color: var(--accent);
+    overflow-wrap: anywhere;
   }
 
   .prose :global(del) {

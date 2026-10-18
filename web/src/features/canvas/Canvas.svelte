@@ -76,7 +76,8 @@
     const viewId = workspace.doc.id;
     const base = window.location.href.replace(/#.*$/, '');
     const url = `${base}#/issue/${encodeURIComponent(id)}?view=${encodeURIComponent(viewId)}`;
-    window.open(url, `issue-${id}`, 'width=780,height=900,resizable,scrollbars');
+    // Wide enough for the two columns of `IssueView.svelte`.
+    window.open(url, `issue-${id}`, 'width=1200,height=860,resizable,scrollbars');
   }
 
   function onNodeClick(id: string, event: MouseEvent): void {

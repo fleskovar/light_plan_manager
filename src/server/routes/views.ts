@@ -1,9 +1,10 @@
 import type { BoardPaths } from '../../core/index.js';
-import { loadBoard, viewExists } from '../../core/index.js';
+import { viewExists } from '../../core/index.js';
 import type { ViewDocument } from '../../shared/index.js';
 import { remapChanges } from '../../shared/index.js';
 import { toSnapshot } from '../../sync/dto.js';
 import { pullBeforeWrite } from '../git.js';
+import { documentCache, readBoard } from '../board-cache.js';
 import { HttpError, readJson, sendJson } from '../http/respond.js';
 import type { Router } from '../http/router.js';
 import { applyChanges } from '../../sync/apply.js';
@@ -41,7 +42,7 @@ export function viewRoutes(router: Router, paths: BoardPaths): void {
 
   router.get('/api/views/:id', ({ res, params }) => {
     const view = loadView(paths, params.id!);
-    sendJson(res, 200, pruneView(view, toSnapshot(loadBoard(paths))));
+    sendJson(res, 200, pruneView(view, toSnapshot(readBoard(paths))));
   });
 
   router.put('/api/views/:id', async ({ req, res, params }) => {
@@ -63,7 +64,7 @@ export function viewRoutes(router: Router, paths: BoardPaths): void {
     const view = parseView(body.view ?? loadView(paths, id), id);
 
     pullBeforeWrite(paths);
-    const result = applyChanges(paths, view.changes);
+    const result = applyChanges(paths, view.changes, { cache: documentCache(paths) });
     // What the board rejected stays pending — but pointing at the ids the push
     // allocated, not at the `new:` ones it has just used up. A change left
     // naming a temporary id could never land again.

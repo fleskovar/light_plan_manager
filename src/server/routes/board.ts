@@ -1,7 +1,7 @@
 import type { BoardPaths } from '../../core/index.js';
-import { loadBoard } from '../../core/index.js';
 import { toSnapshot } from '../../sync/dto.js';
 import { pullInBackground } from '../git.js';
+import { readBoard } from '../board-cache.js';
 import { sendJson } from '../http/respond.js';
 import type { Router } from '../http/router.js';
 
@@ -16,6 +16,6 @@ export function boardRoutes(router: Router, paths: BoardPaths): void {
     // through git in step: a fetch starts in the background, and what it
     // brings is in the next poll's answer.
     pullInBackground(paths);
-    sendJson(res, 200, toSnapshot(loadBoard(paths)));
+    sendJson(res, 200, toSnapshot(readBoard(paths)));
   });
 }

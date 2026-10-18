@@ -2,7 +2,7 @@ import type { BoardConfig, BoardPaths } from '../../core/index.js';
 import {
   BoardError,
   currentUser,
-  loadBoard,
+  type LoadedBoard,
   loadConfig,
   moveNode,
   remoteNamed,
@@ -82,6 +82,7 @@ import type {
 import { summarizePushFailures } from '../../shared/index.js';
 import type { BoardView } from '../../shared/plans/reading.js';
 import { toSnapshot } from '../../sync/dto.js';
+import { readBoard } from '../board-cache.js';
 import { HttpError, readJson, sendJson } from '../http/respond.js';
 import type { Router } from '../http/router.js';
 
@@ -196,7 +197,7 @@ export function remoteRoutes(router: Router, paths: BoardPaths): void {
     const name = params.name!;
     const body = await readJson<{ dryRun?: unknown }>(req);
     refuseDuringSync();
-    const report = await inspectRemoteConnection(loadBoard(paths), name, { apply: body.dryRun !== true });
+    const report = await inspectRemoteConnection(readBoard(paths), name, { apply: body.dryRun !== true });
     sendJson(res, 200, toInspectDto(name, report));
   });
 
@@ -217,7 +218,7 @@ export function remoteRoutes(router: Router, paths: BoardPaths): void {
   // the mapping that a person chose. The read asks the tracker, so it can take
   // seconds. The write changes `remotes.<name>.mapping` and no document.
   router.get('/api/remotes/:name/mapping', async ({ res, params }) => {
-    sendJson(res, 200, await readRemoteMapping(loadBoard(paths), params.name!));
+    sendJson(res, 200, await readRemoteMapping(readBoard(paths), params.name!));
   });
 
   router.put('/api/remotes/:name/mapping', async ({ req, res, params }) => {
@@ -229,10 +230,10 @@ export function remoteRoutes(router: Router, paths: BoardPaths): void {
       ...(body.statuses !== undefined ? { statuses: stringListRecord(body.statuses, 'statuses') } : {}),
       ...(body.periodContainer !== undefined ? { periodContainer: String(body.periodContainer) } : {}),
     };
-    const { changed } = writeRemoteMapping(loadBoard(paths), name, update);
+    const { changed } = writeRemoteMapping(readBoard(paths), name, update);
     const dto: RemoteMappingUpdateResultDto = {
       changed,
-      mapping: await readRemoteMapping(loadBoard(paths), name),
+      mapping: await readRemoteMapping(readBoard(paths), name),
     };
     sendJson(res, 200, dto);
   });
@@ -264,7 +265,7 @@ export function remoteRoutes(router: Router, paths: BoardPaths): void {
 
   router.get('/api/remotes/:name/status', async ({ res, params, query }) => {
     const name = params.name!;
-    const board = loadBoard(paths);
+    const board = readBoard(paths);
     openRemote(board.config, name); // throws when the remote is not declared
     const verbose = query.get('verbose') === '1' || query.get('verbose') === 'true';
     // `?local=1` is the instant half: no connector, no request, every field a
@@ -288,7 +289,7 @@ export function remoteRoutes(router: Router, paths: BoardPaths): void {
   // credential, and can be re-read after every push without slowing one down.
   router.get('/api/remotes/:name/coverage', ({ res, params }) => {
     const name = params.name!;
-    const board = loadBoard(paths);
+    const board = readBoard(paths);
     openRemote(board.config, name); // throws when the remote is not declared
     sendJson(res, 200, computeRemoteCoverage(board, name));
   });
@@ -322,7 +323,7 @@ export function remoteRoutes(router: Router, paths: BoardPaths): void {
     for (const fix of fixes) {
       // Reloaded per fix: core operations write straight to disk, so every
       // handle is stale afterwards — the same reason `PushSession` reloads.
-      const board = loadBoard(paths);
+      const board = readBoard(paths);
       if (fix.kind === 'link_account') {
         const resource = board.resourcesById.get(requireString(fix.resourceId, 'resourceId'));
         if (!resource) throw new HttpError(400, `No resource "${fix.resourceId}" on this board`);
@@ -334,7 +335,7 @@ export function remoteRoutes(router: Router, paths: BoardPaths): void {
         for (const id of fix.issueIds ?? []) {
           const issue = board.byId.get(id);
           if (!issue) continue; // already gone: nothing to clear
-          moveNode(loadBoard(paths), issue, { assignee: null });
+          moveNode(readBoard(paths), issue, { assignee: null });
           changed.push(`${id} unassigned`);
         }
       } else {
@@ -502,8 +503,8 @@ export function remoteRoutes(router: Router, paths: BoardPaths): void {
 // ---------------------------------------------------------------------------
 
 /** The board and the one named remote, or a `BoardError` naming the choice. */
-function openNamedRemote(paths: BoardPaths, name: string): { board: ReturnType<typeof loadBoard>; remote: OpenedRemote } {
-  const board = loadBoard(paths);
+function openNamedRemote(paths: BoardPaths, name: string): { board: LoadedBoard; remote: OpenedRemote } {
+  const board = readBoard(paths);
   const remote = openRemote(board.config, name);
   return { board, remote };
 }
@@ -520,7 +521,7 @@ function openNamedRemote(paths: BoardPaths, name: string): { board: ReturnType<t
  * silently does nothing.
  */
 function selectionOptions(
-  board: ReturnType<typeof loadBoard>,
+  board: LoadedBoard,
   name: string,
   only: string[] | undefined,
 ): { only?: string[]; periods?: string[] } {
@@ -584,7 +585,7 @@ function parseResolveBody(body: RemoteResolveRequestDto): {
 // ---------------------------------------------------------------------------
 
 /** The board as the remote layer reads it: a `BoardView` DTO. */
-function viewOf(board: ReturnType<typeof loadBoard>): BoardView {
+function viewOf(board: LoadedBoard): BoardView {
   const snapshot = toSnapshot(board);
   const nodes = Object.fromEntries(
     [...snapshot.issues, ...snapshot.periods, ...snapshot.resources, ...snapshot.templates].map(
@@ -602,7 +603,7 @@ function viewOf(board: ReturnType<typeof loadBoard>): BoardView {
  */
 async function conflictDetail(
   paths: BoardPaths,
-  board: ReturnType<typeof loadBoard>,
+  board: LoadedBoard,
   remote: OpenedRemote,
   localId: string,
 ): Promise<RemoteConflictDto | null> {

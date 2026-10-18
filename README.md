@@ -3384,6 +3384,16 @@ teammate who pulls your branch sees the same canvas you were looking at.
   splits an issue into N pieces either as
   children or as a chain that replaces it — rewiring both ends of the graph
   either way. Drag its edge to widen it; the width is saved with the view.
+- **Issue window** — a double-click on a node opens the issue in a window of
+  its own. The left column shows the description. The right column shows the
+  details above the comments. Each of the three panes scrolls on its own. Two
+  splitters set the width of the right column and the height of the comments.
+  This browser stores both sizes in `localStorage` under the key
+  `lpm:issue-window`. A change to a field is written to the board about 1.5
+  seconds after you make it. A change to the description is written only when
+  you press *Save* or Ctrl+S. The text beside *Save* shows whether a change is
+  unsaved, for example "Saved automatically 10 seconds ago". When you close the
+  window with an unsaved change, the window asks first.
 - **Panes that spend the room** — dragging the drawer taller or the panel wider
   grows the type and spacing inside it, so a pane made bigger shows bigger rows
   rather than more empty space. Growth is gentler than the drag and stops at
