@@ -108,6 +108,7 @@
   );
 
   let arrange = $state<() => void>(() => {});
+  let newItem = $state<() => void>(() => {});
 
   /**
    * The drawer is a wish bounded by the window it is opened in.
@@ -241,7 +242,7 @@
     const binding = findBinding(event);
     if (!binding) return;
     event.preventDefault();
-    binding.run({ workspace, shell, arrange: () => arrange() });
+    binding.run({ workspace, shell, arrange: () => arrange(), newItem: () => newItem() });
   }
 
   /** Pull when a popup window pushed changes, so the canvas stays in sync. */
@@ -322,7 +323,7 @@
              because the drawer takes its room from the canvas alone. -->
         <div class="stack" bind:clientHeight={stackHeight}>
           <SvelteFlowProvider>
-            <Canvas bind:arrange />
+            <Canvas bind:arrange bind:newItem />
           </SvelteFlowProvider>
 
           {#if workspace.doc.drawer.open}

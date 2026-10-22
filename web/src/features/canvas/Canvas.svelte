@@ -16,19 +16,36 @@
   import { useWorkspace } from '$lib/workspace/workspace.svelte.js';
   import { useRemoteState } from '$features/drawer/remote/remote.svelte.js';
   import { startCarry } from './carry.js';
+  import DraftCard from './DraftCard.svelte';
+  import { cleanTitle, provideCanvasEditing } from './editing.js';
   import DependencyEdge from './edges/DependencyEdge.svelte';
   import { CanvasGraph } from './graph.svelte.js';
-  import { edgeMenu, nodeMenu, paneMenu } from './menus.js';
+  import { edgeMenu, nodeMenu, paneMenu, type EditActions } from './menus.js';
   import GroupNode from './nodes/GroupNode.svelte';
   import IssueNode from './nodes/IssueNode.svelte';
   import { startCameraPan } from './pan.js';
+  import ScopeBar from './ScopeBar.svelte';
+  import {
+    breadcrumb,
+    canEnter,
+    childDepth,
+    chosenType,
+    creatableTypes,
+    scopeShowing,
+  } from './scope.js';
   import { provideGraphSource } from './source.js';
   import {
+    centredOn,
+    commitDraft,
     createCarryHandlers,
     createDoubleClickHandler,
+    finishRename,
     handleDragStop,
     handleRosterDrop,
+    isPaneTarget,
+    nextDraft,
     selectFromEvent,
+    type Draft,
   } from './Canvas.svelte.js';
 
   /**
@@ -37,13 +54,22 @@
    * part that is genuinely about a canvas: wiring SvelteFlow's events to the
    * decision layer in `Canvas.svelte.ts`, and keeping the modifier state the
    * capture-phase handlers and decisions both read.
+   *
+   * The canvas has two modes, and `workspace.canvasMode` holds the mode. Read
+   * mode draws the whole view. Edit mode can make one item the active item.
+   * The canvas then draws only what is inside that item, without its frame,
+   * and a new item becomes its child. In edit mode a double-click on the empty
+   * canvas opens the card of a new item. A double-click on a node enters the
+   * node when it can hold children, and opens its title field when it cannot.
    */
   interface Props {
     /** Exposed so a keyboard shortcut in the shell can trigger the layout. */
     arrange?: () => void;
+    /** Exposed so the key N can open the card of a new item in edit mode. */
+    newItem?: () => void;
   }
 
-  let { arrange = $bindable(() => {}) }: Props = $props();
+  let { arrange = $bindable(() => {}), newItem = $bindable(() => {}) }: Props = $props();
 
   const workspace = useWorkspace();
   const shell = useShell();
@@ -52,11 +78,17 @@
   const preferences = usePreferences();
   const remote = useRemoteState();
   const flow = useSvelteFlow();
-  const graph = new CanvasGraph(provideGraphSource(workspace));
+  // Read mode or edit mode, and the active item of edit mode. The graph draws
+  // the inside of `mode.scope`, which is null in read mode.
+  const mode = workspace.canvasMode;
+  const graph = new CanvasGraph(provideGraphSource(workspace), { scope: () => mode.scope });
   const screenToFlow = (p: { x: number; y: number }) =>
     flow.screenToFlowPosition(p);
 
   arrange = () => graph.arrange();
+  newItem = () => startDraft(null);
+
+  let canvasElement: HTMLDivElement | undefined = $state();
 
   const nodeTypes = { issue: IssueNode, group: GroupNode };
   const edgeTypes = { dependency: DependencyEdge };
@@ -82,7 +114,111 @@
 
   function onNodeClick(id: string, event: MouseEvent): void {
     selectFromEvent(workspace.selection, id, event);
-    doubleClick.handle(id, () => openIssuePopup(id));
+    doubleClick.handle(id, () => (mode.editing ? editDoubleClick(id) : openIssuePopup(id)));
+  }
+
+  // -- Edit mode ------------------------------------------------------------
+
+  /** The active item as a document, or null at the top of the view. */
+  const activeNode = $derived(mode.scope ? (workspace.node(mode.scope) ?? null) : null);
+  const crumbs = $derived(
+    breadcrumb(workspace.nodes, workspace.config, mode.scope, workspace.doc.name),
+  );
+  /** The types that a new item inside the active item can take. */
+  const newTypes = $derived(creatableTypes(workspace.config, workspace.nodeKind, activeNode));
+  const newDepth = $derived(childDepth(activeNode));
+  const newType = $derived(chosenType(newTypes, newDepth, mode.newTypes));
+  const typeLabel = (type: string): string => workspace.config.types[type]?.label ?? type;
+
+  /** The card of a new item that waits for its title, or null. */
+  let draft = $state<Draft | null>(null);
+  let draftSerial = 0;
+
+  /** In edit mode a double-click enters a node that can hold children, and renames any other node. */
+  function editDoubleClick(id: string): void {
+    if (canEnter(workspace.config, workspace.node(id))) enter(id);
+    else mode.startRename(id);
+  }
+
+  function enter(id: string): void {
+    mode.enter(id, workspace.nodes);
+    workspace.selection.clear();
+  }
+
+  /** Go to a step of the breadcrumb bar, and select the item that the canvas came out of. */
+  function navigate(id: string | null): void {
+    const from = mode.goTo(id, workspace.nodes);
+    workspace.selection.set(from ? [from] : []);
+  }
+
+  /** The centre of the visible part of the canvas, in canvas coordinates. */
+  function visibleCentre(): { x: number; y: number } {
+    const box = canvasElement?.getBoundingClientRect();
+    if (!box) return { x: 0, y: 0 };
+    return screenToFlow({ x: box.left + box.width / 2, y: box.top + box.height / 2 });
+  }
+
+  /**
+   * Open the card of a new item. `at` is the centre of the card in canvas
+   * coordinates, or null for the centre of the visible canvas. `type` is the
+   * type chosen in the bar unless the caller gives one.
+   */
+  function startDraft(at: { x: number; y: number } | null, type: string | null = newType): void {
+    if (!mode.editing || !type) return;
+    draftSerial += 1;
+    draft = {
+      serial: draftSerial,
+      parentId: mode.scope,
+      type,
+      position: centredOn(at ?? visibleCentre()),
+    };
+  }
+
+  /** Create the item of the card. Enter with a title opens the next card below it. */
+  function submitDraft(text: string, next: boolean): void {
+    const current = draft;
+    if (!current) return;
+    const title = cleanTitle(text);
+    commitDraft(workspace, current, title);
+    if (next && title !== null) {
+      draftSerial += 1;
+      draft = { ...nextDraft(current), serial: draftSerial };
+    } else {
+      draft = null;
+    }
+  }
+
+  function chooseType(type: string): void {
+    mode.newTypes = { ...mode.newTypes, [newDepth]: type };
+    if (draft) draft = { ...draft, type };
+  }
+
+  const editActions: EditActions = {
+    get activeId() {
+      return mode.scope;
+    },
+    enter,
+    rename: (id) => mode.startRename(id),
+    openWindow: openIssuePopup,
+    draft: (type, at) => startDraft(at ?? null, type),
+  };
+
+  provideCanvasEditing({
+    get enabled() {
+      return mode.editing;
+    },
+    get renaming() {
+      return mode.renaming;
+    },
+    canEnter: (id) => canEnter(workspace.config, workspace.node(id)),
+    enter,
+    finishRename: (id, title) => finishRename(workspace, id, title),
+    openField: () => mode.openField(),
+  });
+
+  function onCanvasDoubleClick(event: MouseEvent): void {
+    if (!mode.editing || !isPaneTarget(event.target)) return;
+    startDraft(screenToFlow({ x: event.clientX, y: event.clientY }));
   }
 
   // -- Carry ----------------------------------------------------------------
@@ -117,8 +253,59 @@
     untrack(() => {
       const id = workspace.selection.primary;
       if (!id) return;
-      void flow.fitView({ nodes: [{ id }], duration: 320, maxZoom: 1.3, padding: 0.6 });
+      // In edit mode the node can be outside the active item. The parent of
+      // the node then becomes the active item, and the travel waits for the
+      // canvas to draw the new content.
+      if (mode.editing) {
+        const scope = scopeShowing(workspace.nodes, id, mode.activeId);
+        if (scope !== mode.activeId) {
+          travelAfterScope = id;
+          if (scope) mode.enter(scope, workspace.nodes);
+          else mode.activate(null);
+          return;
+        }
+      }
+      // The travel waits one frame. A node created in this tick reaches
+      // SvelteFlow only with the next render, and a fit to a node that
+      // SvelteFlow does not know moves nothing. A node that stays off screen
+      // is not drawn, and its title field never opens.
+      requestAnimationFrame(() => {
+        void flow.fitView({ nodes: [{ id }], duration: 320, maxZoom: 1.3, padding: 0.6 });
+      });
     });
+  });
+
+  /**
+   * After the active item changes, the canvas fits the new content. A
+   * pending travel goes to its node. When the canvas went up a level or back
+   * to read mode, the item that was active is now a frame on the canvas, and
+   * the canvas goes to that frame. In any other case it fits everything. The
+   * fit waits one frame, so SvelteFlow has the nodes of the sync.
+   */
+  let travelAfterScope: string | null = null;
+  let previousScope: string | null | undefined;
+  $effect(() => {
+    const scope = mode.scope;
+    untrack(() => {
+      const before = previousScope;
+      previousScope = scope;
+      if (before === undefined || before === scope) return;
+      draft = null;
+      const target = travelAfterScope ?? before;
+      travelAfterScope = null;
+      requestAnimationFrame(() => {
+        if (target && graph.nodes.some((node) => node.id === target)) {
+          void flow.fitView({ nodes: [{ id: target }], duration: 320, maxZoom: 1.1, padding: 0.4 });
+        } else {
+          void flow.fitView({ duration: 320, maxZoom: 1.1, padding: 0.15 });
+        }
+      });
+    });
+  });
+
+  // The card of a new item belongs to edit mode.
+  $effect(() => {
+    if (!mode.editing) untrack(() => (draft = null));
   });
 </script>
 
@@ -147,8 +334,11 @@
   class:splicing
   class:panning
   class:carrying
+  class:editing={mode.editing}
   role="application"
   aria-label="Dependency graph"
+  bind:this={canvasElement}
+  ondblclick={onCanvasDoubleClick}
   onpointerdowncapture={(event) => {
     if (startCarry(event, carryHandlers)) return;
     startCameraPan(event, flow, event.currentTarget);
@@ -173,6 +363,7 @@
     minZoom={0.1}
     maxZoom={2}
     nodeDragThreshold={2}
+    zoomOnDoubleClick={!mode.editing}
     nodesDraggable={!panning}
     selectionKey="Shift"
     multiSelectionKey="Shift"
@@ -182,7 +373,10 @@
       handleDragStop({ ...params, graph, workspace, shell, screenToFlow })}
     onnodecontextmenu={({ node, event }) => {
       if (!workspace.selection.has(node.id)) workspace.selection.set([node.id]);
-      shell.openMenu(event, nodeMenu({ workspace, shell, remote }, node.id));
+      shell.openMenu(
+        event,
+        nodeMenu({ workspace, shell, remote, edit: mode.editing ? editActions : undefined }, node.id),
+      );
     }}
     onedgeclick={({ edge, event }) => {
       event.stopPropagation();
@@ -208,6 +402,7 @@
           shell,
           at: flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }),
           onarrange: () => graph.arrange(),
+          edit: mode.editing ? editActions : undefined,
         }),
       )}
     onconnect={({ source, target }) => addDependency(workspace, target, source)}
@@ -222,7 +417,28 @@
       nodeColor={(node) =>
         `var(--tone-${statusTone(workspace.config, (node.data as { node: { status?: string } }).node.status ?? '')})`}
     />
+    {#if draft}
+      {#key draft.serial}
+        <DraftCard
+          position={draft.position}
+          typeLabel={typeLabel(draft.type)}
+          onsubmit={submitDraft}
+          oncancel={() => (draft = null)}
+        />
+      {/key}
+    {/if}
   </SvelteFlow>
+
+  {#if mode.editing}
+    <ScopeBar
+      {crumbs}
+      types={newTypes.map((type) => ({ value: type, label: typeLabel(type) }))}
+      chosen={newType}
+      onnavigate={navigate}
+      onchoose={chooseType}
+      onadd={() => startDraft(null)}
+    />
+  {/if}
 
   <div class="toolbar">
     <Button size="sm" onclick={() => graph.arrange()} title="Re-arrange the graph (Ctrl+L)">
@@ -231,7 +447,16 @@
     <Button size="sm" onclick={() => flow.fitView({ duration: 240 })}>Fit</Button>
   </div>
 
-  {#if !workspace.doc.members.length}
+  {#if mode.editing}
+    {#if !graph.nodes.length && !draft}
+      <div class="empty">
+        <p>{activeNode ? `${activeNode.id} holds no items in this view.` : 'This view is empty.'}</p>
+        {#if newType}
+          <p class="hint">Double-click the canvas or press N to add a {typeLabel(newType)}.</p>
+        {/if}
+      </div>
+    {/if}
+  {:else if !workspace.doc.members.length}
     <div class="empty">
       <p>This view is empty.</p>
       <p class="hint">Select issues in the table below to add them.</p>
@@ -304,6 +529,11 @@
   .panning :global(.svelte-flow__pane:active),
   .panning :global(.svelte-flow__node:active) {
     cursor: grabbing;
+  }
+
+  /* Edit mode: an accent frame inside the canvas shows that a double-click creates. */
+  .canvas.editing {
+    box-shadow: inset 0 0 0 2px var(--accent-soft);
   }
 
   .toolbar {

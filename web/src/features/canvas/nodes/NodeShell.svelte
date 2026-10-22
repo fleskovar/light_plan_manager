@@ -4,7 +4,9 @@
   import TypeIcon from '$lib/ui/TypeIcon.svelte';
   import { flagLabel } from '$shared';
   import type { CanvasNodeData } from '../model.js';
+  import { cleanTitle } from '../editing.js';
   import { hasFlagInside, isRaisedFlag, isDriftSync, nodeMinSize } from './NodeShell.svelte.js';
+  import TitleField from './TitleField.svelte';
 
   /**
    * The chrome every canvas node shares: the two handles, the type icon, the
@@ -19,11 +21,27 @@
     ontoggle: (id: string) => void;
     /** Where a drag on a corner ends up. Omitted where nothing may be resized. */
     onresize?: (id: string, size: { x: number; y: number; width: number; height: number }) => void;
+    /** True while the title is open for typing. */
+    renaming?: boolean;
+    /** Receives the typed title, or null when the typing was cancelled or left nothing. */
+    onrename?: (title: string | null) => void;
+    /** Makes this node the active item. Present only in edit mode, on a node that can hold children. */
+    onenter?: () => void;
     children?: Snippet;
     footer?: Snippet;
   }
 
-  let { data, selected, ontoggle, onresize, children, footer }: Props = $props();
+  let {
+    data,
+    selected,
+    ontoggle,
+    onresize,
+    renaming = false,
+    onrename,
+    onenter,
+    children,
+    footer,
+  }: Props = $props();
 
   const { minWidth, minHeight } = $derived(nodeMinSize(data));
 </script>
@@ -120,6 +138,20 @@
           +{data.hiddenChildren}
         </span>
       {/if}
+      {#if onenter}
+        <button
+          class="enter nodrag"
+          type="button"
+          title="Work inside {data.node.id} (double-click)"
+          aria-label="Work inside {data.node.id}"
+          onclick={(event) => {
+            event.stopPropagation();
+            onenter?.();
+          }}
+        >
+          ↳
+        </button>
+      {/if}
     </span>
   </header>
 
@@ -135,7 +167,16 @@
     </p>
   {/if}
 
-  <p class="title" title={data.node.title}>{data.node.title}</p>
+  {#if renaming && onrename}
+    <TitleField
+      value={data.node.title}
+      label="Title of {data.node.id}"
+      onsubmit={(text) => onrename?.(cleanTitle(text))}
+      oncancel={() => onrename?.(null)}
+    />
+  {:else}
+    <p class="title" title={data.node.title}>{data.node.title}</p>
+  {/if}
 
   {#if children}
     <div class="body">{@render children()}</div>
@@ -394,6 +435,23 @@
 
   .chevron.collapsed {
     transform: rotate(-90deg);
+  }
+
+  .enter {
+    flex: none;
+    padding: 0 0.3rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface-1);
+    color: var(--ink-muted);
+    font-size: var(--text-xs);
+    line-height: 1.3;
+    cursor: pointer;
+  }
+
+  .enter:hover {
+    border-color: var(--accent);
+    color: var(--accent);
   }
 
   .lineage {

@@ -20,7 +20,10 @@ export type BindingId =
   | 'duplicate'
   | 'delete'
   | 'remove'
-  | 'clear';
+  | 'clear'
+  | 'mode'
+  | 'new-item'
+  | 'rename';
 
 export interface Binding {
   /** The name that a menu entry uses to find this binding. */
@@ -37,6 +40,12 @@ export interface ShortcutContext {
   workspace: Workspace;
   shell: Shell;
   arrange: () => void;
+  /**
+   * Open the title field of a new item on the canvas, in edit mode. The
+   * canvas supplies this function, because the position of the new item
+   * depends on the part of the canvas that is on screen.
+   */
+  newItem?: () => void;
 }
 
 export const BINDINGS: Binding[] = [
@@ -118,8 +127,39 @@ export const BINDINGS: Binding[] = [
   {
     id: 'clear',
     key: 'escape',
-    description: 'Clear the selection',
-    run: ({ workspace }) => workspace.selection.clear(),
+    description: 'Clear the selection. In edit mode with nothing selected, go up one level',
+    run: ({ workspace }) => {
+      const mode = workspace.canvasMode;
+      if (workspace.selection.size || !mode.editing || !mode.activeId) {
+        workspace.selection.clear();
+        return;
+      }
+      const from = mode.goUp(workspace.nodes);
+      if (from) workspace.selection.set([from]);
+    },
+  },
+  {
+    id: 'mode',
+    key: 'e',
+    description: 'Switch the canvas between read mode and edit mode',
+    run: ({ workspace }) => workspace.canvasMode.toggle(),
+  },
+  {
+    id: 'new-item',
+    key: 'n',
+    description: 'Edit mode: add a new item inside the active item',
+    run: ({ workspace, newItem }) => {
+      if (workspace.canvasMode.editing) newItem?.();
+    },
+  },
+  {
+    id: 'rename',
+    key: 'f2',
+    description: 'Edit mode: rename the selected item on the canvas',
+    run: ({ workspace }) => {
+      const id = workspace.selection.primary;
+      if (workspace.canvasMode.editing && id) workspace.canvasMode.startRename(id);
+    },
   },
 ];
 
@@ -160,6 +200,7 @@ const KEY_LABELS: Record<string, string> = {
   delete: 'Delete',
   backspace: 'Backspace',
   escape: 'Esc',
+  f2: 'F2',
 };
 
 /** The keys of a binding as a menu shows them, for example `Ctrl+S`. */

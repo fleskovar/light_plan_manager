@@ -6,10 +6,14 @@
   import { usePool } from '$lib/workspace/pool.svelte.js';
   import { useWorkspace } from '$lib/workspace/workspace.svelte.js';
   import { barMenus } from './menus.js';
+  import ModeSwitch from './ModeSwitch.svelte';
 
   /**
-   * The top bar: the menu bar (File, Edit, View, Help), the name of the board,
-   * and how far behind `.lpm` the active view is.
+   * The top bar, in two rows. The first row holds the name of the board on
+   * the left. On the right it holds how far behind `.lpm` the active view is,
+   * and the switch between read mode and edit mode. The second row holds the
+   * menu bar (File, Edit, View, Help). The component also sets the title of
+   * the browser window to the name of the board.
    *
    * The bar is on screen while a view loads and when a view fails to load. An
    * entry that needs the board is disabled until the workspace is ready, and
@@ -59,43 +63,75 @@
   );
 </script>
 
-<header class="bar">
-  <MenuBar {menus} />
-
-  <span class="spacer"></span>
-
+<!-- The window title is the name of the board, so a reader with several
+     boards open can tell their browser tabs apart. Until the board is read,
+     the title stays as `index.html` sets it. -->
+<svelte:head>
   {#if workspace.ready}
-    <span class="board" title="The board that this window shows">{workspace.config.boardName}</span>
-    <span class="status" class:dirty={workspace.dirty || workspace.unsaved}>{statusLabel}</span>
+    <title>{workspace.config.boardName}</title>
   {/if}
+</svelte:head>
+
+<header class="bar">
+  <!-- The first row: the name of the board on the left, and the status label
+       and the mode switch in the top-right corner of the window. -->
+  <div class="title-row">
+    {#if workspace.ready}
+      <span class="board" title="The board that this window shows">{workspace.config.boardName}</span>
+      <span class="spacer"></span>
+      <span class="status" class:dirty={workspace.dirty || workspace.unsaved}>{statusLabel}</span>
+      <ModeSwitch mode={workspace.canvasMode} />
+    {/if}
+  </div>
+
+  <!-- The second row: the menus. -->
+  <div class="menu-row">
+    <MenuBar {menus} />
+  </div>
 </header>
 
 <style>
   .bar {
     flex: none;
     display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: 2px var(--space-2);
+    flex-direction: column;
     border-bottom: 1px solid var(--border);
     background: var(--surface-1);
+  }
+
+  .title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    /* The row keeps its height while a view loads and has no name to show. */
+    min-height: 2.25rem;
+    padding: var(--space-1) var(--space-3);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .menu-row {
+    display: flex;
+    align-items: center;
+    padding: 0 var(--space-2);
   }
 
   .spacer {
     flex: 1;
   }
 
+  /* The name of the board, in the size and weight of a title. */
   .board {
-    max-width: 20rem;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--ink-faint);
-    font-size: var(--text-xs);
+    color: var(--ink);
+    font-size: var(--text-xl);
+    font-weight: 700;
+    letter-spacing: 0.01em;
   }
 
   .status {
-    margin-right: var(--space-1);
     font-size: var(--text-xs);
     color: var(--ink-muted);
     white-space: nowrap;

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { NodeProps } from '@xyflow/svelte';
   import type { CanvasNodeData } from '../model.js';
+  import { useCanvasEditing } from '../editing.js';
   import { useGraphSource } from '../source.js';
   import NodeShell from './NodeShell.svelte';
 
@@ -12,6 +13,9 @@
   // the board — a size is view state — which is why the same component serves
   // the read-only viewer.
   const source = useGraphSource();
+  // Absent in the read-only viewer, which has no edit mode.
+  const editing = useCanvasEditing();
+  const id = $derived(data.node.id);
 </script>
 
 <NodeShell
@@ -19,6 +23,9 @@
   selected={selected ?? false}
   ontoggle={(id) => source.toggleCollapsed(id)}
   onresize={(id, size) => source.setLayout(id, size)}
+  renaming={editing?.renaming === id}
+  onrename={(title) => editing?.finishRename(id, title)}
+  onenter={editing?.enabled && editing.canEnter(id) ? () => editing.enter(id) : undefined}
 >
   {#snippet footer()}
     {#if data.assigneeLabel}

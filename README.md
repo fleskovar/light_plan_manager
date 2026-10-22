@@ -2880,10 +2880,14 @@ tab order, and `active` holds the id of the view that the window showed last.
 No file under `.lpm` stores the tabs, so a teammate who pulls the board does not
 receive them. A window that **Open in new window** created writes no entry.
 
-The top of the window holds a menu bar with four menus: **File**, **Edit**,
+The top row of the window shows the name of the board in large type. The same
+row shows the status label and the **Read | Edit** switch at its right end.
+The name is the name of the folder that holds `.lpm`, usually the project
+folder. The title of the browser window shows the same name.
+
+Below that row, the window holds a menu bar with four menus: **File**, **Edit**,
 **View** and **Help**. A click on a name opens its menu. While a menu is open,
-the pointer on another name opens that menu. The right end of the bar shows the
-name of the board and the status label.
+the pointer on another name opens that menu.
 
 | Menu | Contents |
 | --- | --- |
@@ -2953,6 +2957,53 @@ dismissed. Anything merely informative is a quieter one that clears itself.
 
 Because the queue lives in the view file, closing the tab loses nothing, and a
 teammate who pulls your branch sees the same canvas you were looking at.
+
+### Read mode and edit mode
+
+The canvas has two modes. The switch **Read | Edit** at the right end of the
+top bar selects the mode. The key <kbd>E</kbd> and **View ▸ Edit mode** do
+the same. Each tab opens in read mode.
+
+- **Read mode** draws the whole view. Everything in [What it does](#what-it-does)
+  works in read mode.
+- **Edit mode** adds an *active item*. With an active item, the canvas draws
+  only the items inside it. The children of the active item have no frame
+  around them, so the whole canvas is room for new items. A new item becomes a
+  child of the active item. Without an active item, edit mode draws the whole
+  view, and a new item goes to the top level.
+
+In edit mode:
+
+| Action | Result |
+| --- | --- |
+| Double-click an item that can hold children, or click its **↳** button | The item becomes the active item. |
+| Double-click an item that cannot hold children, or select it and press <kbd>F2</kbd> | A title field opens on the item. <kbd>Enter</kbd> saves the title, <kbd>Esc</kbd> keeps the old one. |
+| Double-click the empty canvas, press <kbd>N</kbd>, or click **+ Add** | A card for a new item opens. Type the title and press <kbd>Enter</kbd>. The item is created, and the next card opens below it. <kbd>Esc</kbd> closes the card and creates nothing. |
+| Click a step of the bar at the top of the canvas | That step becomes the active item. The first step is the whole view. |
+| Press <kbd>Esc</kbd> with nothing selected | The parent of the active item becomes the active item. |
+| Right-click an item | The menu adds **Work inside**, **Rename** and **Open in a window**. A double-click no longer opens the window in edit mode. |
+
+In both modes, **Add new…** in the menu of an item creates a child of that
+item and opens its title field at once. The field shows the default title
+`New <type>`, selected, so typing replaces it. <kbd>Enter</kbd> or a click
+outside the field saves the title. <kbd>Esc</kbd>, or an empty title, removes
+the new item, and the queue of unpushed edits keeps no change for it. A
+collapsed item is expanded first, so the new child is on the canvas. While a
+title field is on screen, the app holds the automatic push. A push gives the
+new item its final id, and that would close the field.
+
+The list at the right of the bar sets the type of a new item. It offers the
+types that the hierarchy in `.lpm/config.yml` allows under the active item. The
+first type is the default, and the app remembers the choice for each level of
+the hierarchy while the tab is open.
+
+The mode and the active item are not stored in the view file, so a teammate who
+pulls the view sees read mode. The positions are stored in the view file as in
+read mode. A position that edit mode saves for a child of the active item is
+relative to that item. Read mode draws the same child at the same place inside
+the frame of the item, and the frame grows to hold it. When a selection in the
+table or the queue names an item outside the active item, the parent of that
+item becomes the active item.
 
 ### What it does
 

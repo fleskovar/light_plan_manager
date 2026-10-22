@@ -264,6 +264,7 @@ export function placeNewNodes(
   nodes: CanvasNode[],
   edges: CanvasEdge[],
   isPlaced: (id: string) => boolean,
+  topOrigin: { x: number; y: number } = { x: 0, y: 0 },
 ): CanvasNode[] {
   const fresh = nodes.filter((node) => !isPlaced(node.id));
   if (!fresh.length) return nodes;
@@ -286,14 +287,14 @@ export function placeNewNodes(
     const right = reach.get(scope);
     if (right === undefined) {
       // Nothing settled here, so the computed arrangement is the arrangement.
-      offsets.set(scope, { dx: 0, dy: 0 });
+      offsets.set(scope, scope ? { dx: 0, dy: 0 } : { dx: topOrigin.x, dy: topOrigin.y });
       continue;
     }
     const minX = Math.min(...block.map((node) => computed.get(node.id)!.x));
     const minY = Math.min(...block.map((node) => computed.get(node.id)!.y));
     offsets.set(scope, {
       dx: right + RANK_SEPARATION - minX,
-      dy: (scope ? GROUP_HEADER : 0) - minY,
+      dy: (scope ? GROUP_HEADER : topOrigin.y) - minY,
     });
   }
 
@@ -302,5 +303,61 @@ export function placeNewNodes(
     const at = computed.get(node.id) ?? node.position;
     const offset = offsets.get(node.parentId ?? null) ?? { dx: 0, dy: 0 };
     return { ...node, position: { x: at.x + offset.dx, y: at.y + offset.dy } };
+  });
+}
+
+/**
+ * Where the first child of a frame goes, relative to the frame. Edit mode
+ * draws the children of the active item without the frame, so a layout made
+ * there starts at this point. The same children then sit clear of the header
+ * when read mode draws the frame around them.
+ */
+export const FRAME_ORIGIN = { x: GROUP_PADDING, y: GROUP_HEADER } as const;
+
+/** Move every top-level node by `offset`. Nodes inside a frame keep their positions. */
+export function shiftTopLevel(nodes: CanvasNode[], offset: { x: number; y: number }): CanvasNode[] {
+  return nodes.map((node) =>
+    node.parentId
+      ? node
+      : { ...node, position: { x: node.position.x + offset.x, y: node.position.y + offset.y } },
+  );
+}
+
+/**
+ * Move the children of each frame right or down when one of them starts left
+ * of the frame or above it.
+ *
+ * Edit mode draws the children of the active item without the frame, so a
+ * child can be put at a negative position there. Read mode clips a child to
+ * its frame. For each frame with a child at x < 0, this function moves all its
+ * children right by the same amount, so the leftmost child starts at
+ * `GROUP_PADDING`. A child at y < 0 moves all of them down in the same way, to
+ * `GROUP_HEADER`. The children keep their positions relative to each other.
+ * Frames with no negative position are not changed.
+ */
+export function keepInsideFrames(nodes: CanvasNode[]): CanvasNode[] {
+  const offsets = new Map<string, { dx: number; dy: number }>();
+  const lowest = new Map<string, { x: number; y: number }>();
+  for (const node of nodes) {
+    if (!node.parentId) continue;
+    const seen = lowest.get(node.parentId) ?? { x: Infinity, y: Infinity };
+    lowest.set(node.parentId, {
+      x: Math.min(seen.x, node.position.x),
+      y: Math.min(seen.y, node.position.y),
+    });
+  }
+  for (const [parentId, { x, y }] of lowest) {
+    const dx = x < 0 ? GROUP_PADDING - x : 0;
+    const dy = y < 0 ? GROUP_HEADER - y : 0;
+    if (dx || dy) offsets.set(parentId, { dx, dy });
+  }
+  if (!offsets.size) return nodes;
+  return nodes.map((node) => {
+    const offset = node.parentId ? offsets.get(node.parentId) : undefined;
+    if (!offset) return node;
+    return {
+      ...node,
+      position: { x: node.position.x + offset.dx, y: node.position.y + offset.dy },
+    };
   });
 }

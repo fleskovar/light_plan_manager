@@ -865,6 +865,32 @@ Things to keep true here:
   own width, so a widened node keeps its neighbours at arm's length. A resize is
   in `CanvasGraph.signature()` because the subflow around it has to be measured
   again; a drag is not, because only the dragged node moved.
+- **Edit mode reads the same positions as read mode.** The editor's canvas has
+  two modes. `CanvasMode` in `lib/workspace/canvas-mode.svelte.ts` holds the
+  mode, the active item and the open title field, one instance for each tab on
+  the `Workspace`. No file stores them. In edit mode `CanvasGraph` passes the
+  active item to `visibleTree` as `scope`. `visibleTree` then keeps only the
+  members inside that item, and draws the children of the item at the top level.
+  A saved position of a child is relative to its parent in both modes, so edit
+  mode writes the same `NodeLayout` values that read mode reads. Three functions
+  in `layout.ts` keep the two modes consistent. `shiftTopLevel` and the
+  `topOrigin` argument of `placeNewNodes` start a layout in edit mode at
+  `FRAME_ORIGIN`, below the header of the frame. `keepInsideFrames` moves the
+  children of a frame right or down when edit mode left one at a negative
+  position. A new item in edit mode reaches the board only when its title is
+  submitted (`Draft` in `Canvas.svelte.ts`). **Add new…** creates the item
+  first and opens its title field with `removeOnCancel`, so `finishRename`
+  removes the item when the title is cancelled. While a `TitleField` is
+  mounted, `CanvasMode.fieldOpen` is true and `Workspace` holds back the
+  automatic push, because a push replaces a temporary id and that closes the
+  field. The count follows the mounted field and not `renaming`, so a node
+  that SvelteFlow does not draw cannot hold the push. SvelteFlow removes and
+  adds node elements when the visible part of the canvas changes, and that
+  blurs a field inside a node. `TitleField` therefore submits on a press
+  outside it or on a move of the focus to another element, and takes the
+  focus back after a blur with no new focus target. The pure questions about the active
+  item (`breadcrumb`, `creatableTypes`, `canEnter`, `scopeShowing`) are in
+  `features/canvas/scope.ts`.
 - **The viewer holds folding apart from positions.** A `NodeLayout` cannot say
   "collapsed, but put it wherever you like", and `CanvasGraph` treats any layout
   entry as a saved position — so seeding coordinates to express a fold would rob

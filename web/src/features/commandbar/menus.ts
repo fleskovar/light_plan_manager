@@ -273,6 +273,13 @@ export function viewMenu(context: MenuBarContext): MenuEntry[] {
     { label: 'Board overview…', disabled: !ready, onSelect: () => (shell.overviewOpen = true) },
     { separator: true },
     {
+      label: 'Edit mode',
+      // A tick when edit mode is on, like the switches of the panes below.
+      hint: workspace.canvasMode.editing ? '✓' : shortcutLabel(bindingOf('mode')),
+      disabled: !ready,
+      onSelect: () => runBinding('mode', context),
+    },
+    {
       label: 'Arrange the graph',
       hint: shortcutLabel(bindingOf('arrange')),
       disabled: !ready,

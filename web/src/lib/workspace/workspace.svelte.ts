@@ -25,6 +25,7 @@ import { ApiError, api } from '$lib/api/client.js';
 import type { WorkingNodes } from '$lib/board/working.js';
 import { applyChange, replay } from '$lib/board/working.js';
 import { buildIndex, type NodeIndexImpl } from '$lib/board/index.js';
+import { CanvasMode } from './canvas-mode.svelte.js';
 import { Selection } from './selection.svelte.js';
 
 /**
@@ -108,6 +109,9 @@ export class Workspace {
   syncBadges = $state<Record<string, SyncBadge>>({});
 
   readonly selection = new Selection();
+
+  /** Read mode or edit mode, and the active item of edit mode. Never saved. */
+  readonly canvasMode = new CanvasMode();
 
   /**
    * Called after every push that actually wrote something, manual or
@@ -450,6 +454,7 @@ export class Workspace {
     this.index = buildIndex(this.nodes);
     view.members = view.members.filter((id) => this.nodes[id]);
     this.selection.retain((id) => Boolean(this.nodes[id]));
+    this.canvasMode.retain((id) => Boolean(this.nodes[id]));
     this.#seedTempIds();
   }
 
@@ -613,7 +618,21 @@ export class Workspace {
   schedulePush(): void {
     this.#armSave();
     if (this.#pushTimer) clearTimeout(this.#pushTimer);
-    this.#pushTimer = setTimeout(() => void this.push(true), AUTOSAVE_DELAY);
+    this.#pushTimer = setTimeout(() => this.#autoPush(), AUTOSAVE_DELAY);
+  }
+
+  /**
+   * The push that `schedulePush` runs. While a title field is on screen on
+   * the canvas, the push waits another `AUTOSAVE_DELAY`. A push gives real
+   * ids to new documents, and a new id would close the field and lose the
+   * text that was typed. `flush` does not wait, so closing a tab still pushes.
+   */
+  #autoPush(): void {
+    if (this.canvasMode.fieldOpen) {
+      this.#pushTimer = setTimeout(() => this.#autoPush(), AUTOSAVE_DELAY);
+      return;
+    }
+    void this.push(true);
   }
 
   /**
@@ -743,6 +762,7 @@ export class Workspace {
         ),
       });
       this.selection.set(this.#remap(this.selection.ids, result.idMap));
+      this.canvasMode.remap(result.idMap);
       if (Object.keys(result.idMap).length) {
         this.#allocated = { ...this.#allocated, ...result.idMap };
       }

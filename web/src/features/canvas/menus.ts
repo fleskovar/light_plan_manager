@@ -19,6 +19,7 @@ import {
 } from '$lib/workspace/mutations.js';
 import type { Workspace } from '$lib/workspace/workspace.svelte.js';
 import type { RemoteState } from '$features/drawer/remote/remote.svelte.js';
+import { canEnter, creatableTypes } from './scope.js';
 
 /** The registry's container type. @see src/core/model/types.ts */
 const TEMPLATE_FOLDER = 'folder';
@@ -43,6 +44,26 @@ export interface MenuContext {
   /** Where the click happened, in canvas coordinates, for placing new nodes. */
   at?: { x: number; y: number };
   onarrange?: () => void;
+  /**
+   * Present in edit mode only. The canvas supplies these actions, and the
+   * menus then offer them. In read mode the field is absent, and the menus
+   * are the menus of read mode.
+   */
+  edit?: EditActions;
+}
+
+/** The actions of edit mode that the canvas menus offer. */
+export interface EditActions {
+  /** The active item, or null when edit mode shows the whole view. */
+  activeId: string | null;
+  /** Make `id` the active item. */
+  enter(id: string): void;
+  /** Open the title field of `id` on the canvas. */
+  rename(id: string): void;
+  /** Open the window of one issue, which a double-click opens in read mode. */
+  openWindow(id: string): void;
+  /** Open the card of a new item of `type` at `at`, in canvas coordinates. */
+  draft(type: string, at: { x: number; y: number } | undefined): void;
 }
 
 /**
@@ -305,13 +326,27 @@ export function removalEntries(context: MenuContext, ids: string[]): MenuEntry[]
   ];
 }
 
+/**
+ * Create a child of `parentId` and open its title field on the canvas, so the
+ * reader types the title at once. The item is selected, and the canvas travels
+ * to it. A collapsed parent is expanded first, because the field is drawn on
+ * the new node and a collapsed parent hides its children. Esc, or an empty
+ * title, removes the item again. Returns the new id.
+ */
+export function createAndName(workspace: Workspace, type: string, parentId: string): string {
+  if (workspace.isCollapsed(parentId)) workspace.toggleCollapsed(parentId);
+  const id = createNode(workspace, { type, parentId });
+  workspace.selection.focus(id);
+  workspace.canvasMode.startRename(id, true);
+  return id;
+}
+
 function newChildEntries(context: MenuContext, node: NodeDto): MenuEntry[] {
   const { workspace } = context;
   return childTypes(workspace.config, node.kind, node.depth).map((type) => ({
     label: workspace.config.types[type]?.label ?? type,
     onSelect: () => {
-      const id = createNode(workspace, { type, parentId: node.id });
-      workspace.selection.focus(id);
+      createAndName(workspace, type, node.id);
     },
   }));
 }
@@ -369,6 +404,7 @@ export function nodeMenu(context: MenuContext, id: string): MenuEntry[] {
     // Right-clicking one of several selected nodes edits all of them, so the
     // menu says how many before it offers anything.
     ...(selected.length > 1 ? [selectionHeading(selected)] : []),
+    ...editNodeEntries(context, node),
     {
       label: 'Add new…',
       items: children,
@@ -405,6 +441,30 @@ export function nodeMenu(context: MenuContext, id: string): MenuEntry[] {
     { separator: true },
     ...removalEntries(context, selected),
   ];
+}
+
+/**
+ * The entries that edit mode puts at the top of a node's menu. In edit mode a
+ * double-click enters a node or renames it, so the window of the issue moves
+ * into the menu.
+ */
+function editNodeEntries(context: MenuContext, node: NodeDto): MenuEntry[] {
+  const edit = context.edit;
+  if (!edit) return [];
+  const entries: MenuEntry[] = [];
+  if (canEnter(context.workspace.config, node)) {
+    entries.push({
+      label: 'Work inside',
+      hint: 'Double-click',
+      onSelect: () => edit.enter(node.id),
+    });
+  }
+  entries.push({ label: 'Rename', hint: 'F2', onSelect: () => edit.rename(node.id) });
+  if (node.kind === 'issue') {
+    entries.push({ label: 'Open in a window', onSelect: () => edit.openWindow(node.id) });
+  }
+  entries.push({ separator: true });
+  return entries;
 }
 
 export function edgeMenu(
@@ -455,7 +515,11 @@ export function paneMenu(context: MenuContext): MenuEntry[] {
   // In a registry view the same canvas creates templates, so the types on
   // offer come from the registry's hierarchy — the issue levels, plus a folder
   // at every one of them. @see templateHierarchy
-  const rootTypes = workspace.config.hierarchy[workspace.nodeKind][0] ?? [];
+  // In edit mode a new item goes inside the active item, so the types on
+  // offer are the child types of that item.
+  const edit = context.edit;
+  const parent = edit?.activeId ? (workspace.node(edit.activeId) ?? null) : null;
+  const rootTypes = creatableTypes(workspace.config, workspace.nodeKind, parent);
   const selected = workspace.selection.ids;
 
   const onSelection: MenuEntry[] = selected.length
@@ -475,6 +539,11 @@ export function paneMenu(context: MenuContext): MenuEntry[] {
       items: rootTypes.map((type) => ({
         label: workspace.config.types[type]?.label ?? type,
         onSelect: () => {
+          // Edit mode asks for the title first, on a card at the click.
+          if (edit) {
+            edit.draft(type, context.at);
+            return;
+          }
           const id = createNode(workspace, { type, parentId: null });
           if (context.at) workspace.setLayout(id, context.at);
           workspace.selection.focus(id);

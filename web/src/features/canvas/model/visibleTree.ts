@@ -48,6 +48,13 @@ export interface GraphInput {
   display?: Record<string, TypeDisplay>;
   /** Per-node sync badge, when a remote's drift report has been read. */
   syncBadges?: Readonly<Record<string, SyncBadge>>;
+  /**
+   * The active item of edit mode. When it is set, only the members inside it
+   * are drawn, and its own children sit at the top level of the canvas
+   * without a frame around them. The item itself and everything outside it
+   * stay off the canvas. Absent or null draws the whole view.
+   */
+  scope?: string | null;
 }
 
 /** The member ancestors of `id`, nearest first. */
@@ -85,7 +92,12 @@ export function ancestorIds(nodes: WorkingNodes, id: string): string[] {
  * ancestors each visible node carries as a badge.
  */
 export function visibleTree(input: GraphInput): VisibleTree {
-  const members = new Set(input.members.filter((id) => input.nodes[id]));
+  const scope = input.scope ?? null;
+  const members = new Set(
+    input.members.filter(
+      (id) => input.nodes[id] && (scope === null || ancestorIds(input.nodes, id).includes(scope)),
+    ),
+  );
   const display = input.display ?? {};
   const badgedType = (id: string): boolean => display[input.nodes[id]?.type ?? ''] === 'badge';
 
@@ -138,6 +150,8 @@ export function visibleTree(input: GraphInput): VisibleTree {
     // Badged ancestors between here and the node above.
     const lineage: string[] = [];
     for (const ancestor of ancestorIds(input.nodes, id)) {
+      // The active item is named in the breadcrumb bar, so no node repeats it.
+      if (ancestor === scope) break;
       if (members.has(ancestor) && drawn(ancestor)) break;
       if (badgedType(ancestor)) lineage.unshift(ancestor);
     }

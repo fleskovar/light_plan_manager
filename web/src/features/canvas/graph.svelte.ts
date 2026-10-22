@@ -1,7 +1,15 @@
 import { MarkerType, type Edge, type Node } from '@xyflow/svelte';
 import type { PeriodDto } from '$shared';
 import { relatedTo } from './highlight.js';
-import { applyLayout, fitGroups, layoutGraph, placeNewNodes } from './layout.js';
+import {
+  FRAME_ORIGIN,
+  applyLayout,
+  fitGroups,
+  keepInsideFrames,
+  layoutGraph,
+  placeNewNodes,
+  shiftTopLevel,
+} from './layout.js';
 import type { CanvasEdge, CanvasNode, CanvasNodeData } from './model.js';
 import { buildGraph } from './model.js';
 import type { GraphSource } from './source.js';
@@ -20,6 +28,15 @@ import type { GraphSource } from './source.js';
  * *goes* is the source's business: queued into a view file, or held in memory
  * until the tab closes.
  */
+export interface CanvasGraphOptions {
+  /**
+   * The active item of edit mode, or null to draw the whole view. With an
+   * active item, a saved position of a top-level node is relative to that
+   * item, which is the same space that read mode uses inside its frame.
+   */
+  scope?: () => string | null;
+}
+
 export class CanvasGraph {
   nodes = $state.raw<Node[]>([]);
   edges = $state.raw<Edge[]>([]);
@@ -27,7 +44,24 @@ export class CanvasGraph {
   /** The display the last sync drew, so a change to it can be noticed. */
   #display: string | null = null;
 
-  constructor(private readonly source: GraphSource) {}
+  readonly #scope: () => string | null;
+
+  constructor(
+    private readonly source: GraphSource,
+    options: CanvasGraphOptions = {},
+  ) {
+    this.#scope = options.scope ?? (() => null);
+  }
+
+  /** The active item that the graph draws the inside of, or null for the whole view. */
+  get scope(): string | null {
+    return this.#scope();
+  }
+
+  /** Where a layout puts its top-left node: the inside of the frame when scoped. */
+  #topOrigin(): { x: number; y: number } {
+    return this.scope ? FRAME_ORIGIN : { x: 0, y: 0 };
+  }
 
   /**
    * A cheap description of the *logical* graph; a change here means a rebuild.
@@ -71,7 +105,8 @@ export class CanvasGraph {
       .join(';');
 
     // And the planning mode, which decides whether any of that is drawn at all.
-    return `${members}|${periods}|${source.config.planning}|${this.#displayDigest()}`;
+    // The active item of edit mode decides which members are drawn.
+    return `${members}|${periods}|${source.config.planning}|${this.#displayDigest()}|${this.scope ?? ''}`;
   }
 
   /** Which levels are drawn as badges, in a form two syncs can compare. */
@@ -92,6 +127,7 @@ export class CanvasGraph {
       isCollapsed: (id) => source.isCollapsed(id),
       display: source.display,
       syncBadges: source.syncBadges,
+      scope: this.scope,
     });
   }
 
@@ -134,12 +170,13 @@ export class CanvasGraph {
       graph.nodes.map((node) => this.#withSavedGeometry(node)),
       graph.edges,
       (id) => saved[id] !== undefined,
+      this.#topOrigin(),
     );
     for (const node of placed) {
       if (!saved[node.id]) source.setLayout(node.id, node.position);
     }
 
-    this.#publish(fitGroups(placed), graph.edges);
+    this.#publish(fitGroups(keepInsideFrames(placed)), graph.edges);
   }
 
   /** Lay the whole canvas out again and remember where everything landed. */
@@ -151,7 +188,9 @@ export class CanvasGraph {
       const saved = this.source.layout[node.id];
       return { ...node, width: saved?.width ?? node.width, height: saved?.height ?? node.height };
     });
-    const laid = fitGroups(applyLayout(sized, layoutGraph(sized, graph.edges)));
+    const laid = fitGroups(
+      shiftTopLevel(applyLayout(sized, layoutGraph(sized, graph.edges)), this.#topOrigin()),
+    );
     for (const node of laid) this.source.setLayout(node.id, node.position);
     this.#publish(laid, graph.edges);
   }

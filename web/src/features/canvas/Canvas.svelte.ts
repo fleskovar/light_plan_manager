@@ -12,6 +12,9 @@ import type { Workspace } from '$lib/workspace/workspace.svelte.js';
 import type { Shell } from '$lib/app/shell.svelte.js';
 import {
   assignSelection,
+  createNode,
+  editNode,
+  removeNodes,
   reparent,
   reparentChoices,
   scheduleSelection,
@@ -20,6 +23,7 @@ import {
 import { periodDropAt } from '$features/drawer/periods/periods.js';
 import { carriedIds, type CarryHandlers } from './carry.js';
 import type { CanvasGraph } from './graph.svelte.js';
+import { NODE_HEIGHT, NODE_WIDTH } from './model.js';
 
 // ---------------------------------------------------------------------------
 // Hit-testing
@@ -330,4 +334,81 @@ export function handleRosterDrop(
   if (!target) return;
   const ids = workspace.selection.has(target.id) ? [...workspace.selection.ids] : [target.id];
   assignSelection(workspace, ids, resourceId);
+}
+
+// ---------------------------------------------------------------------------
+// New items in edit mode
+// ---------------------------------------------------------------------------
+
+/** The space between a new item and the next one that Enter opens below it. */
+export const DRAFT_GAP = 24;
+
+/**
+ * A new item that waits for its title. The board receives nothing until the
+ * title is submitted, so the id of the item cannot change while it is typed.
+ */
+export interface Draft {
+  /** Counts the drafts, so each one gets a new title field. */
+  serial: number;
+  /** The parent of the new item: the active item, or null at the top level. */
+  parentId: string | null;
+  type: string;
+  /** Top-left corner of the item, in the coordinates of the canvas. */
+  position: { x: number; y: number };
+}
+
+/** The top-left corner that puts a new item's centre on `point`. */
+export function centredOn(point: { x: number; y: number }): { x: number; y: number } {
+  return { x: point.x - NODE_WIDTH / 2, y: point.y - NODE_HEIGHT / 2 };
+}
+
+/** The draft that Enter opens after `draft`: the same parent and type, one row lower. */
+export function nextDraft(draft: Draft): Draft {
+  return {
+    ...draft,
+    serial: draft.serial + 1,
+    position: { x: draft.position.x, y: draft.position.y + NODE_HEIGHT + DRAFT_GAP },
+  };
+}
+
+/**
+ * Create the item that `draft` describes, with `title`, at the draft's
+ * position, and select it. Returns the new id, or null when `title` is null.
+ *
+ * The parent id goes through `workspace.resolve`, because a push can give a
+ * real id to a parent that was created in this session while the title was
+ * typed. The position is stored before the canvas syncs, so the item appears
+ * where the card was.
+ */
+export function commitDraft(workspace: Workspace, draft: Draft, title: string | null): string | null {
+  if (title === null) return null;
+  const parentId = draft.parentId ? workspace.resolve(draft.parentId) : null;
+  const id = createNode(workspace, { type: draft.type, parentId, title });
+  workspace.setLayout(id, draft.position);
+  workspace.selection.set([id]);
+  return id;
+}
+
+/** True when a double-click landed on the empty canvas, not on a node, an edge or a control. */
+export function isPaneTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && target.classList.contains('svelte-flow__pane');
+}
+
+/**
+ * Close the title field of `id` on the canvas and apply what was typed.
+ *
+ * A title writes the key `title` of `id`, unless it equals the current title.
+ * A null title means Esc or an empty field. It changes nothing, except on an
+ * item that **Add new…** created for the field: that item is removed, so the
+ * queue holds no change for it.
+ */
+export function finishRename(workspace: Workspace, id: string, title: string | null): void {
+  const remove = workspace.canvasMode.renaming === id && workspace.canvasMode.closeRename();
+  const node = workspace.node(id);
+  if (!node) return;
+  if (title === null) {
+    if (remove) removeNodes(workspace, [id]);
+    return;
+  }
+  if (title !== node.title) editNode(workspace, id, { title });
 }
