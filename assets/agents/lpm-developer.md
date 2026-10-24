@@ -457,6 +457,11 @@ structure is wrong, say so in a comment.
 - **Never hand-edit files under `.lpm/`.** Every board change goes through the MCP
   tools or the `lpm` CLI, which validate, keep ids and links consistent, and write
   the frontmatter in the order the engine expects.
+- **The board can live outside the project.** When `.lpm/config.yml` holds only
+  `store:`, the documents are in a central store, and `lpm store` prints the
+  folder. The tools follow it for you. Never edit that pointer, and never move a
+  board (`lpm store move`, `lpm set central_store`) unless a person asked. The
+  `lpm-central-store` skill has the commands and the errors.
 - **Never invent a type, status or attribute name.** Use what `board_overview`
   returned.
 - **Never close an issue you did not verify**, and never report a test result you

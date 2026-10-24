@@ -542,6 +542,13 @@ the spike LP-30" — not "created 9 documents".
   or the `lpm` CLI, which validate the hierarchy, allocate ids and keep links
   consistent.
 - **Never invent a type, status or attribute value.** Use `board_overview`.
+- **The board can live outside the project.** When `.lpm/config.yml` holds only
+  `store:`, the config and the documents are in a central store (`lpm store`
+  prints the folder), and `board_overview` reads the real config. Never edit
+  the pointer, and never move a board or the store unless a person asked. When
+  you create a board for someone, pass `lpm init --central` or `--local` as
+  they said: without a terminal, `lpm init` does not ask. Load
+  `lpm-central-store` for the rest.
 - **Never write a ticket with no definition of done.**
 - **Never assign a container** and expect anyone to be offered it.
 - **`dryRun` before any destructive or structural change** with children or

@@ -14,7 +14,7 @@ body). It is versioned with git, has no server and no database, and is driven
 three ways that all produce the same board: the `lpm` CLI, an MCP server for
 agents, and a web app (`lpm ui`).
 
-This skill is the orientation and the map. Eight companions cover the jobs:
+This skill is the orientation and the map. Nine companions cover the jobs:
 
 | Skill | Load it when |
 | --- | --- |
@@ -23,6 +23,7 @@ This skill is the orientation and the map. Eight companions cover the jobs:
 | `lpm-templates` | the reusable pieces of plan in `.lpm/registry/` — **check these before creating anything** |
 | `lpm-delivery` | picking work up, recording progress, closing issues |
 | `lpm-board-health` | `lpm check`, repairing a board, "why is nobody offered work", publishing |
+| `lpm-central-store` | a board whose documents are in a central store (`.lpm/config.yml` holds only `store:`), `lpm store`, `lpm projects`, `lpm set central_store`, or an error about a board pointer |
 | `lpm-writing` | how to write titles, bodies and comments: plain technical English for engineers. **Load it before you write anything on a board** |
 | `lpm-writing-items` | what the body of each type must contain (epic, feature, story, task, bug, test, research, sub-task), with an example for each |
 | `lpm-writing-reviews` | how to ask a senior developer or engineer for a decision: the request, the context, the evidence, the validation steps and the attachments |
@@ -36,8 +37,14 @@ its own types, its own hierarchy and its own statuses in `.lpm/config.yml`.
 
 ```bash
 lpm check          # validates, and fails loudly if you are not on a board
+lpm store          # where the board documents are: local (.lpm) or central
 cat .lpm/config.yml
 ```
+
+When `.lpm/config.yml` holds only the key `store:`, the file is a pointer: the
+board documents, and the real config, are in the central board folder that
+`lpm store` prints. Every command and MCP tool follows the pointer. Load
+`lpm-central-store` before you read or touch board files directly.
 
 Over MCP, one call answers everything:
 

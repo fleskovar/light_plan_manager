@@ -36,8 +36,16 @@ reported and left alone.
 | an id counter that drifted from what is on disk | an assignee who is not on the roster |
 | a stale or missing `.lpm/INDEX.md` | |
 | a container whose status is out of step with the work inside it | |
+| a missing or wrong `project.json` of a central board (from the project folder) | a pointer that names a folder without a board |
 
 Run `lpm check` before you commit, after any hand-edit, and after every merge.
+
+**When no command finds the board.** An error that starts with "The board
+pointer in .../.lpm/config.yml names ..." means that the board documents live in
+a central store, and the pointer names a folder that is gone. `lpm check
+--fix` cannot repair a pointer. Do not run `lpm init` over it. Load
+`lpm-central-store`: it lists each such error and its fix, and `lpm projects`
+and `lpm store list` show where the boards of this computer are.
 
 ## Loading is deliberately forgiving
 
@@ -240,7 +248,11 @@ lpm team                    # uncovered pools, unowned work, load vs capacity
 lpm task next --unassigned  # is anything ready that nobody owns?
 lpm export                  # refresh the published file
 cd .lpm && git add -A && git commit -m "..." && git push
+lpm projects prune          # drop recorded projects whose board is gone (any folder)
 ```
+
+On a central board, the git repository is the folder that `lpm store` prints,
+not `.lpm`.
 
 A board that passes `check --strict`, has no `uncovered` pools and offers each
 person at least one thing tomorrow is healthy. Everything else is planning.

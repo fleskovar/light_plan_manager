@@ -19,7 +19,16 @@ lpm init --template ./our-config.yml  # your own config as the starting point
 lpm init --no-git                     # skip the nested git repo
 lpm init --no-omni                    # skip the standing omni periods (below)
 lpm init --planning periods           # start in sprint planning, not in queue mode
+lpm init --central                    # board documents in the central store (below)
+lpm init --local                      # board in .lpm, even when a central store is set
 ```
+
+**Where the board goes.** When the user setting `central_store` is set
+(`lpm config get central_store` prints it), `lpm init` can put the board
+documents in `<central_store>/.lpm_central/<folder name>` and leave a pointer
+in `.lpm/config.yml`. `lpm init` asks only at a terminal. An agent has none, so
+without a flag it gets a local board. Pass `--central` or `--local` when the
+person said which one. Load `lpm-central-store` for the details.
 
 Three built-ins ship: **scrum** (program > epic > feature > story/bug/test/review/
 research > sub-task, with sprints and increments and a roster), **kanban**
@@ -49,6 +58,9 @@ separate:
 ```bash
 cd .lpm && git remote add origin git@github.com:acme/plan.git && git push -u origin main
 ```
+
+On a central board, the repository is the central board folder, not `.lpm`.
+`lpm store` prints it, and `lpm git setup` works the same way for both stores.
 
 Commit the board like anything else. Conflicts are ordinary markdown conflicts.
 
