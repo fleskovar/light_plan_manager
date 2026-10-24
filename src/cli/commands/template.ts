@@ -5,6 +5,7 @@ import {
   BoardError,
   TEMPLATE_FOLDER_TYPE,
   createTemplate,
+  displayPath,
   findNode,
   isTemplateRoot,
   parseAttributeInput,
@@ -276,7 +277,7 @@ function create(args: string[]): number {
   });
 
   out(`${green('Created')} ${bold(template.id)}  ${template.title}`);
-  out(dim(`  ${template.file.replace(board.paths.root, '').replace(/^[\\/]/, '')}`));
+  out(dim(`  ${displayPath(board.paths, template.file)}`));
   return 0;
 }
 

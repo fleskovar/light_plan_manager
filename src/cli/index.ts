@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
-import { BoardError } from '../core/index.js';
+import { BoardError, findBoardPaths, recordProjectQuietly } from '../core/index.js';
 import * as agent from './commands/agent/index.js';
 import * as check from './commands/check.js';
 import * as comment from './commands/comment.js';
+import * as config from './commands/config.js';
+import * as projects from './commands/projects.js';
+import * as store from './commands/store.js';
 import * as convert from './commands/convert.js';
 import * as copy from './commands/copy.js';
 import * as experimental from './commands/experimental.js';
@@ -68,6 +71,9 @@ const commands: Record<string, Command> = {
   git,
   check,
   experimental,
+  config,
+  store,
+  projects,
   ui,
   export: exportBoard,
   mcp,
@@ -130,6 +136,9 @@ const summaries: Record<string, string> = {
   git: 'Share the board through git: pull before every change, push after',
   check: 'Validate the board; --fix repairs what it can',
   experimental: 'Turn the unfinished features on or off, and install their packages',
+  config: 'Show and change your user settings, such as the central store',
+  store: 'Show where the board is stored; move it to or from the central store',
+  projects: 'List every project that lpm worked on, on this computer',
   ui: 'Open the board in a web browser',
   export: 'Publish the board as a static site anyone can open',
   mcp: 'Serve the board to AI agents over MCP',
@@ -145,6 +154,21 @@ function version(): string {
     return pkg.version ?? '0.0.0';
   } catch {
     return '0.0.0';
+  }
+}
+
+/**
+ * Record the project of the board that this command works on, in the project
+ * index of the user folder (`lpm projects` lists it). A folder without a board,
+ * or a pointer that names no board, records nothing: the command itself
+ * reports that, and the index never makes a command fail.
+ */
+function recordCurrentProject(): void {
+  try {
+    const paths = findBoardPaths();
+    if (paths) recordProjectQuietly(paths);
+  } catch {
+    // The command reports the broken board itself.
   }
 }
 
@@ -205,6 +229,8 @@ function main(): number {
     out(command.help);
     return 0;
   }
+
+  recordCurrentProject();
 
   try {
     return command.run(rest);

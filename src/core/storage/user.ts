@@ -20,6 +20,14 @@ import { expandHome } from './paths.js';
  * - `settings.json` holds the key `default_template`. The value is the name of
  *   the template that `lpm init` uses when no `--template` is given. When the
  *   key is absent, `lpm init` uses `scrum`.
+ * - `settings.json` also holds the key `central_store`. The value is the
+ *   absolute path of the central store, the folder whose `.lpm_central`
+ *   holds boards outside their projects. When the key is absent, there is no
+ *   central store. `operations/central-store.ts` reads and writes it.
+ * - `projects.json` is the project index: every project that an `lpm` command
+ *   worked on, with its board folder and the time of the last use.
+ *   `storage/project-index.ts` reads and writes it, and
+ *   `operations/project-index.ts` owns its rules.
  *
  * Nothing here knows what a template contains. `operations/board-template.ts`
  * owns the rules.
@@ -32,6 +40,12 @@ export const USER_TEMPLATES_DIR = 'templates';
 export interface UserSettings {
   /** The board template that `lpm init` uses when no `--template` is given. */
   default_template?: string;
+  /**
+   * The absolute path of the central store. `lpm config set central_store`
+   * writes it. `lpm init`, `lpm store` and `lpm ui` read it. When the key is
+   * absent, there is no central store, and every board is local.
+   */
+  central_store?: string;
 }
 
 export function userDir(): string {

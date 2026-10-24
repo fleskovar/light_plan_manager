@@ -1,8 +1,9 @@
-import { appendFileSync, readFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { writeFileAtomic } from './atomic.js';
 import type { BoardPaths } from './paths.js';
-import { CREDENTIALS_FILE, LOCAL_FILE, LOCK_FILE, expandHome } from './paths.js';
+import { isCentralBoard } from './central.js';
+import { CREDENTIALS_FILE, LOCAL_FILE, LOCK_FILE, PROJECT_FILE, expandHome } from './paths.js';
 
 /**
  * Per-checkout settings, kept in `.lpm/local.json` and deliberately not
@@ -89,7 +90,7 @@ const CREDENTIALS_PATTERN = 'remotes/*/credentials*';
  * precedes it. One source of truth so the heal (`ensureLocalIgnored`) and the
  * check (`checkGitignore`) cannot drift about what belongs in the file.
  */
-const IGNORED_ENTRIES: ReadonlyArray<{ comment: string; entries: string[] }> = [
+const IGNORED_ENTRIES: ReadonlyArray<{ comment: string; entries: string[]; centralOnly?: boolean }> = [
   { comment: '# Per-checkout settings (current user)', entries: [LOCAL_FILE] },
   {
     comment: '# Remote credentials (never commit these)',
@@ -99,17 +100,57 @@ const IGNORED_ENTRIES: ReadonlyArray<{ comment: string; entries: string[] }> = [
     comment: '# Write lock, held only while a change is in flight',
     entries: [LOCK_FILE, `${LOCK_FILE}.stale.*`],
   },
+  {
+    // Only a central board has the file, so a local board is not asked for it.
+    comment: '# The project folder of this central board (different on each computer)',
+    entries: [PROJECT_FILE],
+    centralOnly: true,
+  },
 ];
 
-/** The trimmed lines of `.lpm/.gitignore`, or [] when the file is absent. */
-function gitignoreLines(paths: BoardPaths): string[] {
+/** The groups that this board must ignore. */
+function entriesFor(paths: BoardPaths): typeof IGNORED_ENTRIES {
+  return IGNORED_ENTRIES.filter((group) => !group.centralOnly || isCentralBoard(paths));
+}
+
+/** The trimmed lines of a file, or [] when the file is absent. */
+function linesOf(file: string): string[] {
   try {
-    return readFileSync(path.join(paths.lpmDir, '.gitignore'), 'utf8')
+    return readFileSync(file, 'utf8')
       .split(/\r?\n/)
       .map((line) => line.trim());
   } catch {
     return [];
   }
+}
+
+/**
+ * The trimmed ignore lines of the board: `.gitignore`, and `.git/info/exclude`.
+ * git reads both. The second file is never committed, so a clone that must
+ * ignore one more file (`project.json` after `lpm git join --central`) can do
+ * it there without changing a file of the shared board.
+ */
+function gitignoreLines(paths: BoardPaths): string[] {
+  return [
+    ...linesOf(path.join(paths.lpmDir, '.gitignore')),
+    ...linesOf(path.join(paths.lpmDir, '.git', 'info', 'exclude')),
+  ];
+}
+
+/**
+ * Add `entries` to `.git/info/exclude` of the board repository, when the
+ * board ignores none of them yet. Returns true if the file changed.
+ */
+export function excludeLocally(paths: BoardPaths, entries: string[]): boolean {
+  const lines = gitignoreLines(paths);
+  const missing = entries.filter((entry) => !lines.includes(entry));
+  if (!missing.length) return false;
+  const file = path.join(paths.lpmDir, '.git', 'info', 'exclude');
+  mkdirSync(path.dirname(file), { recursive: true });
+  const text = linesOf(file).join('\n');
+  const separator = text === '' || text.endsWith('\n') ? '' : '\n';
+  appendFileSync(file, `${separator}${missing.join('\n')}\n`, 'utf8');
+  return true;
 }
 
 /**
@@ -120,7 +161,7 @@ function gitignoreLines(paths: BoardPaths): string[] {
 export function missingIgnoredEntries(paths: BoardPaths): string[] {
   const lines = gitignoreLines(paths);
   const missing: string[] = [];
-  for (const group of IGNORED_ENTRIES) {
+  for (const group of entriesFor(paths)) {
     for (const entry of group.entries) {
       if (!lines.includes(entry)) missing.push(entry);
     }
@@ -141,11 +182,13 @@ export function ensureLocalIgnored(paths: BoardPaths): boolean {
     // No .gitignore in the board yet; we create it below.
   }
   const lines = text.split(/\r?\n/).map((l) => l.trim());
+  // An entry in `.git/info/exclude` counts: git ignores the file either way.
+  const ignored = gitignoreLines(paths);
 
   const additions: string[] = [];
 
-  for (const group of IGNORED_ENTRIES) {
-    const missing = group.entries.filter((entry) => !lines.includes(entry));
+  for (const group of entriesFor(paths)) {
+    const missing = group.entries.filter((entry) => !ignored.includes(entry));
     if (missing.length === 0) continue;
     // A group written over two versions should not grow a second heading: the
     // comment is only added when it is not already in the file.

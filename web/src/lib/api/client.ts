@@ -13,7 +13,9 @@ import type {
   GitSyncResponse,
   GitSyncStatusDto,
   GitUrlCheckDto,
+  HubInfoDto,
   Planning,
+  ProjectEntryDto,
   PushFailure,
   QueueSequenceDto,
   RemoteConflictDto,
@@ -169,6 +171,13 @@ export interface PushResponse {
 export const api = {
   /** Which board, and whether `lpm ui --experimental` turned the tracker remotes on. */
   serverInfo: (): Promise<ServerInfoDto> => request('/api/health'),
+  /** The hub that `lpm ui` serves outside a board. A board server answers 404 here. */
+  hubInfo: (): Promise<HubInfoDto> => request('/api/hub'),
+  /** Every project of the project index, on a board server and on the hub. */
+  projects: (): Promise<ProjectEntryDto[]> => request('/api/projects'),
+  openProject: (lpmDir: string): Promise<{ url: string }> => request('/api/projects/open', send('POST', { lpmDir })),
+  revealProject: (lpmDir: string): Promise<void> =>
+    request<unknown>('/api/projects/reveal', send('POST', { lpmDir })).then(() => undefined),
 
   me: (): Promise<CurrentUserDto> => request('/api/me'),
 

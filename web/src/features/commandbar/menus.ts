@@ -1,5 +1,6 @@
 import { appearanceEntries } from '$lib/app/options.js';
 import type { Preferences } from '$lib/app/preferences.svelte.js';
+import { goToProjects } from '$lib/app/projects-link.js';
 import type { Shell } from '$lib/app/shell.svelte.js';
 import type { Tabs } from '$lib/app/tabs.svelte.js';
 import {
@@ -134,7 +135,8 @@ const submenu = (items: MenuEntry[]): MenuEntry[] | undefined => (items.length ?
  * The File menu: the commands that act on a view file and on its tab, and the
  * two entries that open the configuration of the board. **Remote board…** opens
  * the same dialog on the tab that shares the board through git or mirrors it
- * onto a tracker.
+ * onto a tracker. **All projects…** goes to the page `/projects`, which lists
+ * every project that `lpm` worked on, on this computer.
  */
 export function fileMenu(context: ViewContext): MenuEntry[] {
   const { tabs, shell, workspace, preferences } = context;
@@ -187,6 +189,9 @@ export function fileMenu(context: ViewContext): MenuEntry[] {
     { separator: true },
     { label: 'Board configuration…', disabled: !ready, onSelect: () => shell.openConfig('types') },
     { label: 'Remote board…', disabled: !ready, onSelect: () => shell.openConfig('remote') },
+    { separator: true },
+    // Every project that lpm worked on, on this computer: the page /projects.
+    { label: 'All projects…', onSelect: () => goToProjects() },
     { separator: true },
     {
       label: 'Delete view…',

@@ -16,7 +16,9 @@ export function checkIndex(board: LoadedBoard, problems: Problem[]): void {
   } catch {
     // Absent, which is exactly the stale case below.
   }
-  if (current === renderBoardIndex(board)) return;
+  // git with `core.autocrlf=true` checks the file out with CRLF line ends. The
+  // content is the same, so only the line ends are not compared.
+  if (current !== null && current.replace(/\r\n/g, '\n') === renderBoardIndex(board)) return;
   problems.push({
     level: 'warn',
     path: displayPath(board.paths, board.paths.indexPath),

@@ -162,6 +162,50 @@ any resource via its `assignee:` field.
 walks: the layouts `lpm instructions` renders a [working brief](#working-briefs-the-context-to-actually-do-it)
 with, so a team decides what a developer is handed when they pick an issue up.
 
+### Keeping boards outside the project: the central store
+
+A board can keep its documents in one folder on your computer, outside the
+project folder. That folder is the **central store**. You name it once:
+
+```bash
+cd ~/boards && lpm set central_store       # or: lpm set central_store --path ~/boards
+```
+
+The command writes the key `central_store` in `settings.json` of the user
+folder (`~/.light-plan`, or the folder that `LPM_HOME` names). When another
+folder is already the central store, it asks whether to move the boards there
+(`--move`), to abandon the old store and keep its boards in place
+(`--abandon`), or to cancel. When the key is
+set, `lpm init` asks where to create each new board. `--central` and `--local`
+answer without the question. Without a terminal, `lpm init` creates a local
+board.
+
+```
+~/boards/
+└── .lpm_central/
+    ├── shop/                 the board of ~/work/shop: config.yml, board/, ...
+    │   └── project.json      { "project_path": "~/work/shop" }, never committed
+    └── shop-2/               the board of another folder called shop
+~/work/shop/
+└── .lpm/
+    └── config.yml            store: "~/boards/.lpm_central/shop"
+```
+
+The central board folder holds the same files as a `.lpm` folder, and it is its
+own git repository. The project keeps `.lpm/config.yml` with one key, `store`,
+whose value is the absolute path of the central board folder. Every `lpm`
+command run in the project follows it.
+
+`lpm store move --to central` and `--to local` move an existing board, with
+its git history. `lpm store list` lists the central boards.
+
+Each `lpm` command also records its project in `projects.json` of the user
+folder, so `lpm projects` lists every board on the computer, local or central.
+In the web app, File > "All projects…" shows the same list, with an Open and a
+Reveal button for each project. `lpm ui` in a folder without a board opens that
+page when a central store is set. [`docs/central-store.md`](docs/central-store.md)
+is the full guide, with the assumptions and the known issues.
+
 ## Quick start
 
 ```bash
@@ -2689,7 +2733,7 @@ still refused.
 
 | Command | What it does |
 | --- | --- |
-| `lpm init [dir]` | Create a board, in queue mode by default. `--template`, `--prefix`, `--no-git`, `--no-omni`, `--planning <queue\|periods>` |
+| `lpm init [dir]` | Create a board, in queue mode by default. `--template`, `--prefix`, `--no-git`, `--no-omni`, `--planning <queue\|periods>`, `--central`, `--local` ([central store](#keeping-boards-outside-the-project-the-central-store)) |
 | `lpm new <type> [title]` | Create an issue, period or resource. `-t/--title`, `-p/--parent`, `-s/--status`, `--period`, `--assignee`, `--depends-on`, `--relates-to`, `--related`, `--starts`, `--ends`, `--capacity`, `--covers`, `--set k=v` |
 | `lpm set <id>` | Edit content. `-t/--title`, `--body`, `--body-file`, `--set k=v`, `--related`, `--unrelated`, `--starts`, `--ends`, `--capacity` |
 | `lpm move <id>` | `-s/--status <id>`, `-p/--parent <id>\|root`, `--period <id>\|none`, `--assignee <id>\|none` |
@@ -2714,6 +2758,9 @@ still refused.
 | `lpm queue agent` | Drain the queue with the pi coding agent. `--user`, `--max-tasks`, `--model`, `--effort`, `--commit`, `--unassigned`, `--parked`, `--timeout`, `--command-timeout`, `--plain`, `--file`, `--dry-run` |
 | `lpm remote [<sub>]` | Mirror the board onto an external tracker. No subcommand lists the remotes. `connect`, `push [<id>…]`, `pull [<key>…]`, `sync`, `status`, `ledger`, and the less common `add`, `login`, `setup`, `rm`, `log`, `resolve`, `link`, `unlink`, `decouple`, `relink`, `rebase`. `--remote <name>`, `--all`, `--children`, `--recursive`, `--parent <id>`, `--scope <id>`, `--force`, `--purge`, `--dry-run`, `--changed`, `--limit N`, `--yes`, `--refresh`, `--since <iso>`, `--json` |
 | `lpm check` | Validate. `--fix` repairs, `--strict` also fails on warnings |
+| `lpm config [<sub>]` | Show and change your user settings in `settings.json` of the user folder. No subcommand lists them. `get <key>`, `set <key> <value>`, `unset <key>`. Keys: `central_store`, `default_template` |
+| `lpm store [<sub>]` | Show where the board is stored: `local` (`<project>/.lpm`) or `central` (a folder in `<central_store>/.lpm_central`). `move --to central\|local` moves it and keeps its git history. `list [--json]` lists the boards in the central store, from any folder ([central store](#keeping-boards-outside-the-project-the-central-store)). `lpm move` is a different command |
+| `lpm projects [<sub>]` | List every project that `lpm` worked on, on this computer, local and central, with its state. `forget <path>`, `prune`, `--json`. Each command that finds a board records it in `projects.json` of the user folder |
 | `lpm experimental [on\|off]` | Say whether the experimental features are on. `on` writes the key `experimental` in `.lpm/config.yml` and installs the missing packages. `off` removes the key. `--no-install` |
 | `lpm ui` | Open the board in a browser. `--port`, `--host`, `--no-open`, `--api-only`, `--experimental`. Alias: `lpm web` |
 | `lpm export` | Publish the board as a static site. `-o/--out`, `--site <dir>`, `--workflow`, `--pretty`. Alias: `lpm publish` |
@@ -2733,6 +2780,7 @@ pre-commit hook. Run `lpm <command> --help` for full options.
 | `LPM_USER` | Act as this resource ([who you are](#working-as-a-team-member)) |
 | `LPM_PROFILE` | The profile file to use ([profiles](#profiles-giving-one-developer-one-part-of-the-board)) |
 | `LPM_HOME` | The user folder, which holds the saved board templates and `settings.json` ([templates](#templates)). The default is `~/.light-plan` |
+| `LPM_PROJECT_INDEX` | `off` stops each command from recording its project in `projects.json` of the user folder (`lpm projects`) |
 | `LPM_LOCK_TIMEOUT_MS`, `LPM_LOCK_STALE_MS`, `LPM_NO_LOCK` | The write lock ([sharing a checkout](#several-people-and-agents-one-checkout)) |
 
 Normally `lpm` finds the board by walking up from the current folder, the way
@@ -3453,7 +3501,17 @@ item becomes the active item.
   seconds after you make it. A change to the description is written only when
   you press *Save* or Ctrl+S. The text beside *Save* shows whether a change is
   unsaved, for example "Saved automatically 10 seconds ago". When you close the
-  window with an unsaved change, the window asks first.
+  window with an unsaved change, the window asks first. A click on an issue
+  under *Blocked by* or *Blocks* opens that issue in a new window. When a
+  window already shows that issue, the click brings that window to the front.
+- **Links between documents** — write `[[LP-12]]` in a body or a comment to
+  link to the document with the id `LP-12`. The side panel and the issue
+  window show the id as a link, with the title of the document as a tooltip.
+  A click on the link opens the issue window for `LP-12`. A Ctrl-click opens
+  it in a new browser tab. An id that the board does not hold shows struck
+  through. Text inside a code span stays as text, and `\[[LP-12]]` stays as
+  text too. The published viewer shows bodies as plain text, so it shows
+  `[[LP-12]]` unchanged.
 - **Panes that spend the room** — dragging the drawer taller or the panel wider
   grows the type and spacing inside it, so a pane made bigger shows bigger rows
   rather than more empty space. Growth is gentler than the drag and stops at

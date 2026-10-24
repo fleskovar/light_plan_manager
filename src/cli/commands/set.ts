@@ -5,11 +5,15 @@ import { BoardError, findNode, updateNode } from '../../core/index.js';
 import { requireBoard } from '../context.js';
 import { parseSets, typeDefOf } from '../plan.js';
 import { bold, dim, green, out } from '../ui.js';
+import * as config from './config.js';
 
 export const help = `Edit a document: its title, its body, or its attributes.
 
 Usage
   lpm set <id> [options]
+  lpm set central_store [--path <dir>] [--move | --abandon]
+                        Make this folder the central store: the same command
+                        as \`lpm config set central_store\` (see lpm config --help)
 
 Options
   -t, --title <text>    Rename it; the folder is renamed to match
@@ -72,7 +76,15 @@ function readBody(text: string | undefined, file: string | undefined): string | 
   }
 }
 
+/**
+ * A user setting, not a document id. An id has the form PREFIX-n, so the name
+ * of a setting cannot be one. `lpm set central_store` runs
+ * `lpm config set central_store` with the same arguments.
+ */
+const USER_SETTINGS = new Set(['central_store']);
+
 export function run(args: string[]): number {
+  if (args[0] !== undefined && USER_SETTINGS.has(args[0])) return config.run(['set', ...args]);
   const { values, positionals } = parseArgs({
     args,
     allowPositionals: true,

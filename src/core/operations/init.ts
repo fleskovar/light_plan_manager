@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { buildBoard } from '../board/load.js';
 import { parseConfigText } from '../config/schema.js';
@@ -10,7 +10,9 @@ import { hasPeriods, hasResources } from '../model/types.js';
 import { gitInit, isGitRepo } from '../storage/git.js';
 import { ensureLocalIgnored } from '../storage/local.js';
 import type { BoardPaths } from '../storage/paths.js';
-import { LPM_DIR, boardPathsFor } from '../storage/paths.js';
+import { writeProjectFile, writeStorePointer } from '../storage/central.js';
+import { LPM_DIR, boardPathsAt, boardPathsFor } from '../storage/paths.js';
+import { centralBoardsDir, createCentralBoardDir } from './central-store.js';
 import { writeState } from '../storage/state.js';
 import { writeBoardIndex } from './board-index.js';
 import { defaultBoardTemplate, readBoardTemplate } from './board-template.js';
@@ -81,10 +83,23 @@ export interface InitOptions {
    * period types is in queue mode whatever is passed, and gets no key.
    */
   planning?: PlanningMode;
+  /**
+   * Where the board documents go (default `local`). `local` writes them to
+   * `<root>/.lpm`. `central` writes them to a new folder in
+   * `<central_store>/.lpm_central`, writes the pointer `<root>/.lpm/config.yml`
+   * and writes `project.json` beside the board. `central` throws when the key
+   * `central_store` is not set.
+   */
+  store?: BoardStore;
 }
 
+/** Where a board keeps its documents: in its project, or in the central store. */
+export type BoardStore = 'local' | 'central';
+
 export interface InitResult {
+  /** `paths.lpmDir` is the central board folder for a central board. */
   paths: BoardPaths;
+  store: BoardStore;
   template: string;
   prefix: string;
   gitInitialized: boolean;
@@ -101,12 +116,40 @@ export interface InitResult {
 
 export function initBoard(options: InitOptions): InitResult {
   const root = path.resolve(options.root);
-  const paths = boardPathsFor(root);
+  const local = boardPathsFor(root);
 
-  if (existsSync(paths.configPath)) {
-    throw new BoardError(`A board already exists at ${paths.lpmDir}`);
+  // A pointer is a `config.yml` too, so this refuses a second board of either kind.
+  if (existsSync(local.configPath)) {
+    throw new BoardError(`A board already exists at ${local.lpmDir}`);
   }
+  if ((options.store ?? 'local') === 'local') return { ...writeNewBoard(local, options), store: 'local' };
 
+  const boardsDir = centralBoardsDir();
+  if (boardsDir === null) {
+    throw new BoardError('No central store is set. Name one with `lpm config set central_store <dir>`', [
+      'Or create the board in this project with `lpm init --local`.',
+    ]);
+  }
+  const lpmDir = createCentralBoardDir(root, boardsDir);
+  const projectLpmExisted = existsSync(local.lpmDir);
+  try {
+    const result = writeNewBoard(boardPathsAt(lpmDir, { root }), options);
+    writeProjectFile(lpmDir, root);
+    writeStorePointer(root, lpmDir);
+    return { ...result, store: 'central' };
+  } catch (error) {
+    // Leave nothing behind: a half-made central board would be listed by the
+    // landing page, and a pointer to it would make every command fail.
+    rmSync(lpmDir, { recursive: true, force: true });
+    if (projectLpmExisted) rmSync(local.configPath, { force: true });
+    else rmSync(local.lpmDir, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+/** Write a new board into `paths.lpmDir`. `paths.root` is the project folder. */
+function writeNewBoard(paths: BoardPaths, options: InitOptions): Omit<InitResult, 'store'> {
+  const root = paths.root;
   const { text, name } = readBoardTemplate(options.template ?? defaultBoardTemplate());
   const prefix = options.prefix ?? derivePrefix(path.basename(root));
   if (!/^[A-Z][A-Z0-9]{0,9}$/.test(prefix)) {

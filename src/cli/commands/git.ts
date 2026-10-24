@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { parseArgs } from 'node:util';
 import type { GitSyncStatus, SyncBoardResult } from '../../core/index.js';
 import {
@@ -10,7 +11,9 @@ import {
   findBoardPaths,
   gitSyncStatus,
   gitTopLevel,
+  isCentralBoard,
   joinGitSync,
+  recordProjectQuietly,
   loadConfig,
   projectRepository,
   remoteNames,
@@ -19,6 +22,7 @@ import {
 } from '../../core/index.js';
 import { noBoardFound } from '../context.js';
 import { ask, choose, confirm } from '../prompt.js';
+import { chooseStore } from '../store-choice.js';
 import { bold, cyan, dim, green, out, pad, plural, red, yellow } from '../ui.js';
 
 /**
@@ -36,7 +40,7 @@ Usage
   lpm git [status] [--local]          Where the board's git remote stands
   lpm git setup [--url <url>] [--branch <b>] [--remote <name>] [--project] [--turn-off-remotes]
                                       Share this board: push it and turn syncing on for everybody
-  lpm git join [--url <url>] [--branch <b>]
+  lpm git join [--url <url>] [--branch <b>] [--central | --local]
                                       Clone a shared board into a project that has none yet
   lpm git sync [--ours | --theirs]    Commit local edits, pull, push — and settle a conflict
   lpm git off [--turn-on-remotes]     Stop sharing (pushed, so it stops for everybody)
@@ -68,6 +72,11 @@ Options
   --remote <name>   The git remote inside .lpm (default origin)
   --project         Use the project's repository even if .lpm points elsewhere
   --local           (status) Do not contact the remote
+                    (join) Clone into .lpm in this project
+  --central         (join) Clone into a new folder in the central store, and
+                    write the pointer .lpm/config.yml. Without --central or
+                    --local, join asks when the key central_store is set and
+                    stdin is a terminal, and clones into .lpm otherwise.
   --ours            (sync) Settle a conflict keeping this checkout's version
   --theirs          (sync) Settle a conflict taking the remote's version
   --turn-off-remotes
@@ -275,7 +284,7 @@ function setup(args: string[]): number {
     out(`${green('turned off')} ${result.turnedOff.join(', ')} ${dim('(kept in remotes_off: — `lpm git off --turn-on-remotes` swaps back)')}`);
   }
   out(`${green('shared')} ${result.url} ${dim(`(${result.host.label})`)}, branch ${bold(result.branch)}`);
-  if (result.initialized) out(dim('  made .lpm a git repository'));
+  if (result.initialized) out(dim(`  made ${isCentralBoard(paths) ? paths.lpmDir : '.lpm'} a git repository`));
   if (result.saved) out(dim(`  committed ${plural(result.saved, 'file')} that had not been`));
   if (result.remoteAction !== 'kept') out(dim(`  ${result.remoteAction} the git remote "${result.remote}"`));
   if (result.joined) out(dim('  brought in what was already on that branch'));
@@ -294,20 +303,30 @@ function setup(args: string[]): number {
 function join(args: string[]): number {
   const { values } = parseArgs({
     args,
-    options: { url: { type: 'string' }, branch: { type: 'string' }, remote: { type: 'string' } },
+    options: {
+      url: { type: 'string' },
+      branch: { type: 'string' },
+      remote: { type: 'string' },
+      central: { type: 'boolean' },
+      local: { type: 'boolean' },
+    },
     allowPositionals: false,
   });
   // The project is the repository you are standing in (from any subfolder of
   // it), else the folder itself.
   const root = findBoardPaths()?.root ?? gitTopLevel(process.cwd()) ?? process.cwd();
+  const store = chooseStore(root, values.central === true, values.local === true);
   const result = joinGitSync(root, {
     url: values.url,
     branch: values.branch,
     remote: values.remote,
     interactive: Boolean(process.stdin.isTTY),
+    store,
   });
+  recordProjectQuietly(result.paths);
   out(`${green('joined')} ${result.url} ${dim(`(${result.host.label})`)}, branch ${bold(result.branch)}`);
   out(dim(`  cloned into ${result.paths.lpmDir}`));
+  if (store === 'central') out(dim(`  wrote the pointer ${path.join(root, '.lpm', 'config.yml')}`));
   if (result.gitignoreUpdated) out(dim("  added .lpm/ to the project's .gitignore"));
   return 0;
 }

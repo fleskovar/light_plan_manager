@@ -1,0 +1,4 @@
+project/.lpm/board/LP-1/_issue.md
+project/.lpm/config.yml
+project/.lpm/lock
+project/.lpm/state.json

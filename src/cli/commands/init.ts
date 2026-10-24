@@ -7,10 +7,12 @@ import {
   USER_HOME_ENV_VAR,
   expandHome,
   initBoard,
+  recordProjectQuietly,
   loadConfig,
   parsePlanningMode,
   projectRepository,
 } from '../../core/index.js';
+import { chooseStore } from '../store-choice.js';
 import { bold, cyan, dim, out, pad, yellow } from '../ui.js';
 import { warnAboutTemplates } from './instructions.js';
 
@@ -27,6 +29,8 @@ Options
       --no-git                Skip making .lpm its own git repo
       --no-omni               Skip the standing omni periods (see below)
       --planning <mode>       queue | periods  (default: queue, see below)
+      --central               Create the board in the central store (see below)
+      --local                 Create the board in this folder, in .lpm
 
 By default .lpm becomes an independent git repository and is added to the
 surrounding repo's .gitignore, so the board has its own history and remote.
@@ -51,7 +55,20 @@ into .lpm/config.yml. To plan with sprints, pass --planning periods, or run
 \`lpm planning periods\` at any time. No issue changes when you switch. A
 template with no period types is always in queue mode.
 
-${BOARD_ENV_VAR} is ignored here: init always creates the board in this folder.`;
+The central store is a folder that holds boards outside their projects. The
+key \`central_store\` in settings.json of the user folder names it, and
+\`lpm config set central_store <dir>\` writes the key. When the key is set and
+stdin is a terminal, init asks where to create the board. The default answer
+is the central store. --central and --local answer without the question.
+Without a terminal and without a flag, init creates the board in this folder.
+
+A central board is a folder in <central_store>/.lpm_central, named after this
+folder, with -2, -3 and so on when the name is taken. That folder holds the
+board documents and is its own git repository. This folder still gets .lpm,
+with one file: .lpm/config.yml holds the key \`store\`, whose value is the path
+of the central board folder. Every lpm command run here follows it.
+
+${BOARD_ENV_VAR} is ignored here: init always creates the board for this folder.`;
 
 /** Is a board being created that every other command will then look past? */
 function shadowedBy(lpmDir: string, root: string): string | null {
@@ -81,11 +98,16 @@ export function run(args: string[]): number {
       'no-git': { type: 'boolean' },
       'no-omni': { type: 'boolean' },
       planning: { type: 'string' },
+      central: { type: 'boolean' },
+      local: { type: 'boolean' },
     },
   });
+  const root = path.resolve(positionals[0] ?? process.cwd());
+  const store = chooseStore(root, values.central === true, values.local === true);
 
   const result = initBoard({
-    root: positionals[0] ?? process.cwd(),
+    root,
+    store,
     template: values.template,
     prefix: values.prefix,
     git: !values['no-git'],
@@ -93,13 +115,21 @@ export function run(args: string[]): number {
     planning: values.planning === undefined ? undefined : parsePlanningMode(values.planning),
   });
 
+  recordProjectQuietly(result.paths);
   const rootType = loadConfig(result.paths).config?.hierarchy[0]?.[0] ?? 'task';
 
   out(`${bold('Initialized board')} in ${result.paths.lpmDir}`);
   out();
   out(`  ${pad('template', 11)}${result.template}`);
   out(`  ${pad('prefix', 11)}${result.prefix}`);
-  if (result.gitInitialized) out(`  ${pad('git', 11)}.lpm is now its own git repository`);
+  if (result.store === 'central') {
+    out(`  ${pad('store', 11)}central  ${result.paths.lpmDir}`);
+    out(`  ${pad('pointer', 11)}${path.join(root, '.lpm', 'config.yml')}  ${dim('(lpm follows it from this folder)')}`);
+  }
+  if (result.gitInitialized) {
+    const repository = result.store === 'central' ? 'the board folder' : '.lpm';
+    out(`  ${pad('git', 11)}${repository} is now its own git repository`);
+  }
   if (result.gitignoreUpdated) out(`  ${pad('gitignore', 11)}added .lpm/ to the surrounding repo`);
   if (result.omniPeriods.length) {
     const chain = result.omniPeriods.map((period) => `${period.id} ${period.title}`).join(' > ');
@@ -144,3 +174,4 @@ export function run(args: string[]): number {
   );
   return 0;
 }
+

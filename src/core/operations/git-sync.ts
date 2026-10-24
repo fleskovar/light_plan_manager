@@ -20,8 +20,12 @@ import { writeFileAtomic } from '../storage/atomic.js';
 import { gitInit } from '../storage/git.js';
 import { withBoardLock } from '../storage/lock.js';
 import type { BoardPaths } from '../storage/paths.js';
-import { boardPathsFor, CONFIG_FILE, LPM_DIR } from '../storage/paths.js';
+import { writeProjectFile, writeStorePointer } from '../storage/central.js';
+import { excludeLocally } from '../storage/local.js';
+import { boardPathsAt, boardPathsFor, CONFIG_FILE, LPM_DIR, PROJECT_FILE } from '../storage/paths.js';
 import { renderBoardIndex } from './board-index.js';
+import { centralBoardsDir, createCentralBoardDir } from './central-store.js';
+import type { BoardStore } from './init.js';
 import { ensureGitignoreEntry } from './init.js';
 
 /**
@@ -337,7 +341,7 @@ export function setupGitSync(paths: BoardPaths, options: SetupGitSyncOptions = {
     if (result.kind === 'conflict') {
       throw new ConflictError(
         `This board and ${remote}/${branch} both changed ${describeFiles(result.paths).join(', ')}`,
-        ['Settle it in git inside .lpm, then run `lpm git setup` again.'],
+        [`Settle it in git inside ${dir}, then run \`lpm git setup\` again.`],
       );
     }
     joined = true;
@@ -378,6 +382,11 @@ export interface JoinGitSyncOptions {
   branch?: string;
   remote?: string;
   interactive?: boolean;
+  /**
+   * Where the clone goes (default `local`): `<root>/.lpm`, or a new folder in
+   * `<central_store>/.lpm_central` with the pointer in `<root>/.lpm/config.yml`.
+   */
+  store?: BoardStore;
 }
 
 export interface JoinGitSyncResult {
@@ -395,6 +404,7 @@ export interface JoinGitSyncResult {
  * `_lpm_board_remote` branch.
  */
 export function joinGitSync(root: string, options: JoinGitSyncOptions = {}): JoinGitSyncResult {
+  if (options.store === 'central') return joinIntoCentralStore(path.resolve(root), options);
   const paths = boardPathsFor(root);
   const target = paths.lpmDir;
   if (existsSync(target) && readdirSync(target).length) {
@@ -435,6 +445,74 @@ export function joinGitSync(root: string, options: JoinGitSyncOptions = {}): Joi
     throw new BoardError(`The branch "${branch}" of ${check.url} is not a light-plan board`, [
       `It has no ${CONFIG_FILE} at its root.`,
     ]);
+  }
+  const gitignoreUpdated = isOwnRepo(root) ? ensureGitignoreEntry(root) : false;
+  return { paths, url: check.url, branch, host: check.host, usesProjectRepository, gitignoreUpdated };
+}
+
+/**
+ * `joinGitSync` for a central board: clone the shared board into a new folder
+ * in `.lpm_central`, then write `project.json` and the pointer. Every check
+ * that can fail runs before the folder is created, and a failed clone removes
+ * the folder, so a failure leaves neither a central folder nor a pointer.
+ */
+function joinIntoCentralStore(root: string, options: JoinGitSyncOptions): JoinGitSyncResult {
+  const local = boardPathsFor(root);
+  if (existsSync(local.configPath)) {
+    throw new BoardError(`${local.lpmDir} already holds a board or a pointer to one`, [
+      'Joining clones a shared board into a project that has none.',
+      'To share this one instead, run `lpm git setup`.',
+    ]);
+  }
+  const boardsDir = centralBoardsDir();
+  if (boardsDir === null) {
+    throw new BoardError('No central store is set. Name one with `lpm config set central_store <dir>`', [
+      'Or clone the board into this project with `lpm git join --local`.',
+    ]);
+  }
+  const project = projectRepository(local);
+  const url = options.url?.trim() || project?.url;
+  if (!url) {
+    throw new BoardError('Which repository holds the board?', [
+      'This folder has no git remote to look in. Give one: `lpm git join --url <url>`.',
+    ]);
+  }
+  const usesProjectRepository = Boolean(project && sameRepositoryUrl(url, project.url));
+  const branch = options.branch ?? (usesProjectRepository ? PROJECT_BOARD_BRANCH : 'main');
+  const remote = options.remote ?? 'origin';
+  const check = checkGitUrl(root, url, branch, { interactive: options.interactive });
+  if (!check.reachable) throw unreachable(check);
+  if (!check.branchExists) {
+    throw new BoardError(`${check.url} has no board on the branch "${branch}"`, [
+      'Nobody has shared one there yet. To start one: `lpm init`, then `lpm git setup`.',
+      'If it lives on another branch, name it: `--branch <name>`.',
+    ]);
+  }
+
+  const lpmDir = createCentralBoardDir(root, boardsDir);
+  const paths = boardPathsAt(lpmDir, { root });
+  try {
+    // `git clone` accepts an empty folder as its target.
+    const cloned = git(
+      boardsDir,
+      ['clone', '--branch', branch, '--single-branch', '--origin', remote, check.url, lpmDir],
+      { network: true, interactive: options.interactive },
+    );
+    if (!cloned.ok) throw new BoardError(`Could not clone ${check.url}`, [firstLine(cloned.stderr)]);
+    if (!existsSync(paths.configPath)) {
+      throw new BoardError(`The branch "${branch}" of ${check.url} is not a light-plan board`, [
+        `It has no ${CONFIG_FILE} at its root.`,
+      ]);
+    }
+    // The shared `.gitignore` is a committed file. A board shared from a local
+    // board does not list `project.json`, so the clone excludes it locally.
+    excludeLocally(paths, [PROJECT_FILE]);
+    writeProjectFile(lpmDir, root);
+    writeStorePointer(root, lpmDir);
+  } catch (error) {
+    rmSync(lpmDir, { recursive: true, force: true });
+    rmSync(local.lpmDir, { recursive: true, force: true });
+    throw error;
   }
   const gitignoreUpdated = isOwnRepo(root) ? ensureGitignoreEntry(root) : false;
   return { paths, url: check.url, branch, host: check.host, usesProjectRepository, gitignoreUpdated };

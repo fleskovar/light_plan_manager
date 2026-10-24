@@ -6,6 +6,7 @@
  * `validation/fix/`'s job.  `shared.ts` keeps the two sides agreeing on what is
  * reportable and what is fixable.
  */
+export { checkCentralProject, projectFileProblem } from './central.js';
 export { checkCollection } from './collection.js';
 export { checkCounters } from './counters.js';
 export { checkDependencies } from './dependencies.js';

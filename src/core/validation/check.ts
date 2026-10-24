@@ -1,6 +1,7 @@
 import type { LoadedBoard } from '../board/load.js';
 import type { Problem } from '../model/types.js';
 import {
+  checkCentralProject,
   checkCollection,
   checkCounters,
   checkDependencies,
@@ -32,6 +33,7 @@ export function checkBoard(board: LoadedBoard): Problem[] {
   checkCounters(board, problems);
   checkIndex(board, problems);
   checkGitignore(board, problems);
+  checkCentralProject(board, problems);
   checkRemoteScopes(board, problems);
   return problems;
 }

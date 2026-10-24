@@ -1,0 +1,9 @@
+{
+  "files": {
+    "project/.lpm/config.yml": "store: \"{{tmp}}/store/.lpm_central/shop\"\n",
+    "store/.lpm_central/shop/config.yml": "version: 1\nkey_prefix: SHOP\n",
+    "store/.lpm_central/shop/project.json": "{ \"project_path\": \"{{tmp}}/project\" }\n"
+  },
+  "folders": ["project/src/deep"],
+  "start": "project/src/deep"
+}

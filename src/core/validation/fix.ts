@@ -14,7 +14,9 @@ import { writeBoardIndex } from '../operations/board-index.js';
 import { boardWrite, writeDocument } from '../operations/shared.js';
 import { writeFlagRollups, writeRollups } from '../operations/rollup.js';
 import { ensureLocalIgnored } from '../storage/local.js';
-import { displayPath, nodeDirName } from '../storage/paths.js';
+import { writeProjectFile } from '../storage/central.js';
+import { PROJECT_FILE, displayPath, nodeDirName } from '../storage/paths.js';
+import { projectFileProblem } from './checks/central.js';
 import { allocateIds, counterFor, numberOf, readState, writeState } from '../storage/state.js';
 import { KINDS, RETIRED_LINK_FIELD, allNodes, at, retiredLink, typesOf } from './shared.js';
 
@@ -243,6 +245,13 @@ function fixUnderLock(board: LoadedBoard): string[] {
     actions.push(
       `${displayPath(board.paths, path.join(board.paths.lpmDir, '.gitignore'))}: added missing ignore entries`,
     );
+  }
+
+  // A central board names its project in `project.json`. The fix writes the
+  // project that this command came from, which is the one the pointer leads from.
+  if (projectFileProblem(board.paths)?.fixable) {
+    writeProjectFile(board.paths.lpmDir, board.paths.root);
+    actions.push(`${displayPath(board.paths, path.join(board.paths.lpmDir, PROJECT_FILE))}: names ${board.paths.root}`);
   }
 
   const state = readState(board.paths);

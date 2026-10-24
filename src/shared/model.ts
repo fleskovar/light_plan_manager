@@ -322,8 +322,48 @@ export function statusOf(config: ConfigDto, id: string): StatusDto | undefined {
  */
 export interface ServerInfoDto {
   ok: true;
+  /** The project folder of the board. For a hub, the folder that holds the central boards. */
   root: string;
   experimental: boolean;
+  /** True for the hub that `lpm ui` serves outside a board: it lists central boards and serves none. */
+  hub?: boolean;
+}
+
+/** What `GET /api/hub` answers on the hub. A board server answers 404 there. */
+export interface HubInfoDto {
+  hub: true;
+  /** The central store: the key `central_store` of the user settings. */
+  store: string;
+  /** `<store>/.lpm_central`. */
+  boardsDir: string;
+}
+
+/**
+ * One project of the project index, as `GET /api/projects` answers it on a
+ * board server and on the hub. The same shape as `ProjectEntry` in the engine.
+ */
+export interface ProjectEntryDto {
+  name: string;
+  /** The project folder, or null for a central board without `project.json`. */
+  root: string | null;
+  /** The board folder. `POST /api/projects/open` and `/reveal` name the project by it. */
+  lpmDir: string;
+  store: 'local' | 'central';
+  keyPrefix: string | null;
+  /** ISO time of the last command that recorded the project, or null. */
+  lastUsed: string | null;
+  state: 'ok' | 'project missing' | 'missing';
+}
+
+/** One board on the landing page of the hub: `GET /api/hub/boards` answers a list of these. */
+export interface CentralBoardDto {
+  name: string;
+  lpmDir: string;
+  keyPrefix: string | null;
+  projectPath: string | null;
+  /** False when the project folder is gone or its pointer names another board. */
+  pointerOk: boolean;
+  error: string | null;
 }
 
 /**

@@ -1,10 +1,15 @@
 <script lang="ts">
   import { renderMarkdown } from './markdown.js';
+  import { useNodeLinks } from './node-links.js';
 
   /**
    * A rendered document body. The HTML comes from `markdown.ts`, which escapes
    * its input before it does anything else — that is what makes `{@html}` here
    * a statement about this component rather than about the board.
+   *
+   * When the window provides `NodeLinks`, `[[ID]]` renders as a link. A click
+   * on that link calls `NodeLinks.open`. A click with Ctrl, Cmd, Shift or the
+   * middle button goes to the browser, which opens the address in a new tab.
    */
   interface Props {
     source: string;
@@ -14,11 +19,33 @@
 
   let { source, placeholder = 'No description yet.' }: Props = $props();
 
-  const html = $derived(renderMarkdown(source));
+  const links = useNodeLinks();
+  const html = $derived(renderMarkdown(source, links ? { nodeLink: (id) => links.target(id) } : {}));
+
+  /** The id in the `data-node` attribute of the link that the event targets. */
+  function linkedId(event: Event): string | null {
+    const link = event.target instanceof Element ? event.target.closest('a[data-node]') : null;
+    return link?.getAttribute('data-node') ?? null;
+  }
+
+  function onclick(event: MouseEvent): void {
+    const id = linkedId(event);
+    if (!id || !links) return;
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    links.open(id);
+  }
+
+  /** A double-click on a link does not reach the parent, which opens the editor on a double-click. */
+  function ondblclick(event: MouseEvent): void {
+    if (linkedId(event)) event.stopPropagation();
+  }
 </script>
 
 {#if html}
-  <div class="prose">{@html html}</div>
+  <!-- The links inside take the keyboard focus, and Enter on a link fires a click. -->
+  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+  <div class="prose" {onclick} {ondblclick}>{@html html}</div>
 {:else}
   <p class="empty">{placeholder}</p>
 {/if}
@@ -223,6 +250,28 @@
   .prose :global(a) {
     color: var(--accent);
     overflow-wrap: anywhere;
+  }
+
+  /* A link to another document on the board, written `[[ID]]`. */
+  .prose :global(.node-link) {
+    padding: 0 0.25em;
+    border-radius: var(--radius-sm);
+    background: var(--accent-soft);
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .prose :global(a.node-link:hover) {
+    text-decoration: underline;
+  }
+
+  /* An id that the board does not hold. */
+  .prose :global(.node-link.missing) {
+    background: var(--surface-3);
+    color: var(--ink-faint);
+    text-decoration: line-through;
   }
 
   .prose :global(del) {

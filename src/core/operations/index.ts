@@ -34,6 +34,7 @@
  */
 export * from './board-index.js';
 export * from './board-template.js';
+export * from './central-store.js';
 export * from './claim.js';
 export * from './comment.js';
 export * from './config-edit.js';
@@ -46,6 +47,8 @@ export * from './init.js';
 export * from './link.js';
 export * from './move.js';
 export * from './planning.js';
+export * from './project-index.js';
+export * from './relocate.js';
 export * from './profile.js';
 export * from './remove.js';
 export * from './retype.js';

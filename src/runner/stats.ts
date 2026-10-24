@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { projectLinkPath } from '../core/index.js';
 import type { BoardPaths } from '../core/index.js';
 import type { RunOutcome } from './types.js';
 
@@ -34,7 +35,7 @@ export function writeRunArtifact(
   mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${stamp(at)}.json`);
   writeFileSync(file, JSON.stringify({ at, issue: issueId, ...outcome }, null, 2), 'utf8');
-  return path.relative(paths.root, file).split(path.sep).join('/');
+  return projectLinkPath(paths, file);
 }
 
 function line(label: string, value: string): string {

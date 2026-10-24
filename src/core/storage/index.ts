@@ -16,6 +16,7 @@
  */
 export * from './activity.js';
 export * from './atomic.js';
+export * from './central.js';
 export * from './comments.js';
 export * from './document.js';
 export * from './frontmatter.js';
@@ -23,6 +24,7 @@ export * from './git.js';
 export * from './local.js';
 export * from './lock.js';
 export * from './paths.js';
+export * from './project-index.js';
 export * from './state.js';
 export * from './templates.js';
 export * from './user.js';

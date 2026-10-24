@@ -1,0 +1,7 @@
+{
+  "files": {
+    "project/.lpm/config.yml": "version: 1\nkey_prefix: LP\n"
+  },
+  "folders": ["project/src/deep"],
+  "start": "project/src/deep"
+}

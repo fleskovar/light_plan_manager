@@ -20,6 +20,10 @@
  * bold/italic/strike and links. Anything else comes through as text, which is
  * a fair rendering of it.
  *
+ * `[[LP-12]]` links to the document with the id `LP-12`. The caller passes
+ * `RenderOptions.nodeLink`, which gives the address and the title for an id.
+ * Without that function, the text `[[LP-12]]` stays as it is.
+ *
  * Line breaks follow CommonMark: the lines of one paragraph join with a space,
  * because bodies are hard-wrapped at 80 columns. A line that ends in two
  * spaces or a backslash keeps its break.
@@ -48,6 +52,41 @@ function safeUrl(url: string): string | null {
 
 const anchor = (href: string, label: string): string =>
   `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+
+/**
+ * The characters an id in `[[ID]]` can hold. Board ids have the form
+ * `PREFIX-<n>`. No character in this set needs escaping in an attribute.
+ */
+const NODE_LINK = /\[\[[ \t]*([A-Za-z0-9][\w.-]*)[ \t]*\]\]/g;
+
+/** What a caller tells the renderer about one id that `[[ID]]` names. */
+export interface NodeLinkTarget {
+  /** The address of the link. The renderer escapes it. */
+  href: string;
+  /** The title of the document. The link shows it as a tooltip. */
+  title: string;
+}
+
+export interface RenderOptions {
+  /**
+   * Returns the target for an id in `[[ID]]`, or null when the board holds no
+   * document with that id. Without this function, `[[ID]]` stays as text.
+   */
+  nodeLink?: (id: string) => NodeLinkTarget | null;
+}
+
+/**
+ * The markup for `[[ID]]`. A known id becomes a link with the attribute
+ * `data-node`, which `Markdown.svelte` reads to open the issue window. An
+ * unknown id becomes a span, so the reader sees that the target is missing.
+ */
+function nodeLinkHtml(id: string, target: NodeLinkTarget | null): string {
+  if (!target) {
+    return `<span class="node-link missing" title="No document with the id ${id}">${id}</span>`;
+  }
+  const tooltip = `${id}: ${escape(target.title)}`;
+  return `<a class="node-link" href="${escape(target.href)}" data-node="${id}" title="${tooltip}">${id}</a>`;
+}
 
 /** Bold, italic and strike, applied to text whose code and links are stashed. */
 function emphasis(text: string): string {
@@ -81,9 +120,10 @@ function trimUrl(url: string): string {
  * so no later rule can put a mark inside them. The placeholders are swapped
  * back at the end.
  */
-function inline(text: string): string {
+function inline(text: string, options: RenderOptions): string {
   const stash: string[] = [];
   const keep = (html: string): string => `\u0000${stash.push(html) - 1}\u0000`;
+  const { nodeLink } = options;
 
   const marked = text
     // Code first: nothing inside a span of code is a mark.
@@ -95,6 +135,9 @@ function inline(text: string): string {
     .replace(/(?: {2,}|\\)\n/g, () => `${keep('<br>')}\n`)
     // A backslash keeps the next mark character as text.
     .replace(/\\([\\`*_[\]()#+\-.!|~{}])/g, (_, char: string) => keep(char))
+    // `[[ID]]` names another document on the board. It runs before the rule
+    // for `[label](url)`, so the brackets are gone when that rule looks.
+    .replace(NODE_LINK, (whole, id: string) => (nodeLink ? keep(nodeLinkHtml(id, nodeLink(id))) : whole))
     // An image is linked by its alt text rather than loaded: a body cannot
     // make the reader's browser fetch from a server the body names.
     .replace(
@@ -235,10 +278,15 @@ function interruptsParagraph(lines: string[], at: number): boolean {
   return item !== null && item.text.trim() !== '' && (!item.ordered || item.start === 1);
 }
 
-function renderTable(lines: string[], at: number, alignments: Alignment[]): { html: string; next: number } {
+function renderTable(
+  lines: string[],
+  at: number,
+  alignments: Alignment[],
+  options: RenderOptions,
+): { html: string; next: number } {
   const cell = (tag: 'th' | 'td', text: string, column: number): string => {
     const align = alignments[column];
-    return `<${tag}${align ? ` class="align-${align}"` : ''}>${inline(text)}</${tag}>`;
+    return `<${tag}${align ? ` class="align-${align}"` : ''}>${inline(text, options)}</${tag}>`;
   };
   const row = (tag: 'th' | 'td', line: string): string => {
     const cells = splitRow(line);
@@ -259,7 +307,7 @@ function renderTable(lines: string[], at: number, alignments: Alignment[]): { ht
   };
 }
 
-function renderList(lines: string[], at: number): { html: string; next: number } {
+function renderList(lines: string[], at: number, options: RenderOptions): { html: string; next: number } {
   const first = listMarker(lines[at]!)!;
   const items: string[][] = [];
   let loose = false;
@@ -313,9 +361,9 @@ function renderList(lines: string[], at: number): { html: string; next: number }
   const rendered = items.map((body) => {
     // A task list is what a checklist in an acceptance criterion becomes.
     const task = /^\[([ xX])\][ \t]+(.*)$/.exec(body[0]!);
-    if (!task) return `<li>${renderBlocks(body, !loose)}</li>`;
+    if (!task) return `<li>${renderBlocks(body, options, !loose)}</li>`;
     const done = task[1]!.toLowerCase() === 'x';
-    const content = renderBlocks([task[2]!, ...body.slice(1)], !loose);
+    const content = renderBlocks([task[2]!, ...body.slice(1)], options, !loose);
     return `<li class="task"><input type="checkbox" disabled${done ? ' checked' : ''}> ${content}</li>`;
   });
   return { html: `<${tag}${start}>${rendered.join('')}</${tag}>`, next: index };
@@ -325,7 +373,7 @@ function renderList(lines: string[], at: number): { html: string; next: number }
  * Render escaped lines to HTML. With `tight`, a paragraph is emitted without
  * its `<p>`: that is how the text of a list item with no blank lines renders.
  */
-function renderBlocks(lines: string[], tight = false): string {
+function renderBlocks(lines: string[], options: RenderOptions, tight = false): string {
   const out: string[] = [];
   let index = 0;
 
@@ -359,7 +407,7 @@ function renderBlocks(lines: string[], tight = false): string {
     const heading = HEADING.exec(line);
     if (heading) {
       const level = heading[1]!.length;
-      out.push(`<h${level}>${inline((heading[2] ?? '').trim())}</h${level}>`);
+      out.push(`<h${level}>${inline((heading[2] ?? '').trim(), options)}</h${level}>`);
       index += 1;
       continue;
     }
@@ -382,20 +430,20 @@ function renderBlocks(lines: string[], tight = false): string {
         } else break;
         index += 1;
       }
-      out.push(`<blockquote>${renderBlocks(quoted)}</blockquote>`);
+      out.push(`<blockquote>${renderBlocks(quoted, options)}</blockquote>`);
       continue;
     }
 
     const alignments = tableAt(lines, index);
     if (alignments) {
-      const table = renderTable(lines, index, alignments);
+      const table = renderTable(lines, index, alignments, options);
       out.push(table.html);
       index = table.next;
       continue;
     }
 
     if (listMarker(line)) {
-      const list = renderList(lines, index);
+      const list = renderList(lines, index, options);
       out.push(list.html);
       index = list.next;
       continue;
@@ -407,7 +455,7 @@ function renderBlocks(lines: string[], tight = false): string {
       paragraph.push(lines[index]!.trimStart());
       index += 1;
     }
-    const text = inline(paragraph.join('\n').trimEnd());
+    const text = inline(paragraph.join('\n').trimEnd(), options);
     out.push(tight ? text : `<p>${text}</p>`);
   }
 
@@ -420,9 +468,9 @@ function renderBlocks(lines: string[], tight = false): string {
  * Returns an empty string for an empty body, so a caller can decide what to
  * show instead of a blank box.
  */
-export function renderMarkdown(source: string): string {
+export function renderMarkdown(source: string, options: RenderOptions = {}): string {
   const lines = escape(source ?? '')
     .split(/\r?\n/)
     .map(expandTabs);
-  return renderBlocks(lines);
+  return renderBlocks(lines, options);
 }

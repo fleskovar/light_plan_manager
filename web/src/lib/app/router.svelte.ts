@@ -35,6 +35,10 @@ export function createRouter(): { readonly route: Route } {
 
 export const viewHash = (id: string): string => `#/view/${encodeURIComponent(id)}`;
 
+/** The hash of the issue window for the issue `nodeId`, which loads the view `viewId`. */
+export const issueHash = (nodeId: string, viewId: string): string =>
+  `#/issue/${encodeURIComponent(nodeId)}?view=${encodeURIComponent(viewId)}`;
+
 /**
  * Show a view in this window. With `replace`, the new address takes the place
  * of the current history entry, so the Back button does not return to an

@@ -8,6 +8,7 @@
     useSvelteFlow,
   } from '@xyflow/svelte';
   import '@xyflow/svelte/dist/style.css';
+  import { openIssueWindow } from '$lib/app/issue-window.js';
   import { usePreferences } from '$lib/app/preferences.svelte.js';
   import { useShell } from '$lib/app/shell.svelte.js';
   import { statusTone } from '$lib/board/selectors.js';
@@ -105,11 +106,7 @@
   const doubleClick = createDoubleClickHandler();
 
   function openIssuePopup(id: string): void {
-    const viewId = workspace.doc.id;
-    const base = window.location.href.replace(/#.*$/, '');
-    const url = `${base}#/issue/${encodeURIComponent(id)}?view=${encodeURIComponent(viewId)}`;
-    // Wide enough for the two columns of `IssueView.svelte`.
-    window.open(url, `issue-${id}`, 'width=1200,height=860,resizable,scrollbars');
+    openIssueWindow(id, workspace.doc.id);
   }
 
   function onNodeClick(id: string, event: MouseEvent): void {

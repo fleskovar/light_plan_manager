@@ -2,7 +2,9 @@
   import { onDestroy, untrack } from 'svelte';
   import { SvelteFlowProvider } from '@xyflow/svelte';
   import { DEFAULT_DRAWER_HEIGHT } from '$shared';
+  import { issueWindowLinks } from '$lib/app/issue-window.js';
   import { Shell, provideShell } from '$lib/app/shell.svelte.js';
+  import { provideNodeLinks } from '$lib/ui/node-links.js';
   import { useTabs } from '$lib/app/tabs.svelte.js';
   import { findBinding, isTyping } from '$lib/shortcuts/bindings.js';
   import Button from '$lib/ui/Button.svelte';
@@ -54,6 +56,8 @@
   // App.svelte keys this component on the id, so one read of the prop is correct.
   // svelte-ignore state_referenced_locally
   const workspace = provideWorkspace(opened);
+  // `[[ID]]` in a body or a comment opens the issue window.
+  provideNodeLinks(issueWindowLinks(workspace, () => workspace.doc.id));
   const shell = provideShell(new Shell());
   const tabs = useTabs();
   const remote = provideRemoteState(

@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { parseArgs } from 'node:util';
-import { BoardError, experimentalOf, findBoardPaths, loadConfig } from '../../core/index.js';
+import { BoardError, centralStorePath, experimentalOf, findBoardPaths, loadConfig } from '../../core/index.js';
+import { serveHub } from '../../server/hub.js';
 import {
   DEFAULT_HOST,
   DEFAULT_PORT,
@@ -38,6 +39,13 @@ Each board in its own \`lpm ui\` gets its own port, so you can open several
 boards at the same time. When an \`lpm ui\` on one of those ports already serves
 this board, the command opens that server and starts no second one.
 
+In a folder without a board, \`lpm ui\` opens the central store when the key
+\`central_store\` is set (\`lpm config set central_store <dir>\`). The page lists
+each board in <central_store>/.lpm_central with its key prefix and its project
+folder. Open starts that board in this process, on the next free port. Reveal
+shows the project's .lpm folder in the file manager. Without the key, \`lpm ui\`
+needs a board, as before.
+
 The server is local-only and edits this checkout's .lpm folder. Stop it with
 Ctrl-C. The app writes each edit to the board about 1.5 seconds after you make
 it. On a board with no view, the app creates .lpm/views/default.json.`;
@@ -69,9 +77,6 @@ export function run(args: string[]): number {
     },
   });
 
-  const paths = findBoardPaths();
-  if (!paths) throw noBoardFound();
-
   const port = values.port === undefined ? DEFAULT_PORT : Number(values.port);
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
     throw new BoardError(`Invalid port "${values.port}"`);
@@ -81,6 +86,13 @@ export function run(args: string[]): number {
   const portAttempts = values.port === undefined ? DEFAULT_PORT_ATTEMPTS : 1;
   const apiOnly = values['api-only'] === true;
   const host = values.host ?? DEFAULT_HOST;
+
+  const paths = findBoardPaths();
+  if (!paths) {
+    // Outside a board, a central store gives the hub: the list of its boards.
+    if (centralStorePath() === null) throw noBoardFound();
+    return runHub({ port, portAttempts, host, apiOnly, open: !values['no-open'], experimental: values.experimental === true });
+  }
   // The flag turns the features on for one run. The key `experimental` in
   // .lpm/config.yml, which `lpm experimental on` writes, turns them on for
   // every run. A config that does not validate counts as off here: the server
@@ -139,6 +151,55 @@ export function run(args: string[]): number {
     });
 
   // The process stays alive on the listening socket until Ctrl-C.
+  return 0;
+}
+
+interface HubRun {
+  port: number;
+  portAttempts: number;
+  host: string;
+  apiOnly: boolean;
+  open: boolean;
+  experimental: boolean;
+}
+
+/**
+ * Serve the hub: the landing page that lists the boards of the central store.
+ * Each board that the page opens runs in this process, on the next free port.
+ */
+function runHub(options: HubRun): number {
+  void serveHub({
+    port: options.port,
+    portAttempts: options.portAttempts,
+    host: options.host,
+    serveApp: !options.apiOnly,
+    experimental: options.experimental,
+  })
+    .then((outcome) => {
+      if (outcome.kind === 'taken') {
+        reportError(
+          new BoardError(`Ports ${outcome.ports[0]} to ${outcome.ports[outcome.ports.length - 1]} are all in use`, [
+            'Pass --port <n> to use a different port, or --port 0 to let the system pick one.',
+          ]),
+        );
+        process.exitCode = 1;
+        return;
+      }
+      const url = outcome.kind === 'started' ? outcome.hub.url : outcome.url;
+      out(`${bold('light-plan')} ${dim(`central store ${centralStorePath()}`)}`);
+      out(`  ${url}`);
+      if (outcome.kind === 'running') {
+        out(dim('  Another `lpm ui` already serves the central store. No second server started.'));
+      } else {
+        out(dim('  No board in this folder: the page lists the boards of the central store.'));
+        out(dim('  Ctrl-C to stop (it also stops the boards opened from the page)'));
+      }
+      if (options.open && !options.apiOnly) openBrowser(url);
+    })
+    .catch((error: Error) => {
+      reportError(new BoardError(`Could not start the server: ${error.message}`, ['Pass --port <n> to use a different port.']));
+      process.exitCode = 1;
+    });
   return 0;
 }
 

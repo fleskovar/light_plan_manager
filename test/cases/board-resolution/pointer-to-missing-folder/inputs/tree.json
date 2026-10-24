@@ -1,0 +1,7 @@
+{
+  "files": {
+    "project/.lpm/config.yml": "store: \"{{tmp}}/store/.lpm_central/shop\"\n"
+  },
+  "folders": ["store/.lpm_central"],
+  "start": "project"
+}

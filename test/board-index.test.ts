@@ -197,6 +197,12 @@ describe('checking the index', () => {
     );
   });
 
+  it('accepts an index whose lines end in CRLF, as git writes it on Windows with core.autocrlf', () => {
+    const paths = seed();
+    writeFileSync(paths.indexPath, indexOf(paths).replace(/\n/g, '\r\n'), 'utf8');
+    expect(checkBoard(reload(paths))).toEqual([]);
+  });
+
   it('rebuilds the index for a board written before there was one', () => {
     const paths = makeBoard('blank', 'LP');
     // The old layout: id plus a slug, and no index anywhere.

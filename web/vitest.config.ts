@@ -1,3 +1,4 @@
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
@@ -36,5 +37,11 @@ export default defineConfig({
     },
   },
   ssr: { resolve: { conditions: ['browser'], externalConditions: ['browser'] } },
-  test: { include: ['test/**/*.test.ts'] },
+  test: {
+    include: ['test/**/*.test.ts'],
+    // `test/queue-cases.test.ts` spawns the CLI. These two variables keep it
+    // away from the user folder of the person who runs the tests: no settings
+    // are read, and no project is recorded in `projects.json`.
+    env: { LPM_HOME: path.join(os.tmpdir(), 'lpm-test-no-user-folder'), LPM_PROJECT_INDEX: 'off' },
+  },
 });

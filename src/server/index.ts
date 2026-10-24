@@ -17,6 +17,8 @@ import { planningRoutes } from './routes/planning.js';
 import { gitRoutes } from './routes/git.js';
 import { remoteRoutes } from './routes/remotes.js';
 import { viewRoutes } from './routes/views.js';
+import { projectRoutes } from './routes/projects.js';
+import { BoardLauncher } from './launcher.js';
 
 /**
  * The local web server behind `lpm ui`.
@@ -63,12 +65,24 @@ export interface ServerOptions {
    * default starts a real program. A test passes a recorder.
    */
   desktopLauncher?: DesktopLauncher;
+  /**
+   * Opens the other boards of the project index (`/api/projects/open`). A
+   * board server that a launcher started gets that launcher, so one process
+   * has one launcher. Without it, the server makes its own.
+   */
+  launcher?: BoardLauncher;
+  /** The first port for a board that this server opens. Defaults to 4571. 0 lets the system pick. */
+  boardPort?: number;
+  /** The number of ports to try for a board that this server opens. Defaults to 20. */
+  boardPortAttempts?: number;
 }
 
 /** What `buildRouter` needs to know about how the server was started. */
 export interface RouterOptions {
   experimental?: boolean;
   desktopLauncher?: DesktopLauncher;
+  /** Registers the project routes when given. */
+  launcher?: BoardLauncher;
 }
 
 export const DEFAULT_PORT = 4571;
@@ -93,7 +107,26 @@ export function buildRouter(paths: BoardPaths, options: RouterOptions = {}): Rou
   // there cannot be reached by anything that ignores the hint.
   if (experimental) remoteRoutes(router, paths);
   gitRoutes(router, paths);
+  if (options.launcher) {
+    projectRoutes(router, { launcher: options.launcher, desktopLauncher: options.desktopLauncher, self: paths });
+  }
   return router;
+}
+
+/** The launcher of a server: the one in `options`, or a new one with the same settings. */
+export function launcherFor(options: ServerOptions): BoardLauncher {
+  return (
+    options.launcher ??
+    new BoardLauncher({
+      serve: serveBoard,
+      host: options.host ?? DEFAULT_HOST,
+      boardPort: options.boardPort ?? DEFAULT_PORT,
+      boardPortAttempts: options.boardPortAttempts ?? (options.boardPort === 0 ? 1 : DEFAULT_PORT_ATTEMPTS),
+      serveApp: options.serveApp !== false,
+      experimental: options.experimental === true,
+      desktopLauncher: options.desktopLauncher,
+    })
+  );
 }
 
 /**
@@ -131,8 +164,18 @@ export function createBoardServer(paths: BoardPaths, options: ServerOptions = {}
   const router = buildRouter(paths, {
     experimental: options.experimental,
     desktopLauncher: options.desktopLauncher,
+    launcher: options.launcher,
   });
-  const assets = options.serveApp === false ? null : staticServer();
+  return createGuardedServer(router, options.serveApp !== false);
+}
+
+/**
+ * An HTTP server for `router`, behind the local-only guard described above,
+ * with the built web app as the fallback for a GET outside `/api/`. The board
+ * server and the hub server (`hub.ts`) both use it.
+ */
+export function createGuardedServer(router: Router, serveApp: boolean): Server {
+  const assets = serveApp ? staticServer() : null;
 
   return createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -178,6 +221,8 @@ export function createBoardServer(paths: BoardPaths, options: ServerOptions = {}
 export interface RunningServer {
   server: Server;
   url: string;
+  /** Opens the other boards. Close it to stop the board servers that it started. */
+  launcher: BoardLauncher;
 }
 
 /**
@@ -225,7 +270,8 @@ export async function probeBoardServer(
     });
     if (!response.ok) return null;
     const info = (await response.json()) as Partial<ServerInfoDto>;
-    return info.ok === true && typeof info.root === 'string' ? info.root : null;
+    // A hub serves no board, so it never counts as the server of this one.
+    return info.ok === true && info.hub !== true && typeof info.root === 'string' ? info.root : null;
   } catch {
     return null;
   }
@@ -291,7 +337,8 @@ export function startBoardServer(
   paths: BoardPaths,
   options: ServerOptions = {},
 ): Promise<RunningServer> {
-  const server = createBoardServer(paths, options);
+  const launcher = launcherFor(options);
+  const server = createBoardServer(paths, { ...options, launcher });
   const host = options.host ?? DEFAULT_HOST;
   const port = options.port ?? DEFAULT_PORT;
 
@@ -300,7 +347,9 @@ export function startBoardServer(
     server.listen(port, host, () => {
       const address = server.address();
       const bound = typeof address === 'object' && address ? address.port : port;
-      resolve({ server, url: `http://${host}:${bound}` });
+      const url = `http://${host}:${bound}`;
+      launcher.serving(paths.lpmDir, `http://${displayHost(host)}:${bound}`);
+      resolve({ server, url, launcher });
     });
   });
 }

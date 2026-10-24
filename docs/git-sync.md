@@ -107,6 +107,28 @@ remote by default and puts the board on a branch called **`_lpm_board_remote`**.
 - A teammate with a clone of the project runs `lpm git join` with no
   arguments: the project's remote and the board branch are the defaults.
 
+### Central boards
+
+A central board keeps its documents in `<central_store>/.lpm_central/<name>/`,
+outside the project folder. The project keeps only the pointer
+`.lpm/config.yml` (see [`central-store.md`](central-store.md)). Git sync uses
+two folders for such a board:
+
+| Folder | What git does there |
+| --- | --- |
+| The central board folder (`BoardPaths.lpmDir`) | `git init`, every commit, fetch, pull, push and status of the board. `lpm git setup` adds the remote here. |
+| The project folder (`BoardPaths.root`) | `lpm git setup --project` and `lpm git join` read the remote of the code here. `lpm git join` and `lpm init` add `.lpm/` to its `.gitignore`. |
+
+The pointer and `project.json` never reach the shared board. The project's
+`.gitignore` lists `.lpm/`, and the board's `.gitignore` lists `project.json`,
+because both hold paths of one computer.
+
+`lpm git join --central` clones the shared board into a new folder in
+`.lpm_central`, then writes the pointer and `project.json`. `lpm git join
+--local` clones into `<project>/.lpm`. Without a flag, `lpm git join` asks the
+same question as `lpm init` when `central_store` is set and stdin is a
+terminal, and clones into `.lpm` otherwise.
+
 ## 4. Any git host, and credentials
 
 Setup recognises **GitHub, GitLab, Bitbucket and Azure DevOps** URLs, in both

@@ -1,0 +1,8 @@
+project/.lpm/config.yml
+project/src/main.ts
+store/.lpm_central/project/.gitignore
+store/.lpm_central/project/board/LP-1/_issue.md
+store/.lpm_central/project/config.yml
+store/.lpm_central/project/local.json
+store/.lpm_central/project/project.json
+store/.lpm_central/project/state.json

@@ -143,7 +143,7 @@ export function integrate(
   if (!base) {
     throw new BoardError(`The board and ${sync.remote}/${sync.branch} share no history`, [
       'They are two different boards. Run `lpm git status` for the remote this one points at,',
-      'or move this .lpm aside and run `lpm git join` to work on the shared one.',
+      `or move this board folder (${dir}) aside and run \`lpm git join\` to work on the shared one.`,
     ]);
   }
 

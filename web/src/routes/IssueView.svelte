@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
+  import { canvasWindow, issueWindowLinks, openIssueWindow } from '$lib/app/issue-window.js';
   import { neighbours } from '$lib/board/links.js';
   import AttributeField from '$lib/ui/fields/AttributeField.svelte';
   import Button from '$lib/ui/Button.svelte';
   import Markdown from '$lib/ui/Markdown.svelte';
   import Modal from '$lib/ui/Modal.svelte';
+  import { provideNodeLinks } from '$lib/ui/node-links.js';
   import Splitter from '$lib/ui/Splitter.svelte';
   import TypeIcon from '$lib/ui/TypeIcon.svelte';
   import Notices from '$lib/ui/Notices.svelte';
@@ -55,6 +57,11 @@
   const PANE_MIN = 120;
 
   const workspace = provideWorkspace(new Workspace());
+  // `[[ID]]` in the description or a comment opens another issue window.
+  provideNodeLinks(issueWindowLinks(workspace, () => viewId));
+
+  /** The window with the canvas. It pulls after a push here, and it can select this issue. */
+  const canvas = canvasWindow();
 
   let ready = $state(false);
   let failed = $state(false);
@@ -78,7 +85,7 @@
     workspace.onPushed = () => {
       savedAt = Date.now();
       savedBy = saving ? 'manual' : 'auto';
-      window.opener?.postMessage({ type: 'lpm:pushed', nodeId }, window.location.origin);
+      canvas?.postMessage({ type: 'lpm:pushed', nodeId }, window.location.origin);
     };
     // The label counts the time since the last write.
     const clock = setInterval(() => (now = Date.now()), 1000);
@@ -146,18 +153,14 @@
 
   // -- Leaving --------------------------------------------------------------
 
-  /** The window was opened as a popup — is there an opener to go back to? */
-  const hasOpener = $state(typeof window !== 'undefined' && Boolean(window.opener));
+  /** True when a canvas window opened this window, so there is a window to go back to. */
+  const hasOpener = Boolean(canvas);
 
-  /**
-   * What the reader loses by leaving. `closingWindow` is true when the
-   * window closes. Opening another issue in this window disposes the workspace, and
-   * the dispose pushes the pending field changes, so only a close loses them.
-   */
-  function losses(closingWindow: boolean): string[] {
+  /** What the reader loses when this window closes. */
+  function losses(): string[] {
     const items: string[] = [];
     if (draft.dirty) items.push('Your changes to the description.');
-    if (closingWindow && workspace.dirty) {
+    if (workspace.dirty) {
       const count = workspace.pending.length;
       items.push(`${count} field change${count === 1 ? '' : 's'} that the board does not hold yet.`);
     }
@@ -176,15 +179,15 @@
 
   let prompt = $state<Prompt | null>(null);
 
-  function confirmLeave(title: string, closingWindow: boolean, proceed: () => void): void {
-    const items = losses(closingWindow);
+  function confirmClose(proceed: () => void): void {
+    const items = losses();
     if (!items.length) return proceed();
-    const saveHelps = draft.dirty || (closingWindow && workspace.dirty);
+    const saveHelps = draft.dirty || workspace.dirty;
     prompt = {
-      title,
+      title: 'Close with unsaved changes?',
       items,
-      saveLabel: saveHelps ? (closingWindow ? 'Save and close' : 'Save and open') : undefined,
-      discardLabel: closingWindow ? 'Close without saving' : 'Open without saving',
+      saveLabel: saveHelps ? 'Save and close' : undefined,
+      discardLabel: 'Close without saving',
       proceed,
     };
   }
@@ -210,20 +213,18 @@
   }
 
   function requestClose(): void {
-    confirmLeave('Close with unsaved changes?', true, closeWindow);
+    confirmClose(closeWindow);
   }
 
+  /** A linked issue opens in its own window, so this window keeps its changes. */
   function openIssue(id: string): void {
-    confirmLeave(`Open ${id} with unsaved changes?`, false, () => {
-      const base = location.href.replace(/#.*$/, '');
-      location.href = `${base}#/issue/${encodeURIComponent(id)}?view=${encodeURIComponent(viewId)}`;
-    });
+    openIssueWindow(id, viewId);
   }
 
   function showOnCanvas(): void {
     if (!node) return;
-    window.opener?.postMessage({ type: 'lpm:open', nodeId: node.id }, window.location.origin);
-    window.opener?.focus();
+    canvas?.postMessage({ type: 'lpm:open', nodeId: node.id }, window.location.origin);
+    canvas?.focus();
   }
 
   function cancelEdit(): void {
@@ -241,7 +242,7 @@
    * own text in that dialog, so the text here does not reach the reader.
    */
   function onbeforeunload(event: BeforeUnloadEvent): void {
-    if (!closing && losses(true).length) event.preventDefault();
+    if (!closing && losses().length) event.preventDefault();
   }
 
   function onkeydown(event: KeyboardEvent): void {

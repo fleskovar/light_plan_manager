@@ -206,4 +206,54 @@ describe('renderMarkdown', () => {
     expect(renderMarkdown('')).toBe('');
     expect(renderMarkdown('   \n  ')).toBe('');
   });
+
+  describe('links to documents on the board', () => {
+    const titles: Record<string, string> = { 'LP-3': 'Parse the config', 'LP-4': 'Use <b> & "quotes"' };
+    const nodeLink = (id: string) => (id in titles ? { href: `#/issue/${id}?view=v`, title: titles[id]! } : null);
+
+    it('links [[ID]] to the address that the caller gives', () => {
+      expect(renderMarkdown('See [[LP-3]].', { nodeLink })).toBe(
+        '<p>See <a class="node-link" href="#/issue/LP-3?view=v" data-node="LP-3" title="LP-3: Parse the config">LP-3</a>.</p>',
+      );
+    });
+
+    it('accepts spaces inside the brackets', () => {
+      expect(renderMarkdown('[[ LP-3 ]]', { nodeLink })).toContain('data-node="LP-3"');
+    });
+
+    it('marks an id that the board does not hold', () => {
+      expect(renderMarkdown('[[LP-99]]', { nodeLink })).toBe(
+        '<p><span class="node-link missing" title="No document with the id LP-99">LP-99</span></p>',
+      );
+    });
+
+    it('keeps [[ID]] as text when the caller gives no nodeLink', () => {
+      expect(renderMarkdown('See [[LP-3]].')).toBe('<p>See [[LP-3]].</p>');
+    });
+
+    it('escapes the title in the tooltip', () => {
+      const html = renderMarkdown('[[LP-4]]', { nodeLink });
+      expect(html).toContain('title="LP-4: Use &lt;b&gt; &amp; &quot;quotes&quot;"');
+      expect(html).not.toContain('<b>');
+    });
+
+    it('does not link inside code or after a backslash', () => {
+      expect(renderMarkdown('`[[LP-3]]`', { nodeLink })).toBe('<p><code>[[LP-3]]</code></p>');
+      expect(renderMarkdown('\\[[LP-3]]', { nodeLink })).not.toContain('<a');
+    });
+
+    it('does not apply emphasis inside an id', () => {
+      const ids: Record<string, string> = { a_b_c: 'x' };
+      const html = renderMarkdown('[[a_b_c]]', { nodeLink: (id) => (ids[id] ? { href: '#', title: ids[id]! } : null) });
+      expect(html).toContain('>a_b_c</a>');
+      expect(html).not.toContain('<em>');
+    });
+
+    it('links inside a list, a table and a heading', () => {
+      const html = renderMarkdown(['# About [[LP-3]]', '', '- [[LP-3]]', '', '| a |', '| - |', '| [[LP-3]] |'].join('\n'), {
+        nodeLink,
+      });
+      expect(html.match(/data-node="LP-3"/g)).toHaveLength(3);
+    });
+  });
 });

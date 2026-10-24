@@ -1,0 +1,12 @@
+{
+  "files": {
+    "home/settings.json": "{ \"central_store\": \"{{tmp}}/store\" }\n",
+    "project/.lpm/config.yml": "version: 1\nkey_prefix: LP\n",
+    "project/.lpm/state.json": "{ \"counter\": 1 }\n",
+    "project/.lpm/board/LP-1/_issue.md": "---\nid: LP-1\ntitle: Payments\n---\n",
+    "project/.lpm/lock": "{ \"pid\": {{pid}}, \"host\": \"{{host}}\", \"user\": \"someone\", \"op\": \"a long import\", \"at\": \"{{now}}\", \"nonce\": \"not-ours\" }\n"
+  },
+  "folders": ["store"],
+  "project": "project",
+  "to": "central"
+}
