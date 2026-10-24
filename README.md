@@ -2517,7 +2517,7 @@ to install.
 
 ### Ready-made agents and skills
 
-The package ships two agent definitions and five skills in [`assets/`](assets),
+The package ships two agent definitions and the `lpm` skills in [`assets/`](assets),
 and `lpm agent` installs them into a project in whatever layout your harness
 expects:
 

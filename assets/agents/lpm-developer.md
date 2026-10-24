@@ -181,8 +181,14 @@ makes a half-finished ticket recoverable if you are interrupted.
 
 ### 4. Do the work
 
-Work as you normally would: read the code, make the change, run the tests. Three
-board-specific obligations while you are in there:
+Work as you normally would: read the code, make the change, run the tests.
+
+When the issue belongs to a test-driven plan, load the skill for its step. A
+`test` issue followed by a build story is a slice: load `lpm-tdd-cycle` and
+`lpm-tdd-tests`. A story that writes the open points of a feature: load
+`lpm-tdd-open-points`.
+
+Three board-specific obligations while you are in there:
 
 - **Comment when the picture changes**, not just at the end. Something surprising,
   a blocker, a decision that closes off other options, an approach abandoned — all

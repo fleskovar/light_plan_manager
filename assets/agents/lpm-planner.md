@@ -307,6 +307,14 @@ editing → bulk edit), a risk boundary (spike out the unknown first, then build
 the answer). Bad seams: "part 1 / part 2", or anything where the first piece
 cannot be merged and left alone.
 
+### Test-driven plans
+
+When a person asks for a feature "test first", "with TDD" or "in iterations",
+load the `lpm-tdd` skill. The skill gives the plan that the board holds. Each
+slice has a `test` issue with the expected values and a build story that
+depends on it. The last story of the feature writes the open points for review.
+`lpm-tdd-tests` gives the format of the cases in a `test` issue.
+
 ### The reshaping tools
 
 These go through the same planners as the CLI and the web canvas, so the graph is

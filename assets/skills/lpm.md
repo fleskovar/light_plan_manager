@@ -1,6 +1,6 @@
 ---
 name: lpm
-description: How to drive a light-plan board — the `lpm` CLI and the light-plan MCP server. Load this whenever a task involves a `.lpm` folder, the `lpm` command, a light-plan board, or the light-plan MCP tools (board_overview, next_tasks, create_document, …); when asked to read, populate, work or fix a board; or when a repository turns out to contain a `.lpm` directory and you need to know what it is. Start here, then load lpm-board-setup, lpm-planning, lpm-delivery or lpm-board-health for the specific job, and lpm-writing before you write anything on the board (lpm-writing-items for the body of each type, lpm-writing-reviews for a review request).
+description: How to drive a light-plan board — the `lpm` CLI and the light-plan MCP server. Load this whenever a task involves a `.lpm` folder, the `lpm` command, a light-plan board, or the light-plan MCP tools (board_overview, next_tasks, create_document, …); when asked to read, populate, work or fix a board; or when a repository turns out to contain a `.lpm` directory and you need to know what it is. Start here, then load lpm-board-setup, lpm-planning, lpm-delivery or lpm-board-health for the specific job, lpm-tdd for a test-driven plan, and lpm-writing before you write anything on the board (lpm-writing-items for the body of each type, lpm-writing-reviews for a review request).
 roles:
   - developer
   - pm
@@ -14,7 +14,7 @@ body). It is versioned with git, has no server and no database, and is driven
 three ways that all produce the same board: the `lpm` CLI, an MCP server for
 agents, and a web app (`lpm ui`).
 
-This skill is the orientation and the map. Nine companions cover the jobs:
+This skill is the orientation and the map. Thirteen companions cover the jobs:
 
 | Skill | Load it when |
 | --- | --- |
@@ -27,6 +27,10 @@ This skill is the orientation and the map. Nine companions cover the jobs:
 | `lpm-writing` | how to write titles, bodies and comments: plain technical English for engineers. **Load it before you write anything on a board** |
 | `lpm-writing-items` | what the body of each type must contain (epic, feature, story, task, bug, test, research, sub-task), with an example for each |
 | `lpm-writing-reviews` | how to ask a senior developer or engineer for a decision: the request, the context, the evidence, the validation steps and the attachments |
+| `lpm-tdd` | planning a feature test first, in small slices: a `test` issue and a build story for each slice, what to decide before the first slice, and the open-points story at the end |
+| `lpm-tdd-tests` | writing tests that a person can read and solve by hand, and the case table of a `test` issue |
+| `lpm-tdd-cycle` | working one slice: red, green, refactor, the open/closed check, and the comments that record each open point |
+| `lpm-tdd-open-points` | writing the assumptions, known issues and limitations of a feature as review issues, each with a working example |
 
 ## The first rule: the board defines its own vocabulary
 
