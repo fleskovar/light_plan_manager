@@ -3,13 +3,20 @@ import { parseArgs } from 'node:util';
 import type { BoardPaths, BoardStore } from '../../core/index.js';
 import {
   BoardError,
+  backupAgeDays,
+  backupBoard,
+  backupsDir,
   centralBoardsDir,
   centralStorePath,
+  findBackup,
   findBoardPaths,
   isCentralBoard,
+  listBackups,
   listCentralBoards,
   recordProjectQuietly,
   relocateBoard,
+  restoreBackup,
+  restoreTarget,
 } from '../../core/index.js';
 import { noBoardFound } from '../context.js';
 import { bold, cyan, dim, green, out, pad, red, yellow } from '../ui.js';
@@ -17,7 +24,7 @@ import { bold, cyan, dim, green, out, pad, red, yellow } from '../ui.js';
 /**
  * Where a board keeps its documents: in its project (`<project>/.lpm`), or in
  * the central store (`<central_store>/.lpm_central/<name>`). A thin printer
- * over `relocateBoard`.
+ * over `relocateBoard`, and over the backups of `operations/backup.ts`.
  */
 
 export const help = `Show where the board is stored, and move it between the project and the central store.
@@ -27,6 +34,9 @@ Usage
   lpm store move --to central      Move the board to the central store
   lpm store move --to local        Move the board back into this project, in .lpm
   lpm store list [--json]          List the boards in the central store, from any folder
+  lpm store backup [--replace]     Copy the board to its backup in the central store
+  lpm store backups [--json]       List the backups in the central store, from any folder
+  lpm store restore --yes          Overwrite the board with the copy in its backup
 
 \`lpm store list\` prints one line for each board in <central_store>/.lpm_central:
 the folder name, the key prefix and the project folder. "project missing" means
@@ -43,6 +53,12 @@ remote credentials. It copies the board first, compares the copy, and then
 switches. A move that fails leaves the board where it was. Stop a running
 \`lpm ui\` or \`lpm mcp\` on the board before the move, and start it again after.
 
+Before each move, \`lpm store move\` backs the board up. A backup is a full
+copy of the board folder in <central_store>/.lpm_backups/<name>_backup/board,
+with backup.json beside it. Each board has one backup, and a move replaces it.
+\`lpm store backup\` replaces it only with --replace. \`lpm store restore\`
+overwrites the board of this folder with the copy, and runs only with --yes.
+
 \`lpm move\` is a different command: it changes the status, parent, period or
 assignee of an issue.
 
@@ -50,7 +66,9 @@ Examples
   lpm store
   lpm store move --to central
   lpm store move --to local
-  lpm store list`;
+  lpm store list
+  lpm store backup --replace
+  lpm store restore --yes`;
 
 function boardHere(): BoardPaths {
   const paths = findBoardPaths();
@@ -92,6 +110,7 @@ function move(args: string[]): number {
   const where = to === 'central' ? 'the central store' : 'the project';
   out(`${green('Moved')} the board to ${where}: ${bold(result.paths.lpmDir)}`);
   if (to === 'central') out(dim(`  ${path.join(result.paths.root, '.lpm', 'config.yml')} now points at it`));
+  if (result.backup) out(dim(`  The backup of the board before the move is in ${result.backup.dir}`));
   for (const warning of result.warnings) out(`${yellow('warning')} ${warning}`);
   return 0;
 }
@@ -127,10 +146,73 @@ function list(args: string[]): number {
   return 0;
 }
 
+function backup(args: string[]): number {
+  const { values } = parseArgs({ args, options: { replace: { type: 'boolean' } }, allowPositionals: false });
+  const paths = boardHere();
+  const replaced = findBackup(paths.root);
+  const result = backupBoard(paths, { replace: values.replace === true });
+  out(`${green('Backed up')} the board to ${bold(result.dir)}`);
+  const note = replaced ? `. It replaced the backup of ${replaced.createdAt.slice(0, 10)}` : '';
+  out(dim(`  ${result.files} files, ${result.bytes} bytes${note}`));
+  return 0;
+}
+
+function backups(args: string[]): number {
+  const { values } = parseArgs({ args, options: { json: { type: 'boolean' } }, allowPositionals: false });
+  const entries = listBackups();
+  if (values.json) {
+    out(JSON.stringify(entries, null, 2));
+    return 0;
+  }
+  const dir = backupsDir();
+  if (dir === null) {
+    out(dim('No central store is set. `lpm config set central_store <dir>` names one.'));
+    return 0;
+  }
+  if (!entries.length) {
+    out(dim(`No backups in ${dir}. Create one with ${cyan('lpm store backup')}.`));
+    return 0;
+  }
+  const nameWidth = Math.max(...entries.map((entry) => entry.name.length)) + 2;
+  for (const entry of entries) {
+    const days = backupAgeDays(entry.createdAt);
+    const age = `${days} ${days === 1 ? 'day' : 'days'}`;
+    out(`${pad(entry.name, nameWidth)}${pad(entry.createdAt.slice(0, 10), 12)}${pad(age, 10)}${pad(entry.source, 9)}${entry.projectPath}`);
+  }
+  out(dim(`in ${dir}`));
+  return 0;
+}
+
+function restore(args: string[]): number {
+  const { values } = parseArgs({ args, options: { yes: { type: 'boolean' } }, allowPositionals: false });
+  const paths = boardHere();
+  const found = findBackup(paths.root);
+  if (!found) {
+    throw new BoardError(`The board of ${paths.root} has no backup`, ['Create one with `lpm store backup`.']);
+  }
+  const target = restoreTarget(found);
+  if (values.yes !== true) {
+    throw new BoardError(`A restore overwrites every file of the board in ${target.lpmDir}`, [
+      `The backup is from ${found.createdAt}: ${found.dir}.`,
+      'Run `lpm store restore --yes` to overwrite the board.',
+    ]);
+  }
+  const result = restoreBackup(found);
+  recordProjectQuietly(result.paths);
+  out(`${green('Restored')} the board from the backup of ${found.createdAt.slice(0, 10)}: ${bold(result.paths.lpmDir)}`);
+  for (const warning of result.warnings) out(`${yellow('warning')} ${warning}`);
+  return 0;
+}
+
 export function run(args: string[]): number {
   const [subcommand, ...rest] = args;
   if (subcommand === undefined) return show();
   if (subcommand === 'move') return move(rest);
   if (subcommand === 'list') return list(rest);
-  throw new BoardError(`Unknown subcommand "${subcommand}"`, ['Use `lpm store`, `lpm store list` or `lpm store move --to central|local`.']);
+  if (subcommand === 'backup') return backup(rest);
+  if (subcommand === 'backups') return backups(rest);
+  if (subcommand === 'restore') return restore(rest);
+  throw new BoardError(`Unknown subcommand "${subcommand}"`, [
+    'Use `lpm store`, `lpm store list`, `lpm store move --to central|local`, `lpm store backup`, `lpm store backups` or `lpm store restore`.',
+  ]);
 }

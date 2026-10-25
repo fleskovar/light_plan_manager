@@ -1,22 +1,55 @@
-import type { ProjectEntryDto } from '$shared';
+import type { BackupListDto, BoardBackupDto, ProjectEntryDto, StoreJobDto } from '$shared';
+import type { Confirmation } from '$lib/app/shell.svelte.js';
+import { StoreJobWatcher, type Schedule } from './jobs.svelte.js';
+import {
+  ageInDays,
+  ageText,
+  backupConfirmation,
+  backupDateText,
+  jobPercent,
+  jobText,
+  moveConfirmation,
+  moveLabel,
+  projectName,
+  restoreConfirmation,
+  sizeText,
+} from './maintenance.js';
 
 /**
  * The "All projects" page: every project of the project index (`lpm projects`),
- * local and central. Open asks the server for a board server and goes to it.
- * Reveal asks the server to show `<project>/.lpm` in the file manager.
+ * local and central, and the backups in the central store.
+ *
+ * The tab Projects lists the projects. Open asks the server for a board server
+ * and goes to it. Reveal asks the server to show `<project>/.lpm` in the file
+ * manager. Move moves the board between its project and the central store, and
+ * Back up copies the board to its backup. The tab Backups lists the backups,
+ * with the date and the age in days of each, and Restore overwrites a board
+ * with its backup.
+ *
+ * Move, Back up and Restore ask for a confirmation first. Then the server runs
+ * the operation in the background, and the row shows its progress
+ * (`StoreJobWatcher`). Replacing a backup needs the typed word `backup`, and a
+ * restore needs the typed word `restore`.
  *
  * The logic is here and `ProjectsPage.svelte` only draws it, so the tests in
  * `web/test/projects-page.test.ts` need no browser.
  */
 
-/** The three project routes. `api` in `$lib/api/client.ts` provides them. */
+/** The project routes. `api` in `$lib/api/client.ts` provides them. */
 export interface ProjectsApi {
   list(): Promise<ProjectEntryDto[]>;
   open(lpmDir: string): Promise<{ url: string }>;
   reveal(lpmDir: string): Promise<void>;
+  backups(): Promise<BackupListDto>;
+  jobs(): Promise<StoreJobDto[]>;
+  move(lpmDir: string, to: 'local' | 'central'): Promise<StoreJobDto>;
+  backup(lpmDir: string, confirm?: string): Promise<StoreJobDto>;
+  restore(name: string, confirm: string): Promise<StoreJobDto>;
 }
 
-/** One row of the page. */
+export type ProjectsTab = 'projects' | 'backups';
+
+/** One row of the tab Projects. */
 export interface ProjectRow extends ProjectEntryDto {
   /** The project folder, or the board folder when the project is not known. */
   folder: string;
@@ -26,56 +59,158 @@ export interface ProjectRow extends ProjectEntryDto {
   label: string | null;
   canOpen: boolean;
   canReveal: boolean;
+  /** The text of the move button: "Move to central" or "Move to project". */
+  moveLabel: string;
+  canMove: boolean;
+  /** Why the move button is off, or the target of the move. */
+  moveTitle: string;
+  canBackup: boolean;
+  /** The backup of the project, or null. */
+  backup: BoardBackupDto | null;
+  /** The job of the project that runs or ended last, or null. */
+  job: StoreJobDto | null;
 }
 
-function toRow(entry: ProjectEntryDto): ProjectRow {
-  return {
-    ...entry,
-    folder: entry.root ?? entry.lpmDir,
-    lastUsedText: entry.lastUsed ? entry.lastUsed.slice(0, 10) : 'never',
-    label: entry.state === 'ok' ? null : entry.state,
-    canOpen: entry.state !== 'missing',
-    canReveal: entry.state === 'ok' && entry.root !== null,
-  };
+/** One row of the tab Backups. */
+export interface BackupRow extends BoardBackupDto {
+  /** The project folder name. */
+  projectName: string;
+  /** `YYYY-MM-DD HH:MM` in the local time zone. */
+  dateText: string;
+  ageDays: number;
+  /** "0 days", "1 day", "12 days". */
+  ageText: string;
+  sizeText: string;
+  canRestore: boolean;
+  job: StoreJobDto | null;
+}
+
+/** The message of the last job that ended, for the page to show. */
+export interface JobNotice {
+  kind: 'done' | 'failed';
+  message: string;
+  notes: string[];
 }
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+export interface ProjectsPageOptions {
+  /** The time for the age of a backup. Tests pass one. */
+  now?: () => Date;
+  /** The timer of the job polling. Tests pass one that they run by hand. */
+  schedule?: Schedule;
+}
+
 export class ProjectsPage {
   /** Replaced as a whole on each load, so it is not a deep proxy. */
-  rows = $state.raw<ProjectRow[]>([]);
+  entries = $state.raw<ProjectEntryDto[]>([]);
+  backupList = $state.raw<BackupListDto>({ store: null, backupsDir: null, backups: [] });
   loading = $state(true);
   /** The last failure, for the page to show. Cleared by the next action. */
   error = $state<string | null>(null);
-  /** The board folder that an action is running for, or null. */
+  /** The board folder that Open or Reveal runs for, or null. */
   busy = $state<string | null>(null);
+  tab = $state<ProjectsTab>('projects');
+  /** The confirmation that the page shows, or null. */
+  confirmation = $state<Confirmation | null>(null);
+  notice = $state<JobNotice | null>(null);
 
+  readonly watcher: StoreJobWatcher;
   readonly #api: ProjectsApi;
   readonly #navigate: (url: string) => void;
+  readonly #now: () => Date;
 
-  constructor(api: ProjectsApi, navigate: (url: string) => void) {
+  constructor(api: ProjectsApi, navigate: (url: string) => void, options: ProjectsPageOptions = {}) {
     this.#api = api;
     this.#navigate = navigate;
+    this.#now = options.now ?? (() => new Date());
+    this.watcher = new StoreJobWatcher({ jobs: () => api.jobs() }, (job) => void this.#finished(job), {
+      schedule: options.schedule,
+    });
   }
+
+  rows = $derived.by<ProjectRow[]>(() => this.entries.map((entry) => this.#toRow(entry)));
+
+  backupRows = $derived.by<BackupRow[]>(() =>
+    this.backupList.backups.map((backup) => {
+      const days = ageInDays(backup.createdAt, this.#now());
+      const job = this.watcher.jobFor(backup.projectPath) ?? null;
+      return {
+        ...backup,
+        projectName: projectName(backup.projectPath),
+        dateText: backupDateText(backup.createdAt),
+        ageDays: days,
+        ageText: ageText(days),
+        sizeText: sizeText(backup.bytes),
+        canRestore: job?.state !== 'running',
+        job,
+      };
+    }),
+  );
 
   /** The text for an empty list, or null while loading or when projects exist. */
   get emptyText(): string | null {
-    if (this.loading || this.rows.length) return null;
+    if (this.loading || this.entries.length) return null;
     return 'No projects yet. Each lpm command in a project adds it to this list.';
+  }
+
+  /** The text for an empty Backups tab, or null. */
+  get backupsEmptyText(): string | null {
+    if (this.loading || this.backupList.backups.length) return null;
+    if (this.backupList.store === null) return 'No central store is set, so there are no backups. `lpm set central_store` names one.';
+    return 'No backups yet. Back up a board on the tab Projects, or move a board: each move backs the board up first.';
+  }
+
+  #toRow(entry: ProjectEntryDto): ProjectRow {
+    const ok = entry.state === 'ok' && entry.root !== null;
+    const job = this.watcher.jobFor(entry.root) ?? null;
+    const running = job?.state === 'running';
+    const hasStore = this.backupList.store !== null;
+    const backup = entry.root === null ? null : (this.backupList.backups.find((candidate) => candidate.projectPath === entry.root) ?? null);
+    const toCentral = entry.store === 'local';
+    const moveTitle = !ok
+      ? 'The board is not at its recorded place, or its project folder is not known'
+      : toCentral && !hasStore
+        ? 'No central store is set. `lpm set central_store` names one.'
+        : toCentral
+          ? `Move the board to ${this.backupList.store}/.lpm_central`
+          : `Move the board into ${entry.root}/.lpm`;
+    return {
+      ...entry,
+      folder: entry.root ?? entry.lpmDir,
+      lastUsedText: entry.lastUsed ? entry.lastUsed.slice(0, 10) : 'never',
+      label: entry.state === 'ok' ? null : entry.state,
+      canOpen: entry.state !== 'missing' && !running,
+      canReveal: entry.state === 'ok' && entry.root !== null,
+      moveLabel: moveLabel(entry.store),
+      canMove: ok && !running && (!toCentral || hasStore),
+      moveTitle,
+      // A central board finds its store from its own folder, so only a local board needs the key.
+      canBackup: ok && !running && (hasStore || entry.store === 'central'),
+      backup,
+      job,
+    };
   }
 
   async load(): Promise<void> {
     this.loading = true;
     this.error = null;
     try {
-      this.rows = (await this.#api.list()).map(toRow);
+      const [entries, backups] = await Promise.all([this.#api.list(), this.#api.backups()]);
+      this.entries = entries;
+      this.backupList = backups;
     } catch (error) {
       this.error = messageOf(error);
     } finally {
       this.loading = false;
     }
+    await this.watcher.poll();
+  }
+
+  selectTab(tab: ProjectsTab): void {
+    this.tab = tab;
   }
 
   #row(lpmDir: string): ProjectRow | undefined {
@@ -90,6 +225,83 @@ export class ProjectsPage {
   async reveal(lpmDir: string): Promise<void> {
     if (!this.#row(lpmDir)?.canReveal) return;
     await this.#run(lpmDir, () => this.#api.reveal(lpmDir));
+  }
+
+  /** Ask to move the board of `lpmDir` to the other store. The move starts when the reader confirms. */
+  requestMove(lpmDir: string): void {
+    const row = this.#row(lpmDir);
+    if (!row?.canMove || row.root === null) return;
+    const to = row.store === 'local' ? 'central' : 'local';
+    this.confirmation = moveConfirmation({
+      name: row.name,
+      store: row.store,
+      root: row.root,
+      centralStore: this.backupList.store,
+      backup: row.backup,
+      now: this.#now(),
+      onConfirm: () => void this.#start(() => this.#api.move(lpmDir, to)),
+    });
+  }
+
+  /** Ask to back the board of `lpmDir` up. Replacing a backup needs the typed word `backup`. */
+  requestBackup(lpmDir: string): void {
+    const row = this.#row(lpmDir);
+    if (!row?.canBackup) return;
+    this.confirmation = backupConfirmation({
+      name: row.name,
+      backup: row.backup,
+      now: this.#now(),
+      onConfirm: (confirm) => void this.#start(() => this.#api.backup(lpmDir, confirm)),
+    });
+  }
+
+  /** Ask to restore the board of a backup. The restore needs the typed word `restore`. */
+  requestRestore(name: string): void {
+    const row = this.backupRows.find((candidate) => candidate.name === name);
+    if (!row?.canRestore) return;
+    this.confirmation = restoreConfirmation({
+      backup: row,
+      now: this.#now(),
+      onConfirm: (confirm) => void this.#start(() => this.#api.restore(name, confirm)),
+    });
+  }
+
+  /** Close the confirmation. `accepted` runs its action. */
+  resolveConfirmation(accepted: boolean): void {
+    const pending = this.confirmation;
+    this.confirmation = null;
+    if (accepted) pending?.onConfirm(false);
+  }
+
+  /** The progress of a job, from 0 to 100, and its line of text. */
+  progressOf(job: StoreJobDto): { percent: number; text: string } {
+    return { percent: jobPercent(job), text: jobText(job) };
+  }
+
+  /** Stop the job polling. */
+  dispose(): void {
+    this.watcher.stop();
+  }
+
+  async #start(begin: () => Promise<StoreJobDto>): Promise<void> {
+    this.error = null;
+    this.notice = null;
+    try {
+      this.watcher.track(await begin());
+    } catch (error) {
+      this.error = messageOf(error);
+    }
+  }
+
+  async #finished(job: StoreJobDto): Promise<void> {
+    this.notice = { kind: job.state === 'failed' ? 'failed' : 'done', message: job.message ?? '', notes: job.notes };
+    try {
+      const [entries, backups] = await Promise.all([this.#api.list(), this.#api.backups()]);
+      this.entries = entries;
+      this.backupList = backups;
+    } catch (error) {
+      this.error = messageOf(error);
+    }
   }
 
   async #run(lpmDir: string, action: () => Promise<void>): Promise<void> {

@@ -29,3 +29,4 @@ export * from './state.js';
 export * from './templates.js';
 export * from './user.js';
 export * from './views.js';
+export * from './tree.js';

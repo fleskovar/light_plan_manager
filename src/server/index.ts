@@ -18,6 +18,7 @@ import { gitRoutes } from './routes/git.js';
 import { remoteRoutes } from './routes/remotes.js';
 import { viewRoutes } from './routes/views.js';
 import { projectRoutes } from './routes/projects.js';
+import { registerServedBoard } from './jobs.js';
 import { BoardLauncher } from './launcher.js';
 
 /**
@@ -166,7 +167,11 @@ export function createBoardServer(paths: BoardPaths, options: ServerOptions = {}
     desktopLauncher: options.desktopLauncher,
     launcher: options.launcher,
   });
-  return createGuardedServer(router, options.serveApp !== false);
+  const server = createGuardedServer(router, options.serveApp !== false);
+  // A move of the board from this process writes its new paths into `paths` (jobs.ts).
+  const unregister = registerServedBoard(paths);
+  server.once('close', unregister);
+  return server;
 }
 
 /**

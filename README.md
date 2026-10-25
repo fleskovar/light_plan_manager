@@ -199,11 +199,22 @@ command run in the project follows it.
 `lpm store move --to central` and `--to local` move an existing board, with
 its git history. `lpm store list` lists the central boards.
 
+Each move backs the board up first, into
+`<central_store>/.lpm_backups/<name>_backup`. The move deletes the original
+folder only after the copy has the same files, sizes and SHA-256 digests. Each
+board has one backup. `lpm store backup` writes it, and replaces an existing
+backup only with `--replace`. `lpm store backups` lists the backups.
+`lpm store restore --yes` overwrites the board with its backup.
+
 Each `lpm` command also records its project in `projects.json` of the user
 folder, so `lpm projects` lists every board on the computer, local or central.
-In the web app, File > "All projects…" shows the same list, with an Open and a
-Reveal button for each project. `lpm ui` in a folder without a board opens that
-page when a central store is set. [`docs/central-store.md`](docs/central-store.md)
+In the web app, File > "All projects…" shows the same list. Each row has the
+buttons Open, Reveal, Move to central (or Move to project) and Back up. A move
+or a backup runs in the background, and the row shows a progress bar. The tab
+Backups lists each backup with its date and its age in days, and Restore
+overwrites the board. File ▸ Board configuration… has the same actions for
+the open board, on the tab Storage. `lpm ui` in a folder without a board opens
+the "All projects" page when a central store is set. [`docs/central-store.md`](docs/central-store.md)
 is the full guide, with the assumptions and the known issues.
 
 ## Quick start
@@ -2759,7 +2770,7 @@ still refused.
 | `lpm remote [<sub>]` | Mirror the board onto an external tracker. No subcommand lists the remotes. `connect`, `push [<id>…]`, `pull [<key>…]`, `sync`, `status`, `ledger`, and the less common `add`, `login`, `setup`, `rm`, `log`, `resolve`, `link`, `unlink`, `decouple`, `relink`, `rebase`. `--remote <name>`, `--all`, `--children`, `--recursive`, `--parent <id>`, `--scope <id>`, `--force`, `--purge`, `--dry-run`, `--changed`, `--limit N`, `--yes`, `--refresh`, `--since <iso>`, `--json` |
 | `lpm check` | Validate. `--fix` repairs, `--strict` also fails on warnings |
 | `lpm config [<sub>]` | Show and change your user settings in `settings.json` of the user folder. No subcommand lists them. `get <key>`, `set <key> <value>`, `unset <key>`. Keys: `central_store`, `default_template` |
-| `lpm store [<sub>]` | Show where the board is stored: `local` (`<project>/.lpm`) or `central` (a folder in `<central_store>/.lpm_central`). `move --to central\|local` moves it and keeps its git history. `list [--json]` lists the boards in the central store, from any folder ([central store](#keeping-boards-outside-the-project-the-central-store)). `lpm move` is a different command |
+| `lpm store [<sub>]` | Show where the board is stored: `local` (`<project>/.lpm`) or `central` (a folder in `<central_store>/.lpm_central`). `move --to central\|local` moves it and keeps its git history. `list [--json]` lists the boards in the central store, from any folder. A move backs the board up first. `backup [--replace]` copies the board to its backup in `<central_store>/.lpm_backups`, `backups [--json]` lists the backups, and `restore --yes` overwrites the board with its backup ([central store](#keeping-boards-outside-the-project-the-central-store)). `lpm move` is a different command |
 | `lpm projects [<sub>]` | List every project that `lpm` worked on, on this computer, local and central, with its state. `forget <path>`, `prune`, `--json`. Each command that finds a board records it in `projects.json` of the user folder |
 | `lpm experimental [on\|off]` | Say whether the experimental features are on. `on` writes the key `experimental` in `.lpm/config.yml` and installs the missing packages. `off` removes the key. `--no-install` |
 | `lpm ui` | Open the board in a browser. `--port`, `--host`, `--no-open`, `--api-only`, `--experimental`. Alias: `lpm web` |
@@ -3259,7 +3270,7 @@ item becomes the active item.
   yours rather than the view's: they are kept in this browser, apply to every
   board and view you open in it, and never travel with a view to a teammate.
 - **File ▸ Board configuration…** — the content of `.lpm/config.yml`, and the
-  commands that change it. The dialog has four tabs. The tab **Remote board**
+  commands that change it. The dialog has five tabs. The tab **Remote board**
   has its own entry above. The top of the dialog shows the planning mode with
   the button **Switch to queue** or **Switch to periods**, which writes the key
   `planning` as the **Queue Mode** switch of the queue panel does.
@@ -3278,6 +3289,15 @@ item becomes the active item.
 
   **Templates** saves the config as a [board template](#templates) and selects
   the template that `lpm init` uses by default.
+
+  **Storage** shows the board folder, the project folder and the central
+  store. **Move to central** (or **Move to project**) moves the board, after a
+  confirmation. **Back up** copies the board to its backup. When the board has
+  a backup, the button replaces it, and the confirmation asks you to type
+  `backup`. **Restore from backup** overwrites the board, and the confirmation
+  asks you to type `restore`. Each action runs in the background, and the tab
+  shows a progress bar. The server serves the board from its new folder after
+  a move. [`docs/central-store.md`](docs/central-store.md) describes the steps.
 
   Each change is written to `.lpm/config.yml` at once. A change that renames or
   removes a name also rewrites each file that holds the name:

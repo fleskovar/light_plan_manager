@@ -18,6 +18,11 @@ export interface Confirmation {
    * checkbox under the message. Its final state is what `onConfirm` receives.
    */
   choice?: { label: string; checked: boolean };
+  /**
+   * A word that the reader must type before the confirm button works, for an
+   * action that overwrites data. The dialog shows a text field under the message.
+   */
+  typeToConfirm?: string;
   onConfirm: (choice: boolean) => void;
 }
 
@@ -32,7 +37,7 @@ export interface ReparentRequest {
 export type ViewDialogKind = 'new' | 'save-as' | 'rename';
 
 /** The tabs of the board configuration dialog. */
-export type ConfigTab = 'types' | 'statuses' | 'remote' | 'templates';
+export type ConfigTab = 'types' | 'statuses' | 'remote' | 'templates' | 'storage';
 
 export class Shell {
   menu = $state<{ anchor: MenuAnchor; entries: MenuEntry[] } | null>(null);

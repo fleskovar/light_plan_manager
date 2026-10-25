@@ -51,6 +51,11 @@ export class BoardLauncher {
     this.#opened.push({ lpmDir, url, server: null });
   }
 
+  /** Record that the board in `from` moved to `to`, so that `open` finds its server under the new folder. */
+  moved(from: string, to: string): void {
+    for (const entry of this.#opened) if (samePath(entry.lpmDir, from)) entry.lpmDir = to;
+  }
+
   /** The URL of a server for the board of `paths`. Starts one when none runs. */
   async open(paths: BoardPaths): Promise<string> {
     const known = this.#opened.find((entry) => samePath(entry.lpmDir, paths.lpmDir));

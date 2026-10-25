@@ -28,17 +28,21 @@ folder, called `<tmp>` below, and replaces `{{tmp}}` with that folder. It sets
 1. `relocateBoard` asks the allocator for a folder name. The project folder is
    called `project`, and `store/.lpm_central` holds no folder, so the name is
    `project`.
-2. It copies every file of `project/.lpm` to `store/.lpm_central/project`. The
+2. It backs the board up. It copies every file of `project/.lpm` to
+   `store/.lpm_backups/project_backup/board`, compares the copy, and writes
+   `backup.json` beside `board/`.
+3. It copies every file of `project/.lpm` to `store/.lpm_central/project`. The
    board has no `lock` file in this case. A lock file is never copied.
-3. It compares the two file lists and sizes. They are equal.
-4. It renames `project/.lpm` aside, then writes:
+4. It compares the two trees: the file lists, the sizes and the SHA-256
+   digests. They are equal.
+5. It renames `project/.lpm` aside, then writes:
    - `store/.lpm_central/project/project.json`, which names `<tmp>/project`;
    - the line `project.json` in `store/.lpm_central/project/.gitignore`,
      because the board is not a git repository (a git board gets the line in
      `.git/info/exclude` instead);
    - the pointer `project/.lpm/config.yml`, with `store:` and the path of the
      central board folder.
-5. It deletes the old folder that it renamed aside.
+6. It deletes the old folder that it renamed aside.
 
 `outputs/tree.txt` lists every file after the move, without `home/`:
 
@@ -46,6 +50,8 @@ folder, called `<tmp>` below, and replaces `{{tmp}}` with that folder. It sets
 | --- | --- |
 | `project/.lpm/config.yml` | The pointer. It is the only file left in `project/.lpm`. |
 | `project/src/main.ts` | The move does not touch the code. |
+| `store/.lpm_backups/project_backup/backup.json` | The record of the backup: the project folder, the time and the source store. |
+| `store/.lpm_backups/project_backup/board/*` | The five board files, as they were before the move. |
 | `store/.lpm_central/project/*` | The five board files, and the new `project.json`. |
 
 ## Run it

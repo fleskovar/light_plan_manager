@@ -49,6 +49,7 @@ export * from './move.js';
 export * from './planning.js';
 export * from './project-index.js';
 export * from './relocate.js';
+export * from './backup.js';
 export * from './profile.js';
 export * from './remove.js';
 export * from './retype.js';

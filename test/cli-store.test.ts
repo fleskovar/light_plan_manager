@@ -151,3 +151,45 @@ describe('lpm store move', () => {
     expect(lpmIn(dir, 'store', 'move', '--to', 'elsewhere').status).toBe(1);
   });
 });
+
+describe('lpm store backup, backups and restore', () => {
+  it('prints the backup that a move writes', () => {
+    const dir = project('shop', 'local');
+    const run = lpmIn(dir, 'store', 'move', '--to', 'central');
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain(path.join(store, '.lpm_backups', 'shop_backup'));
+  });
+
+  it('backs a board up once, and replaces the backup only with --replace', () => {
+    const dir = project('shop', 'local');
+    expect(lpmIn(dir, 'store', 'backup').status).toBe(0);
+    const refused = lpmIn(dir, 'store', 'backup');
+    expect(refused.status).toBe(1);
+    expect(refused.all).toContain('already has a backup');
+    const replaced = lpmIn(dir, 'store', 'backup', '--replace');
+    expect(replaced.status).toBe(0);
+    expect(replaced.stdout).toContain('It replaced the backup of');
+  });
+
+  it('lists the backups with the date and the age in days', () => {
+    const dir = project('shop', 'local');
+    lpmIn(dir, 'store', 'backup');
+    const run = lpmIn(tempDir('lpm-empty-'), 'store', 'backups');
+    expect(run.status).toBe(0);
+    expect(run.stdout).toMatch(/shop_backup\s+\d{4}-\d{2}-\d{2}\s+0 days\s+local\s+/);
+    const json = JSON.parse(lpmIn(dir, 'store', 'backups', '--json').stdout) as { projectPath: string }[];
+    expect(json.map((entry) => entry.projectPath)).toEqual([dir]);
+  });
+
+  it('restores only with --yes', () => {
+    const dir = project('shop', 'local');
+    lpmIn(dir, 'store', 'backup');
+    const refused = lpmIn(dir, 'store', 'restore');
+    expect(refused.status).toBe(1);
+    expect(refused.all).toContain('lpm store restore --yes');
+    const run = lpmIn(dir, 'store', 'restore', '--yes');
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain('Restored');
+    expect(existsSync(path.join(dir, '.lpm', 'config.yml'))).toBe(true);
+  });
+});

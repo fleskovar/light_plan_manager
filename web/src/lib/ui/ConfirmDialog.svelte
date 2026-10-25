@@ -13,6 +13,14 @@
   // Seeded once: the dialog is remounted for each confirmation.
   // svelte-ignore state_referenced_locally
   let choice = $state(confirmation.choice?.checked ?? false);
+
+  /** What the reader typed. With `typeToConfirm`, the confirm button works only when it equals that word. */
+  let typed = $state('');
+  const ready = $derived(!confirmation.typeToConfirm || typed.trim() === confirmation.typeToConfirm);
+
+  function accept(): void {
+    if (ready) onresolve(true, choice);
+  }
 </script>
 
 <Modal title={confirmation.title} size="sm" onclose={() => onresolve(false, choice)}>
@@ -30,13 +38,24 @@
       <span>{confirmation.choice.label}</span>
     </label>
   {/if}
+  {#if confirmation.typeToConfirm}
+    <label class="typed">
+      <span>Type <strong>{confirmation.typeToConfirm}</strong> to continue.</span>
+      <!-- svelte-ignore a11y_autofocus -->
+      <input
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+        autofocus
+        bind:value={typed}
+        onkeydown={(event) => event.key === 'Enter' && accept()}
+      />
+    </label>
+  {/if}
 
   {#snippet footer()}
     <Button onclick={() => onresolve(false, choice)}>Cancel</Button>
-    <Button
-      variant={confirmation.danger ? 'danger' : 'primary'}
-      onclick={() => onresolve(true, choice)}
-    >
+    <Button variant={confirmation.danger ? 'danger' : 'primary'} disabled={!ready} onclick={accept}>
       {confirmation.confirmLabel ?? 'Confirm'}
     </Button>
   {/snippet}
@@ -59,6 +78,23 @@
 
   .choice input {
     margin-top: 0.2rem;
+  }
+
+  .typed {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin-top: var(--space-3);
+    font-size: var(--text-sm);
+  }
+
+  .typed input {
+    font-family: var(--font-mono);
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-0, var(--surface-1));
+    color: var(--ink);
   }
 
   ul {

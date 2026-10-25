@@ -1,10 +1,12 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes } from 'node:crypto';
-import { closeSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from 'node:fs';
+import { closeSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync, writeSync } from 'node:fs';
 import { hostname, userInfo } from 'node:os';
 import path from 'node:path';
 import { BoardError } from '../errors.js';
 import { sleepSync } from './atomic.js';
 import type { BoardPaths } from './paths.js';
+import { LOCK_FILE } from './paths.js';
 
 /**
  * The board lock: one writer at a time, across processes.
@@ -53,6 +55,11 @@ import type { BoardPaths } from './paths.js';
  * underneath it whether or not the lock behaved. Two lines of defence, because
  * this one is advisory: nothing stops a text editor writing `_issue.md`.
  */
+
+/** True for the lock file and for a lock that `breakLock` renamed aside. Neither belongs in a copy of the board. */
+export function isLockFileName(name: string): boolean {
+  return name === LOCK_FILE || name.startsWith(`${LOCK_FILE}.stale.`);
+}
 
 /** How long to wait for another process before giving up. */
 export const LOCK_TIMEOUT_ENV = 'LPM_LOCK_TIMEOUT_MS';
@@ -265,6 +272,12 @@ function timedOut(file: string, op: string, timeoutMs: number): BoardError {
  */
 const held = new Map<string, { depth: number; nonce: string }>();
 
+/** The key of a lock file in `held` and `jobs`. Windows and macOS do not compare case, so one folder has one key. */
+function lockKey(file: string): string {
+  const resolved = path.resolve(file);
+  return process.platform === 'win32' || process.platform === 'darwin' ? resolved.toLowerCase() : resolved;
+}
+
 /**
  * Run `fn` as the board's only writer.
  *
@@ -275,14 +288,17 @@ export function withBoardLock<T>(paths: BoardPaths, op: string, fn: () => T): T 
   if (disabled()) return fn();
 
   const file = paths.lockPath;
-  const entry = held.get(file);
+  const key = lockKey(file);
+  const entry = held.get(key);
   if (entry) {
+    const job = jobs.get(key);
+    if (job !== undefined && !jobScope.getStore()?.has(key)) throw busyWithJob(job, op);
     entry.depth += 1;
     try {
       return fn();
     } finally {
       entry.depth -= 1;
-      if (entry.depth === 0) held.delete(file);
+      if (entry.depth === 0) held.delete(key);
     }
   }
 
@@ -299,20 +315,134 @@ export function withBoardLock<T>(paths: BoardPaths, op: string, fn: () => T): T 
   };
 
   acquire(file, holder, timeoutMs, staleMs, op);
-  held.set(file, { depth: 1, nonce });
+  held.set(key, { depth: 1, nonce });
   const stopWatching = releaseOnExit(file, nonce);
   try {
     return fn();
   } finally {
-    const current = held.get(file);
+    const current = held.get(key);
     if (current) {
       current.depth -= 1;
       if (current.depth === 0) {
-        held.delete(file);
+        held.delete(key);
         stopWatching();
         release(file, nonce);
       }
     }
+  }
+}
+
+/**
+ * The locks that an async job of this process holds (`withBoardLockAsync`),
+ * with what the job does. A server runs a long job, such as a board move, in
+ * the background and keeps answering other requests. A write of such a request
+ * must not re-enter the lock of the job, so it fails at once.
+ */
+const jobs = new Map<string, string>();
+
+/** The lock files of the async jobs that the current call runs inside. */
+const jobScope = new AsyncLocalStorage<ReadonlySet<string>>();
+
+/** How often an async job writes a new time into its lock, so that the lock never looks stale. */
+const HEARTBEAT_MS = 20_000;
+
+function busyWithJob(job: string, op: string): BoardError {
+  return new BoardError(`The board is busy: this server is doing "${job}"`, [
+    `Could not ${op} now. Try again when it is done.`,
+  ]);
+}
+
+/**
+ * Run the async `fn` as the board's only writer.
+ *
+ * The lock file is the same as for `withBoardLock`, so other processes wait
+ * for the job. In this process, a call of `withBoardLock` or
+ * `withBoardLockAsync` from inside `fn` re-enters the lock. A call from
+ * anywhere else fails at once with "The board is busy", and does not wait,
+ * because a wait would stop the event loop that runs the job.
+ *
+ * Every 20 seconds the job writes the current time into the lock file. So a
+ * job that runs longer than `LPM_LOCK_STALE_MS` keeps its lock.
+ */
+export async function withBoardLockAsync<T>(paths: BoardPaths, op: string, fn: () => Promise<T>): Promise<T> {
+  if (disabled()) return fn();
+
+  const file = paths.lockPath;
+  const key = lockKey(file);
+  if (held.has(key)) {
+    if (jobScope.getStore()?.has(key)) return fn();
+    throw busyWithJob(jobs.get(key) ?? 'another change', op);
+  }
+
+  const timeoutMs = positiveEnv(LOCK_TIMEOUT_ENV, DEFAULT_TIMEOUT_MS);
+  const staleMs = positiveEnv(LOCK_STALE_ENV, DEFAULT_STALE_MS);
+  const nonce = randomBytes(8).toString('hex');
+  const holder: LockHolder = {
+    pid: process.pid,
+    host: hostname(),
+    user: whoami(),
+    op,
+    at: new Date().toISOString(),
+    nonce,
+  };
+
+  await acquireAsync(file, holder, timeoutMs, staleMs, op);
+  // A sync call of this process can have taken the lock while this call waited.
+  if (held.has(key)) {
+    release(file, nonce);
+    throw busyWithJob(jobs.get(key) ?? 'another change', op);
+  }
+  held.set(key, { depth: 1, nonce });
+  jobs.set(key, op);
+  const stopWatching = releaseOnExit(file, nonce);
+  const heartbeat = setInterval(() => refresh(file, holder), HEARTBEAT_MS);
+  heartbeat.unref();
+  const scope = new Set(jobScope.getStore() ?? []);
+  scope.add(key);
+  try {
+    return await jobScope.run(scope, fn);
+  } finally {
+    clearInterval(heartbeat);
+    held.delete(key);
+    jobs.delete(key);
+    stopWatching();
+    release(file, nonce);
+  }
+}
+
+/** Write a new time into a lock that this process still holds. */
+function refresh(file: string, holder: LockHolder): void {
+  if (readLockHolder(file)?.nonce !== holder.nonce) return;
+  try {
+    writeFileSync(file, JSON.stringify({ ...holder, at: new Date().toISOString() }));
+  } catch {
+    // The folder moved during a switch. The next heartbeat tries again.
+  }
+}
+
+/** `acquire` with a timer between two attempts, so the event loop runs while the call waits. */
+async function acquireAsync(file: string, holder: LockHolder, timeoutMs: number, staleMs: number, op: string): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let unreadableSince: number | null = null;
+  for (;;) {
+    if (tryCreate(file, holder)) return;
+    const current = readLockHolder(file);
+    if (current) {
+      unreadableSince = null;
+      if (isStale(current, staleMs)) {
+        breakLock(file);
+        continue;
+      }
+    } else {
+      unreadableSince ??= Date.now();
+      if (Date.now() - unreadableSince > staleMs) {
+        breakLock(file);
+        unreadableSince = null;
+        continue;
+      }
+    }
+    if (Date.now() >= deadline) throw timedOut(file, op, timeoutMs);
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
   }
 }
 

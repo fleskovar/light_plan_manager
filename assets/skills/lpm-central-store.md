@@ -1,6 +1,6 @@
 ---
 name: lpm-central-store
-description: Where a light-plan board keeps its documents, and how to operate the central store and the project index. Load this when `.lpm/config.yml` holds only the key `store:`, when a path in a message points into `.lpm_central`, when a task mentions the central store, `central_store`, `lpm set central_store`, `lpm config`, `lpm store` (show, move, list), `lpm projects`, `projects.json`, `lpm init --central` or `--local`, `lpm git join --central`, the "All projects" page of the web app, or an error such as "The board pointer ... holds no board" or "The central store is already ...".
+description: Where a light-plan board keeps its documents, and how to operate the central store and the project index. Load this when `.lpm/config.yml` holds only the key `store:`, when a path in a message points into `.lpm_central`, when a task mentions the central store, `central_store`, `lpm set central_store`, `lpm config`, `lpm store` (show, move, list, backup, backups, restore), a backup in `.lpm_backups`, `lpm projects`, `projects.json`, `lpm init --central` or `--local`, `lpm git join --central`, the "All projects" page of the web app, or an error such as "The board pointer ... holds no board" or "The central store is already ...".
 roles:
   - developer
   - pm
@@ -123,9 +123,26 @@ lpm store move --to central
 lpm store move --to local
 ```
 
-The move copies the board, compares the copy, then switches, so a failure
-leaves the board where it was. It keeps the git history, the remotes,
-`local.json` and `credentials.json`.
+The move backs the board up first, copies the board, compares the copy, then
+switches, so a failure leaves the board where it was. It keeps the git
+history, the remotes, `local.json` and `credentials.json`.
+
+## Backups
+
+Each board has one backup, in `<central_store>/.lpm_backups/<name>_backup`.
+The folder holds `board/` (the copy) and `backup.json` (the project folder and
+the time). Each move replaces it.
+
+```bash
+lpm store backup             # first backup of the board of this folder
+lpm store backup --replace   # replaces the existing backup
+lpm store backups            # name, date, age in days, store, project
+lpm store restore --yes      # overwrites the board with its backup
+```
+
+**Never pass `--replace` or `--yes` on your own.** A replaced backup and a
+restored board cannot be recovered. Ask the person first, and say which
+backup (its date) the command replaces or restores.
 
 **A running `lpm ui` or `lpm mcp` keeps the old paths.** That includes the MCP
 server you may be talking to now. After a move, the MCP server must be
@@ -154,9 +171,9 @@ lpm store list               # the central boards only
 
 `LPM_PROJECT_INDEX=off` stops the recording, for example in CI.
 
-In the web app, File > "All projects…" shows the same list with Open and
-Reveal. `lpm ui` in a folder without a board shows that page when a central
-store is set.
+In the web app, File > "All projects…" shows the same list with Open, Reveal,
+Move and Back up, and a tab Backups with Restore. `lpm ui` in a folder without
+a board shows that page when a central store is set.
 
 ## Errors and what to do
 

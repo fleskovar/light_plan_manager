@@ -355,6 +355,82 @@ export interface ProjectEntryDto {
   state: 'ok' | 'project missing' | 'missing';
 }
 
+/**
+ * One backup in `<central_store>/.lpm_backups`, as `GET /api/projects/backups`
+ * answers it. The same shape as `BoardBackup` in the engine.
+ */
+export interface BoardBackupDto {
+  /** The folder name, for example `shop_backup`. `POST /api/projects/restore` names the backup by it. */
+  name: string;
+  dir: string;
+  /** The project folder. Each project has one backup at most. */
+  projectPath: string;
+  /** The ISO time of the backup. */
+  createdAt: string;
+  /** Where the board was at the time of the backup. */
+  source: 'local' | 'central';
+  sourceDir: string;
+  keyPrefix: string | null;
+  files: number;
+  bytes: number;
+}
+
+/** What `GET /api/projects/backups` answers. */
+export interface BackupListDto {
+  /** The key `central_store` of the user settings, or null when it is absent. */
+  store: string | null;
+  /** `<store>/.lpm_backups`, or null. */
+  backupsDir: string | null;
+  backups: BoardBackupDto[];
+}
+
+/** The three operations that a server runs in the background. */
+export type StoreJobKind = 'move' | 'backup' | 'restore';
+
+/**
+ * One background operation of a server: a move between the project and the
+ * central store, a backup, or a restore. `GET /api/projects/jobs` lists them.
+ */
+export interface StoreJobDto {
+  id: string;
+  kind: StoreJobKind;
+  /** The project folder of the board. The page finds the row of the job by it. */
+  root: string;
+  /** The target store of a move, or null. */
+  to: 'local' | 'central' | null;
+  state: 'running' | 'done' | 'failed';
+  /** The step that runs: `backup`, `copy` or `restore`. Null before the first report. */
+  step: 'backup' | 'copy' | 'restore' | null;
+  /** `copy` while the files are copied, then `compare` while the copy is checked. */
+  phase: 'copy' | 'compare' | null;
+  /** The position of the step, from 1. */
+  stepIndex: number;
+  stepCount: number;
+  /** The bytes of the phase that are done, and the bytes of the phase. */
+  done: number;
+  total: number;
+  /** The result on success, or the error on failure. Null while the job runs. */
+  message: string | null;
+  /** The warnings of a finished job, such as a folder that could not be deleted, or the hints of a failure. */
+  notes: string[];
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+/** What `GET /api/projects/self` answers on a board server: where its own board is. */
+export interface BoardStoreInfoDto {
+  name: string;
+  root: string;
+  lpmDir: string;
+  store: 'local' | 'central';
+  /** The key `central_store` of the user settings, or null. */
+  centralStore: string | null;
+  /** The backup of this board, or null. */
+  backup: BoardBackupDto | null;
+  /** The background job of this board that runs or ended last, or null. */
+  job: StoreJobDto | null;
+}
+
 /** One board on the landing page of the hub: `GET /api/hub/boards` answers a list of these. */
 export interface CentralBoardDto {
   name: string;

@@ -8,6 +8,7 @@
   import { ConfigEditor } from './editor.svelte.js';
   import RemoteBoardTab from './remote/RemoteBoardTab.svelte';
   import StatusesTab from './StatusesTab.svelte';
+  import StorageTab from './StorageTab.svelte';
   import TemplatesTab from './TemplatesTab.svelte';
   import TypesTab from './TypesTab.svelte';
 
@@ -30,6 +31,9 @@
    *   with `lpm ui --experimental` connects a tracker and maps its items.
    * - **Templates** saves the configuration as a template for new boards and
    *   chooses the default template.
+   * - **Storage** shows whether the board is in its project or in the central
+   *   store, moves it between the two, backs it up, and restores it from its
+   *   backup. The "All projects" page offers the same actions for every board.
    *
    * `shell.configTab` holds the open tab, so a menu entry or the Sync tab of
    * the drawer can open the dialog on a tab. The planning mode, which the
@@ -128,6 +132,7 @@
       { id: 'statuses', label: 'Statuses' },
       { id: 'remote', label: 'Remote board' },
       { id: 'templates', label: 'Templates' },
+      { id: 'storage', label: 'Storage' },
     ]}
     active={tab}
     onselect={(id) => shell.openConfig(id)}
@@ -141,6 +146,8 @@
       <StatusesTab {editor} />
     {:else if tab === 'remote'}
       <RemoteBoardTab />
+    {:else if tab === 'storage'}
+      <StorageTab />
     {:else}
       <TemplatesTab {editor} />
     {/if}

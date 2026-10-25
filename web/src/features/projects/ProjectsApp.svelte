@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import type { HubInfoDto } from '$shared';
   import { api } from '$lib/api/client.js';
   import ProjectsPage from './ProjectsPage.svelte';
@@ -17,10 +18,20 @@
   let { hub }: Props = $props();
 
   const page = new ProjectsPageModel(
-    { list: api.projects, open: api.openProject, reveal: api.revealProject },
+    {
+      list: api.projects,
+      open: api.openProject,
+      reveal: api.revealProject,
+      backups: api.backups,
+      jobs: api.storeJobs,
+      move: api.moveProject,
+      backup: api.backupProject,
+      restore: api.restoreBackup,
+    },
     (url) => window.location.assign(url),
   );
   void page.load();
+  onDestroy(() => page.dispose());
 </script>
 
 <ProjectsPage {page} {hub} />

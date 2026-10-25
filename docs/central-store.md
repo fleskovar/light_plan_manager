@@ -4,16 +4,22 @@ A board can keep its documents in one folder on your computer instead of in its
 project folder. That folder is the **central store**. This page is the user
 guide (sections 1 to 7), the list of decisions that the first iterations rest
 on (section 8) and the list of known issues (section 9). It also covers the
-project index, which lists every board on the computer, local or central.
+project index, which lists every board on the computer, local or central, and
+the backups of boards in the central store.
 
 The code is in `src/core/storage/paths.ts` (finding a board through a pointer),
 `src/core/storage/central.ts` (writing the pointer and `project.json`),
 `src/core/operations/central-store.ts` (the setting, the folder names, the
 list), `src/core/operations/relocate.ts` (moving a board and the whole store),
+`src/core/operations/backup.ts` (backups and restores), `src/core/storage/tree.ts`
+(copying and comparing a folder tree), `withBoardLockAsync` in
+`src/core/storage/lock.ts` (the lock of a background job),
 `src/core/storage/project-index.ts` and `src/core/operations/project-index.ts`
 (the project index), `src/server/launcher.ts`, `src/server/routes/projects.ts`
-and `src/server/hub.ts` (opening boards from the web app), and
-`web/src/features/projects/` (the "All projects" page).
+and `src/server/hub.ts` (opening boards from the web app), `src/server/jobs.ts`
+(the background jobs of `lpm ui`), `web/src/features/projects/` (the "All
+projects" page) and `web/src/features/config/StorageTab.svelte` (the tab
+Storage of the board configuration).
 
 ---
 
@@ -27,7 +33,10 @@ lpm init --central                        # the board goes to ~/boards/.lpm_cent
 lpm task next                             # every command follows the pointer
 
 cd ~/work/blog
-lpm store move --to central               # an existing local board moves there too
+lpm store move --to central               # an existing local board moves there too,
+                                          # after a backup in ~/boards/.lpm_backups/blog_backup
+lpm store backups                         # lists the backups, with date and age in days
+lpm store restore --yes                   # overwrites the board with its backup
 
 cd ~
 lpm ui                                    # no board here: the page lists both boards
@@ -80,6 +89,10 @@ path.
     │   ├── .gitignore
     │   └── project.json              { "project_path": "/home/ada/work/shop" }
     └── shop-2/                       the board of another folder called shop
+└── .lpm_backups/
+    └── shop_backup/                  the one backup of ~/work/shop
+        ├── backup.json               the project folder, the time, the store at that time
+        └── board/                    the copy of the board folder
 ~/work/shop/
 ├── .lpm/
 │   └── config.yml                    the pointer: store: "/home/ada/boards/.lpm_central/shop"
@@ -139,14 +152,20 @@ project  /home/ada/work/shop
 ```
 
 `lpm store move --to central` and `lpm store move --to local` move a board.
-The move runs under the board lock and takes three steps:
+The move runs under the board lock and takes four steps:
 
+0. Back the board up into `<central_store>/.lpm_backups/<name>_backup`
+   (see [Backups](#backups) below). The backup replaces the earlier backup of
+   the project.
 1. Copy the board folder to the target, without the lock file. The move to
    `local` does not copy `project.json`.
-2. Compare the file lists and file sizes of the two folders.
+2. Compare the two folder trees: the file lists, the file sizes and the
+   SHA-256 digest of each file.
 3. Switch with renames inside one parent folder, then delete the old folder.
 
-A failure before step 3 removes the copy and leaves the board where it was. The
+The old folder is deleted only after step 2 found no difference. A failure
+before step 3 removes the copy and leaves the board where it was. The backup
+of step 0 stays. The
 git history, the remotes, `local.json` and `credentials.json` move with the
 board. `lpm move` is a different command: it changes the status, parent,
 period or assignee of an issue.
@@ -163,6 +182,51 @@ in /home/ada/boards/.lpm_central
 
 "project missing" means that the project folder is gone, or that its pointer
 names another board. `--json` prints the list as JSON.
+
+### Backups
+
+A backup is a full copy of one board folder in the central store. Each project
+has one backup at most.
+
+| Item | Value |
+| --- | --- |
+| Folder | `<central_store>/.lpm_backups/<name>_backup/`. Without the key `central_store`, a central board uses the store that holds its folder. A local board without the key has no backup. |
+| Name | The name of the central board folder, or the project folder name for a local board, cleaned as section 3 describes, with `_backup` at the end. A taken name gets `-2`, `-3` before the suffix: `shop-2_backup`. |
+| Content | `board/`: the copy of the board folder, without `lock`. `backup.json`: the keys `projectPath`, `createdAt` (ISO time), `source` (`local` or `central`), `sourceDir`, `keyPrefix`, `files` and `bytes`. |
+| Identity | The key `projectPath`. A board keeps its backup when it moves between its project and the central store. |
+| Written by | Each move (`lpm store move`, the Move buttons of the web app), `lpm store backup`, and the Back up buttons of the web app. |
+| Read by | `lpm store backups`, `lpm store restore`, `GET /api/projects/backups`, the tab Backups of the "All projects" page, and the tab Storage of the board configuration. |
+
+A backup copies the board into a staging folder beside the backup folder,
+compares the copy, writes `backup.json`, and then renames the staging folder
+into place. The old backup is deleted only after that rename. A backup that
+fails leaves the old backup as it was.
+
+`lpm store backup` refuses when the board has a backup, and names
+`--replace`. A move always replaces the backup, because the backup must hold
+the board as it was just before the move.
+
+`lpm store restore --yes` overwrites the board of the current folder with the
+copy in its backup. Without `--yes`, the command prints the board folder and
+the time of the backup, and changes nothing. The restore writes the board
+where the board is now: in the project, or in the central store. When the
+project has no board, the restore creates `<project>/.lpm`. When the pointer
+names a central board folder that is gone, the restore creates that folder
+again. A restore to a central folder writes `project.json` for the current
+project. A restore to a local folder leaves `project.json` out. The restore
+copies the backup into a staging folder beside the board folder, compares the
+copy, and then switches the folders with two renames. The backup does not
+change.
+
+```
+$ lpm store backups
+blog_backup  2026-10-24  1 day     central  /home/ada/work/blog
+shop_backup  2026-10-13  12 days   local    /home/ada/work/shop
+in /home/ada/boards/.lpm_backups
+```
+
+`lpm set central_store --move` moves the backups to the new store after the
+boards.
 
 ## 5. Git sync
 
@@ -220,7 +284,42 @@ goes to `/projects` on the same server. Each row shows the name, `local` or
 - **Reveal** shows `<project>/.lpm` in the file manager. The server takes the
   path from the list, never from the request. Reveal is off unless the state is
   `ok`.
+- **Move to central** (on a local board) or **Move to project** (on a central
+  board) moves the board, after a confirmation. The confirmation says that the
+  move backs the board up first, and gives the date of the backup that the
+  move replaces. Move to central is off without the key `central_store`.
+- **Back up** copies the board to its backup, after a confirmation. When the
+  board has a backup, the confirmation gives its date and age, and the
+  Continue button works only after you type `backup`.
 - **Back to the board** returns to `/`.
+
+A move or a backup runs in the background on the server. The row shows a
+progress bar with the step ("Step 1 of 2: Backing up", "Step 2 of 2: Copying
+the board"), the phase (the copy, then the check of the copy) and the percent.
+The page reads `GET /api/projects/jobs` twice a second while a job runs. When
+the job ends, the page reloads both lists and shows the result above them.
+Open, Move and Back up are off for a board while its job runs.
+
+The tab **Backups** lists each backup of `.lpm_backups`: the project, the store
+at the time of the backup, the date and time, the age in days, the number of
+files and the size. **Restore** opens a confirmation that says that the
+restore overwrites the board. The Continue button works only after you type
+`restore`. The restore runs in the background, as a move does.
+
+File ▸ Board configuration… has the tab **Storage**, with the same actions for
+the board of the server: Move, Back up (or Replace the backup) and Restore from
+backup. The tab shows the board folder, the project folder, the central store,
+and the date and age of the backup. After a move, the server writes the new
+paths into the paths that its routes read (`followMovedBoard` in
+`src/server/jobs.ts`). So the editor keeps working on the board in its new
+folder without a restart.
+
+A background job holds the board lock for the whole operation, with
+`withBoardLockAsync`. Another process waits for the lock, as for any write. A
+write from a request to the same server fails at once with "The board is
+busy: this server is doing ...". A wait would stop the server that runs the
+job. Every 20 seconds the job writes the current time into the lock file, so a
+job that runs longer than `LPM_LOCK_STALE_MS` keeps its lock.
 
 When `lpm ui` finds no board from the current folder and `central_store` is
 set, it starts the **hub** instead of a board server. The hub serves the same
@@ -238,6 +337,12 @@ the page. When that process stops, they stop.
 | `GET /api/health` | both | The hub adds `hub: true` |
 | `GET /api/hub` | hub | `{ hub: true, store, boardsDir }`. A board server answers 404, and the web app uses that answer to choose the page. |
 | `GET /api/hub/boards`, `POST /api/hub/boards/:name/open`, `/reveal` | hub | The central boards only, by folder name (the first landing page used these) |
+| `GET /api/projects/backups` | both | `{ store, backupsDir, backups }`, from `listBackups` |
+| `GET /api/projects/jobs` | both | The background jobs of the process: each running job, and each job that ended in the last 10 minutes |
+| `POST /api/projects/move` `{ lpmDir, to }` | both | 202 and the job. 400 for a `to` other than `local` or `central`. 404 as above. 409 when the board is not `ok`, is in `to` already or has a job running, or when `to` is `central` without a central store |
+| `POST /api/projects/backup` `{ lpmDir, confirm? }` | both | 202 and the job. 409 when the board has a backup and `confirm` is not `"backup"` |
+| `POST /api/projects/restore` `{ name, confirm }` | both | 202 and the job. 404 for a name that is not in the list of backups. 400 when `confirm` is not `"restore"`, or when the project folder is gone |
+| `GET /api/projects/self` | board server | `BoardStoreInfoDto`: the board folder, the store, the central store, the backup and the last job of this board |
 
 ## 8. Assumptions
 
@@ -270,6 +375,20 @@ decisions. The review LPM-54 confirms or changes each one.
 | 15 | A move of the store stops at the first failure and keeps the key until every board moved. | As planned. |
 | 16 | File > "All projects…" opens `/projects` on the same server. The hub shows the same page. | As planned. The first landing page (central boards only) and its web code were removed. Its server routes `/api/hub/boards/...` stay. |
 
+The third iteration (requested by fleskovar on 2026-10-25) added moves and
+backups to the web app. These decisions were taken without a review.
+
+| # | Decision | Status after the implementation |
+| --- | --- | --- |
+| 17 | The request said "leave the copy in the central store archived with an _backup". A backup is a folder copy, not a zip or tar file. Node has no zip writer without a new dependency, and a folder copy restores with the same rename steps as a move. | As planned. |
+| 18 | The backups are in `<central_store>/.lpm_backups`, not in `.lpm_central`. A folder in `.lpm_central` with a `config.yml` is a board, so `lpm store list`, the project index and `lpm set central_store --move` would treat a backup as a board. | As planned. |
+| 19 | The project folder identifies a backup ("one backup per board"). | As planned. |
+| 20 | Each move replaces the backup without a typed word. The move confirmation gives the date of the backup that it replaces. Only an explicit backup over an existing one needs the typed word `backup`. | As planned. |
+| 21 | The CLI move backs up too ("always"). The CLI has `lpm store backup`, `backups` and `restore`, so the CLI and the web app do the same operations. `relocateBoard` takes `backup: false` for a library caller. | As planned. |
+| 22 | The check of a copy compares SHA-256 digests, in addition to the file lists and sizes ("completely copied"). | As planned. The check applies to every move, also to `lpm set central_store --move`. |
+| 23 | A restore overwrites the board where it is now, and keeps the backup. A restore does not back up the board first, because that backup would replace the backup that the restore reads. | As planned. |
+| 24 | The server runs the operations as background jobs in its own process, with async file calls. The web app polls for the progress. | As planned. A write from a request to the same server fails at once while a job holds the lock of its board. |
+
 ## 9. Known issues
 
 | Issue | How to reproduce it | Workaround |
@@ -291,6 +410,13 @@ decisions. The review LPM-54 confirms or changes each one.
 | `lpm ui` outside a board without `central_store` does not open the "All projects" page, even when the project index holds projects. | Unset `central_store`, then run `lpm ui` in an empty folder. It fails with "No light-plan board found". | Run `lpm ui` in any project, then File > "All projects…". |
 | The question of `lpm set central_store` (move, abandon, cancel) is not tested at a terminal. | A spawned test process has no terminal. | The flags `--move` and `--abandon` and the refusal without a terminal are tested. |
 | A move of the store skips a folder in the old `.lpm_central` that holds no `config.yml`, and the old folder then stays. | Create an empty folder in the old `.lpm_central`, then run `lpm set central_store --move`. The command prints "left ... holds no board". | Delete the folder by hand. |
+| Another `lpm ui` or `lpm mcp` process keeps the old paths after a move from the web app. Only the server that ran the move follows the board. | Run `lpm ui` in a project, open the same board from the hub of a second `lpm ui`, and move it from the second one. | Restart the first process. |
+| A job runs in the `lpm ui` process. When the process stops during a job, the job stops between two files. | Stop `lpm ui` with Ctrl-C during a long copy. | The board stays where it was. Delete a folder whose name holds `.incoming-` or `.restoring-` by hand. |
+| A local board without the key `central_store` has no place for a backup. A central board outside a `.lpm_central` folder, without the key, cannot move to its project, because the move needs a backup. | Unset `central_store`, then run `lpm store backup` on a local board. | Set the key with `lpm set central_store`. |
+| The backups of a central board without the key are in the store that holds the board, and `lpm store backups` does not list them. | Unset `central_store`, then back up a central board. | Set the key again. |
+| A board without a known project (no `project.json`) has no backup. | Delete `project.json` of a central board, then back it up. | Run `lpm check --fix` in the project folder. |
+| A write from the editor fails with "The board is busy" while a job of the same server holds the lock. | Start a move of the open board, and change an issue during the copy. | Wait until the progress bar is gone, then make the change again. |
+| Not checked in a browser: the layout of the progress bar, the tab Backups, the typed confirmation and the tab Storage. | The tests cover the view-models (`web/test/store-maintenance.test.ts`) and the routes (`test/server-store-jobs.test.ts`). | — |
 
 A bug found on the way, and fixed: on Windows with `core.autocrlf=true`, a
 board cloned by `lpm git join` had a CRLF `INDEX.md`, and `lpm check` reported

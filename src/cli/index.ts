@@ -137,7 +137,7 @@ const summaries: Record<string, string> = {
   check: 'Validate the board; --fix repairs what it can',
   experimental: 'Turn the unfinished features on or off, and install their packages',
   config: 'Show and change your user settings, such as the central store',
-  store: 'Show where the board is stored; move it to or from the central store',
+  store: 'Show where the board is stored; move it to or from the central store; back it up and restore it',
   projects: 'List every project that lpm worked on, on this computer',
   ui: 'Open the board in a web browser',
   export: 'Publish the board as a static site anyone can open',

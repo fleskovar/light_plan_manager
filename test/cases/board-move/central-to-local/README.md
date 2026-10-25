@@ -28,19 +28,25 @@ folder, called `<tmp>` below, and replaces `{{tmp}}` with that folder.
 
 1. `findBoardPaths(<tmp>/project)` follows the pointer. The board folder is
    `store/.lpm_central/project`, and the project folder is `<tmp>/project`.
-2. `relocateBoard` copies the board folder to a new folder beside
-   `project/.lpm`, without `project.json`. A local board has no use for the
-   file, because its project is the parent folder.
-3. It compares the two file lists and sizes. They are equal.
-4. It renames the pointer folder `project/.lpm` aside, and renames the copy to
+2. `relocateBoard` backs the board up. It copies every file of the board
+   folder to `store/.lpm_backups/project_backup/board`, compares the copy, and
+   writes `backup.json` beside `board/`. The backup keeps `project.json`.
+3. It copies the board folder to a new folder beside `project/.lpm`, without
+   `project.json`. A local board has no use for the file, because its project
+   is the parent folder.
+4. It compares the two trees: the file lists, the sizes and the SHA-256
+   digests. They are equal.
+5. It renames the pointer folder `project/.lpm` aside, and renames the copy to
    `project/.lpm`.
-5. It deletes the pointer folder and `store/.lpm_central/project`.
+6. It deletes the pointer folder and `store/.lpm_central/project`.
 
 `outputs/tree.txt` lists every file after the move, without `home/`:
 
 | File | Why it is there |
 | --- | --- |
 | `project/.lpm/*` | The four board files. `config.yml` is the board config now, not the pointer. |
+| `store/.lpm_backups/project_backup/backup.json` | The record of the backup: the project folder, the time and the source store. |
+| `store/.lpm_backups/project_backup/board/*` | The five files of the central board folder, as they were before the move. |
 | `store/.lpm_central/other/config.yml` | The move does not touch another board. |
 
 `project.json` is in no folder. `.gitignore` keeps its line `project.json`,

@@ -1,5 +1,7 @@
 import type {
   ApiErrorBody,
+  BackupListDto,
+  BoardStoreInfoDto,
   BoardSnapshot,
   BoardTemplatesDto,
   CommentDto,
@@ -44,6 +46,7 @@ import type {
   RemoteSyncEventDto,
   RemoteSyncRequestDto,
   ServerInfoDto,
+  StoreJobDto,
   ViewDocument,
   ViewMode,
   ViewSummary,
@@ -178,6 +181,22 @@ export const api = {
   openProject: (lpmDir: string): Promise<{ url: string }> => request('/api/projects/open', send('POST', { lpmDir })),
   revealProject: (lpmDir: string): Promise<void> =>
     request<unknown>('/api/projects/reveal', send('POST', { lpmDir })).then(() => undefined),
+
+  /** The backups in <central_store>/.lpm_backups. */
+  backups: (): Promise<BackupListDto> => request('/api/projects/backups'),
+  /** The background jobs of the server: moves, backups and restores. */
+  storeJobs: (): Promise<StoreJobDto[]> => request('/api/projects/jobs'),
+  /** Start a move of the board between its project and the central store. The job runs in the background. */
+  moveProject: (lpmDir: string, to: 'local' | 'central'): Promise<StoreJobDto> =>
+    request('/api/projects/move', send('POST', { lpmDir, to })),
+  /** Start a backup. `confirm` holds the word that the person typed when a backup exists. */
+  backupProject: (lpmDir: string, confirm?: string): Promise<StoreJobDto> =>
+    request('/api/projects/backup', send('POST', { lpmDir, confirm })),
+  /** Start a restore of the backup `name`. `confirm` holds the word that the person typed. */
+  restoreBackup: (name: string, confirm: string): Promise<StoreJobDto> =>
+    request('/api/projects/restore', send('POST', { name, confirm })),
+  /** Where the board of this server is, and its backup. A board server only. */
+  storeInfo: (): Promise<BoardStoreInfoDto> => request('/api/projects/self'),
 
   me: (): Promise<CurrentUserDto> => request('/api/me'),
 

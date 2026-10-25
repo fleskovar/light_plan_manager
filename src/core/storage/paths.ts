@@ -159,6 +159,12 @@ export const STORE_KEY = 'store';
  */
 export const CENTRAL_DIR = '.lpm_central';
 /**
+ * The folder in the central store that holds the backups, one folder for each
+ * project: `<central_store>/.lpm_backups/<name>_backup`. `operations/backup.ts`
+ * writes and reads it.
+ */
+export const BACKUPS_DIR = '.lpm_backups';
+/**
  * The file in a central board folder that names the project folder, in the key
  * `project_path`. `lpm init` and `lpm store move` write it. The board's own
  * `.gitignore` lists it, because the path is different on each computer.

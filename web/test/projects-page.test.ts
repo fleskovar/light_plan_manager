@@ -37,6 +37,18 @@ function fakeApi(projects: ProjectEntryDto[], options: { openFails?: boolean; re
       calls.push(`reveal ${lpmDir}`);
       if (options.revealFails) throw new Error('Could not show the file in the file manager');
     },
+    // The move, backup and restore routes have their own tests in store-maintenance.test.ts.
+    backups: async () => ({ store: '/boards', backupsDir: '/boards/.lpm_backups', backups: [] }),
+    jobs: async () => [],
+    move: async () => {
+      throw new Error('not used here');
+    },
+    backup: async () => {
+      throw new Error('not used here');
+    },
+    restore: async () => {
+      throw new Error('not used here');
+    },
   };
   return { api, calls };
 }
