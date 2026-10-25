@@ -152,20 +152,39 @@ project  /home/ada/work/shop
 ```
 
 `lpm store move --to central` and `lpm store move --to local` move a board.
-The move runs under the board lock and takes four steps:
+The move runs under the board lock and takes five steps:
 
 0. Back the board up into `<central_store>/.lpm_backups/<name>_backup`
    (see [Backups](#backups) below). The backup replaces the earlier backup of
    the project.
 1. Copy the board folder to the target, without the lock file. The move to
-   `local` does not copy `project.json`.
+   `local` copies into the pointer folder `<project>/.lpm`, without
+   `project.json` and without `config.yml`.
 2. Compare the two folder trees: the file lists, the file sizes and the
-   SHA-256 digest of each file.
-3. Switch with renames inside one parent folder, then delete the old folder.
+   SHA-256 digest of each file. When the trees differ, the move deletes the
+   copy, waits 1 second, and copies again. A third copy follows after
+   3 seconds. A difference after the third copy fails the move. The second
+   and third copies cover git: after each `git commit`, git starts
+   `git maintenance run --auto --detach`, which can repack `.git/objects`
+   during the copy. A backup and a restore compare and copy again in the
+   same way.
+3. Switch: replace the file `<project>/.lpm/config.yml`. The move to
+   `central` writes the pointer over the board config. The move to `local`
+   writes the board config over the pointer.
+4. Delete the old files. The move to `central` deletes every entry of
+   `<project>/.lpm` except the pointer. The move to `local` deletes the
+   central board folder.
 
-The old folder is deleted only after step 2 found no difference. A failure
-before step 3 removes the copy and leaves the board where it was. The backup
-of step 0 stays. The
+The move renames no folder. On Windows, a folder rename fails with `EPERM`
+while any program has a file below the folder open, and a terminal, an
+editor, a git client or a virus scanner can hold such a file.
+
+The old files are deleted only after step 3. A failure before step 3 removes
+the copy and leaves the board where it was. The backup of step 0 stays. When
+step 4 cannot delete an entry, the move is complete, and the result holds a
+warning that names the entry. Delete that entry by hand. The move to `local`
+refuses a pointer folder that holds other entries than `config.yml`, because
+the copy would mix with them. The
 git history, the remotes, `local.json` and `credentials.json` move with the
 board. `lpm move` is a different command: it changes the status, parent,
 period or assignee of an issue.
@@ -397,8 +416,8 @@ backups to the web app. These decisions were taken without a review.
 | A clone of the project has no pointer. | Clone the code repository of a project with a central board. `.lpm/` is not in the clone. | Run `lpm git join --central` (with git sync), or ask for the board folder. |
 | A running server keeps the old paths after a move. | Start `lpm ui` or `lpm mcp` on a board, run `lpm store move`, then edit in the running server. The server still uses the paths that it resolved at start, which name the old folder. Not tested. | Stop `lpm ui` and `lpm mcp` before the move, and start them again after. |
 | A writer that waited for the lock during a move can write to the old local path. | Not reproduced. A second `lpm` process that resolved the board before the move holds the old paths when it gets the lock. | Do not run other `lpm` commands on the board during a move. |
-| On Windows, a move fails when a program holds a file of the board open. | Open a file of `<project>/.lpm` in an editor that locks it, then run `lpm store move --to central`. The move stops with "Could not move ... aside" and "Nothing was moved". | Close the program and run the move again. |
-| When the old folder cannot be deleted after a move, it stays on disk. | The move prints a warning that names the folder. | Delete the folder by hand. |
+| On Windows, a move fails when a program holds `<project>/.lpm/config.yml` open. | Open `config.yml` with a program that keeps the file open, then run `lpm store move`. The move stops with "Could not write the pointer ..." or "Could not write the board config ..." and "Nothing was moved". | Close the program and run the move again. |
+| When an old file cannot be deleted after a move, it stays on disk. | Hold a board file open with a program that denies delete access, then run `lpm store move --to central`. The move prints a warning that names the entry. | Delete the entry by hand. A move back into the project refuses the pointer folder until the entry is gone. |
 | Two projects that point at one board make `lpm check --fix` rewrite `project.json` in turn. | Copy a pointer from one project to another, then run `lpm check --fix` in each. | Give each project its own board. |
 | Boards opened from the landing page stop with the hub. | Open a board from the page, then stop `lpm ui` with Ctrl-C. | Run `lpm ui` in the project folder for a board server of its own. |
 | A board with "project missing" cannot be revealed. | Delete a project folder, then open the landing page. | Find the central board folder with `lpm store list`, or restore the project folder. |

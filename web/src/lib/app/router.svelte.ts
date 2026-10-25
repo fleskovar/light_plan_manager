@@ -3,16 +3,24 @@
  *
  * The "router" is a reactive read of the URL hash. `#/view/roadmap` names the
  * view that the window shows, which is the active tab. `#/issue/LP-3?view=roadmap`
- * is the popup for one issue. Any other hash is `home`: the app then opens the
- * view that this browser used last. Using the hash means reloading the page
+ * is the popup for one issue. `#/library` is the Library page, and
+ * `#/library?doc=prd/payments&view=roadmap` opens it on one document, with the
+ * view whose issue windows its links open. Any other hash is `home`: the app
+ * then opens the view that this browser used last. Using the hash means reloading the page
  * keeps you where you were, and the static server needs no rewrite rules.
  */
 export type Route =
   | { name: 'home' }
   | { name: 'view'; id: string }
-  | { name: 'issue'; nodeId: string; viewId: string };
+  | { name: 'issue'; nodeId: string; viewId: string }
+  | { name: 'library'; docId: string | null; viewId: string | null };
 
 export function parseRoute(hash: string): Route {
+  const libraryMatch = /^#\/library(?:\?(.*))?$/.exec(hash);
+  if (libraryMatch) {
+    const query = new URLSearchParams(libraryMatch[1] ?? '');
+    return { name: 'library', docId: query.get('doc'), viewId: query.get('view') };
+  }
   const issueMatch = /^#\/issue\/([^?]+)\?view=(.+)$/.exec(hash);
   if (issueMatch) {
     return { name: 'issue', nodeId: decodeURIComponent(issueMatch[1]!), viewId: decodeURIComponent(issueMatch[2]!) };
@@ -34,6 +42,15 @@ export function createRouter(): { readonly route: Route } {
 }
 
 export const viewHash = (id: string): string => `#/view/${encodeURIComponent(id)}`;
+
+/** The hash of the Library page, opened on the document `docId` when it is not null. */
+export function libraryHash(docId: string | null, viewId: string | null): string {
+  const query = new URLSearchParams();
+  if (docId !== null) query.set('doc', docId);
+  if (viewId !== null) query.set('view', viewId);
+  const text = query.toString();
+  return text ? `#/library?${text}` : '#/library';
+}
 
 /** The hash of the issue window for the issue `nodeId`, which loads the view `viewId`. */
 export const issueHash = (nodeId: string, viewId: string): string =>

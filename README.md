@@ -440,6 +440,9 @@ lpm library show prd/payments                                 # print the body
 lpm library refs prd/payments                                 # the issues that reference it
 lpm library mv prd/payments requirements/payments             # rename it, and rewrite the references
 lpm library rm requirements/payments                          # delete it
+lpm library mkdir archive/2026                                # a folder, kept in git while it is empty
+lpm library mv prompts archive/prompts                        # move a folder with everything inside it
+lpm library tree                                              # the folders and the documents, nested
 ```
 
 An issue references a document with the related file `library:<id>`, or with a
@@ -449,10 +452,12 @@ each document that the issue or one of its ancestors references, so
 issue. A registry template can hold the same references, and its placeholders
 work in them. The MCP tools `list_library`, `get_library_document`,
 `create_library_document`, `update_library_document`,
-`move_library_document` and `delete_library_document` give an agent the same
-access. In the web app,
-**File ▸ Library…** lists the documents and edits them with the editor of the
-issue window. [`docs/library.md`](docs/library.md) is the full guide.
+`move_library_document`, `delete_library_document`, `create_library_folder`
+and `delete_library_folder` give an agent the same access. In the web app, the
+button **Library** in the top row, or **File ▸ Library…**, opens the Library
+page in its own window. The page shows the folders and the documents as a
+tree, moves an item when it is dragged onto a folder, and edits a document
+with the editor of the issue window. [`docs/library.md`](docs/library.md) is the full guide.
 
 ## Time hierarchy
 
@@ -2808,7 +2813,7 @@ still refused.
 | `lpm planning [periods\|queue]` | Plan with sprints and increments, or work the board as one continuous queue that ignores every period. No argument says which. Alias: `lpm mode` |
 | `lpm instructions [<id>]` | Print the working brief for an issue. `--id`, `--template`, `--no-comments`, `--list`, `--init`, `--force`. Aliases: `lpm brief`, `lpm context` |
 | `lpm team` | Roster and load. `--period <id>`, `--open`. Alias: `lpm roster` |
-| `lpm library [<sub>]` | The [board library](#the-board-library). No subcommand lists the documents. `show <id>`, `new <id>`, `set <id>`, `mv <id> <new-id>`, `refs <id>`, `rm <id>`. `-t/--title`, `-d/--description`, `-m/--message`, `-f/--file`, `--json`, `--no-refs`. Aliases: `lpm lib`, `lpm docs` |
+| `lpm library [<sub>]` | The [board library](#the-board-library). No subcommand lists the documents. `tree [<folder>]`, `show <id>`, `new <id>`, `set <id>`, `mv <id> <new-id>`, `refs <id>`, `rm <id>`, `mkdir <folder>`, `rmdir <folder>`. `-t/--title`, `-d/--description`, `-m/--message`, `-f/--file`, `--json`, `--no-refs`, `-r/--recursive`. Aliases: `lpm lib`, `lpm docs` |
 | `lpm queue simulate` | Work the queue through as one person, or the whole team. `--user <id\|name>`, `--role <id\|name>`, `--team`, `--unassigned`, `--parked`, `--limit <n>`, `--skipped` |
 | `lpm queue agent` | Drain the queue with the pi coding agent. `--user`, `--max-tasks`, `--model`, `--effort`, `--commit`, `--unassigned`, `--parked`, `--timeout`, `--command-timeout`, `--plain`, `--file`, `--dry-run` |
 | `lpm remote [<sub>]` | Mirror the board onto an external tracker. No subcommand lists the remotes. `connect`, `push [<id>…]`, `pull [<key>…]`, `sync`, `status`, `ledger`, and the less common `add`, `login`, `setup`, `rm`, `log`, `resolve`, `link`, `unlink`, `decouple`, `relink`, `rebase`. `--remote <name>`, `--all`, `--children`, `--recursive`, `--parent <id>`, `--scope <id>`, `--force`, `--purge`, `--dry-run`, `--changed`, `--limit N`, `--yes`, `--refresh`, `--since <iso>`, `--json` |
@@ -3018,7 +3023,7 @@ The **File** menu holds the commands for views:
 | **Close tab** | Closes the tab of the open view. Disabled when the window has one tab. |
 | **Board configuration…** | Opens the dialog that shows and changes `.lpm/config.yml`. See [What it does](#what-it-does). |
 | **Remote board…** | Opens the same dialog on the tab **Remote board**, which sets up git sync and, with the experimental features on, the tracker remotes. |
-| **Library…** | Opens the dialog that lists, adds, edits and deletes the documents of the [board library](#the-board-library). |
+| **Library…** | Opens the Library page in its own window. The page manages the folders and the documents of the [board library](#the-board-library). The button **Library** in the top row opens the same page. |
 | **Delete view…** | Asks, then deletes the view file. The issues stay on the board. |
 
 The key `description` of a view file holds a short text that says what the

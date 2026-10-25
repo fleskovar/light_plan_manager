@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { BoardError } from '../errors.js';
 import { writeFileAtomic } from './atomic.js';
@@ -30,6 +30,11 @@ export { LIBRARY_REF_PREFIX, isLibraryRef, libraryRef, normalizeLibraryId, parse
  * of an id holds lowercase letters, digits, `-`, `_` and `.`, and starts with a
  * letter or a digit. A file whose name breaks this rule stays on disk, and
  * `listLibraryDocs` leaves it out (`check` reports it).
+ *
+ * **Folders.** A folder below the library folder groups documents. A folder
+ * stays when its last document leaves it, and each folder that the library
+ * creates holds `FOLDER_KEEP_FILE`, so git keeps an empty folder too.
+ * `listLibraryFolders` lists every folder, also the empty ones.
  *
  * **The file.** Optional YAML frontmatter, then the markdown body. Two keys of
  * the frontmatter have a meaning: `title` and `description`. Other keys stay
@@ -239,50 +244,122 @@ export function renderLibraryDoc(input: LibraryDocInput): string {
   return stringifyFrontmatter(data, body);
 }
 
-/** Write a document. The caller holds the board lock. */
+/**
+ * The file that keeps a folder in git. Git stores files and no folders, so a
+ * folder without a file disappears on the next clone. The library writes this
+ * file into each folder that it creates.
+ */
+export const FOLDER_KEEP_FILE = '.gitkeep';
+
+/** The absolute path of a folder below the library folder. `folder` obeys the id rule. */
+export function libraryFolderPath(paths: BoardPaths, folder: string): string {
+  return path.join(libraryDir(paths), ...requireLibraryId(folder).split('/'));
+}
+
+export function libraryFolderExists(paths: BoardPaths, folder: string): boolean {
+  const normal = normalizeLibraryId(folder);
+  if (normal === null) return false;
+  try {
+    return statSync(libraryFolderPath(paths, normal)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Every folder below the library folder whose path obeys the id rule, also an
+ * empty one, sorted by path. Dot-entries are skipped. A folder whose name
+ * breaks the rule is left out, together with everything inside it.
+ */
+export function listLibraryFolders(paths: BoardPaths): string[] {
+  const out: string[] = [];
+  const walk = (dir: string, prefix: string[]): void => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.') || !entry.isDirectory()) continue;
+      const parts = [...prefix, entry.name];
+      const relative = parts.join('/');
+      if (normalizeLibraryId(relative) !== relative) continue;
+      out.push(relative);
+      walk(path.join(dir, entry.name), parts);
+    }
+  };
+  walk(libraryDir(paths), []);
+  return out.sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Create the folder `folder` and each folder above it, and write
+ * `FOLDER_KEEP_FILE` into each one that has none. An empty `folder` names the
+ * library folder itself, which gets no keep file. The caller holds the board
+ * lock.
+ */
+export function ensureLibraryFolder(paths: BoardPaths, folder: string): void {
+  const root = libraryDir(paths);
+  mkdirSync(root, { recursive: true });
+  if (!folder) return;
+  let dir = root;
+  for (const part of requireLibraryId(folder).split('/')) {
+    dir = path.join(dir, part);
+    mkdirSync(dir, { recursive: true });
+    const keep = path.join(dir, FOLDER_KEEP_FILE);
+    if (!existsSync(keep)) writeFileAtomic(keep, '');
+  }
+}
+
+/** The folder part of an id: `prompts` for `prompts/review`, and an empty text for `notes`. */
+export function libraryParentOf(id: string): string {
+  const at = id.lastIndexOf('/');
+  return at === -1 ? '' : id.slice(0, at);
+}
+
+/** Write a document, and create its folders. The caller holds the board lock. */
 export function writeLibraryDoc(paths: BoardPaths, id: string, input: LibraryDocInput): string {
   const file = libraryDocPath(paths, id);
-  mkdirSync(path.dirname(file), { recursive: true });
+  ensureLibraryFolder(paths, libraryParentOf(requireLibraryId(id)));
   writeFileAtomic(file, renderLibraryDoc(input));
   return file;
 }
 
 /**
- * Delete a document, and each folder above it that the delete left empty, up
- * to the library folder. The caller holds the board lock.
+ * Delete a document. Its folder stays, also when the delete left it empty,
+ * because a folder is part of the structure that a person set up. The caller
+ * holds the board lock.
  */
 export function deleteLibraryDoc(paths: BoardPaths, id: string): void {
-  const file = libraryDocPath(paths, id);
-  rmSync(file, { force: true });
-  pruneEmptyFolders(paths, path.dirname(file));
-}
-
-/** Remove `dir` and each folder above it while it is empty, up to the library folder. */
-function pruneEmptyFolders(paths: BoardPaths, start: string): void {
-  const root = libraryDir(paths);
-  let dir = start;
-  while (dir.startsWith(root) && dir !== root) {
-    try {
-      if (readdirSync(dir).length) break;
-      rmdirSync(dir);
-    } catch {
-      break;
-    }
-    dir = path.dirname(dir);
-  }
+  rmSync(libraryDocPath(paths, id), { force: true });
 }
 
 /**
  * Rename the file of the document `from` to the file of the id `to`, and
- * remove each folder that the rename left empty. The caller holds the board
- * lock and checked that no document has the id `to`.
+ * create the folders of `to`. The folder of `from` stays. The caller holds the
+ * board lock and checked that no document has the id `to`.
  */
 export function renameLibraryDocFile(paths: BoardPaths, from: string, to: string): void {
-  const source = libraryDocPath(paths, from);
   const target = libraryDocPath(paths, to);
-  mkdirSync(path.dirname(target), { recursive: true });
-  renameSync(source, target);
-  pruneEmptyFolders(paths, path.dirname(source));
+  ensureLibraryFolder(paths, libraryParentOf(requireLibraryId(to)));
+  renameSync(libraryDocPath(paths, from), target);
+}
+
+/**
+ * Rename the folder `from` to `to`, with everything inside it, also the empty
+ * folders. The caller holds the board lock and checked that `to` does not
+ * exist and is not inside `from`.
+ */
+export function renameLibraryFolder(paths: BoardPaths, from: string, to: string): void {
+  const target = libraryFolderPath(paths, to);
+  ensureLibraryFolder(paths, libraryParentOf(requireLibraryId(to)));
+  renameSync(libraryFolderPath(paths, from), target);
+}
+
+/** Delete a folder with everything inside it. The caller holds the board lock. */
+export function deleteLibraryFolder(paths: BoardPaths, folder: string): void {
+  rmSync(libraryFolderPath(paths, folder), { recursive: true, force: true });
 }
 
 /**

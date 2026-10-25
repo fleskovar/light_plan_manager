@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { BoardPaths } from '../src/core/index.js';
 import { createIssue, findIssue, readLibraryDoc } from '../src/core/index.js';
 import { startBoardServer } from '../src/server/index.js';
-import type { LibraryDocDto, LibraryEntryDto, LibraryMoveResultDto } from '../src/shared/index.js';
+import type { LibraryDocDto, LibraryListDto, LibraryMoveResultDto } from '../src/shared/index.js';
 import { cleanupBoards, makeBoard, reload } from './helpers.js';
 
 /**
@@ -49,11 +49,12 @@ describe('the library routes', () => {
     expect(created.status).toBe(201);
     expect(created.body).toMatchObject({ id: 'prd/payments', referencedBy: ['LP-1'] });
 
-    const list = await call<LibraryEntryDto[]>('GET', '/api/library');
-    expect(list.body).toEqual([
+    const list = await call<LibraryListDto>('GET', '/api/library');
+    expect(list.body.documents).toEqual([
       expect.objectContaining({ id: 'prd/payments', title: 'Payments PRD', path: '.lpm/library/prd/payments.md' }),
     ]);
-    expect('body' in list.body[0]!).toBe(false);
+    expect(list.body.folders).toEqual(['prd']);
+    expect('body' in list.body.documents[0]!).toBe(false);
 
     const read = await call<LibraryDocDto>('GET', doc('prd/payments'));
     expect(read.body).toMatchObject({ body: '## Goals\n', description: 'What payments must do' });
@@ -85,7 +86,12 @@ describe('the library routes', () => {
   it('renames a document, rewrites the reference of the issue, and moves it back', async () => {
     const moved = await call<LibraryMoveResultDto>('POST', `${doc('prd/payments')}/move`, { to: 'spec/payments' });
     expect(moved.status).toBe(200);
-    expect(moved.body).toEqual({ moved: [{ from: 'prd/payments', to: 'spec/payments' }], rewritten: ['LP-1'], stale: [] });
+    expect(moved.body).toEqual({
+      kind: 'document',
+      moved: [{ from: 'prd/payments', to: 'spec/payments' }],
+      rewritten: ['LP-1'],
+      stale: [],
+    });
     expect(findIssue(reload(paths), 'LP-1')!.related_files).toEqual(['library:spec/payments']);
 
     expect((await call('POST', `${doc('spec/payments')}/move`, {})).status).toBe(400);
@@ -96,6 +102,6 @@ describe('the library routes', () => {
   it('deletes a document and names the issues that still reference it', async () => {
     const deleted = await call<{ deleted: string; referencedBy: string[] }>('DELETE', doc('prd/payments'));
     expect(deleted.body).toEqual({ deleted: 'prd/payments', referencedBy: ['LP-1'] });
-    expect((await call<unknown[]>('GET', '/api/library')).body).toEqual([]);
+    expect((await call<LibraryListDto>('GET', '/api/library')).body.documents).toEqual([]);
   });
 });

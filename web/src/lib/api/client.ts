@@ -53,6 +53,8 @@ import type {
   LibraryDocDto,
   LibraryDocPatch,
   LibraryEntryDto,
+  LibraryFolderRemovalDto,
+  LibraryListDto,
   LibraryMoveResultDto,
 } from '$shared';
 
@@ -246,8 +248,17 @@ export const api = {
 
   listViews: (): Promise<ViewSummary[]> => request('/api/views'),
 
-  /** The documents of the board library, without their bodies, sorted by id. */
-  listLibrary: (): Promise<LibraryEntryDto[]> => request('/api/library'),
+  /** The documents of the board library, without their bodies, and every folder. */
+  listLibrary: (): Promise<LibraryListDto> => request('/api/library'),
+  /** Create a folder in the library, and each folder above it. */
+  createLibraryFolder: (path: string): Promise<{ folder: string }> =>
+    request('/api/library-folders', send('POST', { path })),
+  /** Delete a folder. `recursive` deletes the documents inside it too. */
+  deleteLibraryFolder: (path: string, recursive: boolean): Promise<LibraryFolderRemovalDto> =>
+    request(
+      `/api/library-folders/${encodeURIComponent(path)}${recursive ? '?recursive=true' : ''}`,
+      send('DELETE'),
+    ),
   /** One library document. The id holds `/`, so the client encodes it as one path segment. */
   getLibraryDoc: (id: string): Promise<LibraryDocDto> => request(`/api/library/${encodeURIComponent(id)}`),
   createLibraryDoc: (input: { id: string; title?: string; description?: string; body?: string }): Promise<LibraryDocDto> =>
@@ -255,7 +266,7 @@ export const api = {
   /** Answers 409 when `patch.revision` is not the revision of the file. */
   updateLibraryDoc: (id: string, patch: LibraryDocPatch): Promise<LibraryDocDto> =>
     request(`/api/library/${encodeURIComponent(id)}`, send('PUT', patch)),
-  /** Rename a document, or move a folder, and rewrite the references to it. */
+  /** Give a document or a folder a new path, and rewrite the references to the documents that move. */
   moveLibraryDoc: (id: string, to: string): Promise<LibraryMoveResultDto> =>
     request(`/api/library/${encodeURIComponent(id)}/move`, send('POST', { to })),
   deleteLibraryDoc: (id: string): Promise<{ deleted: string; referencedBy: string[] }> =>

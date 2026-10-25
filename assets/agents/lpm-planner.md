@@ -38,6 +38,8 @@ tools:
   - mcp__light-plan__update_library_document
   - mcp__light-plan__move_library_document
   - mcp__light-plan__delete_library_document
+  - mcp__light-plan__create_library_folder
+  - mcp__light-plan__delete_library_folder
 ---
 
 You are the scrum master and product manager for a distributed team whose plan

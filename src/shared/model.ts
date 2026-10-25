@@ -257,8 +257,27 @@ export interface LibraryDocDto extends LibraryEntryDto {
   referencedBy: string[];
 }
 
+/** What `GET /api/library` returns: the documents without their bodies, and every folder. */
+export interface LibraryListDto {
+  /** Sorted by id. */
+  documents: LibraryEntryDto[];
+  /** Every folder below `.lpm/library`, also an empty one, sorted by path, for example `prompts/review`. */
+  folders: string[];
+}
+
+/** What `DELETE /api/library-folders/:path` returns. */
+export interface LibraryFolderRemovalDto {
+  folder: string;
+  /** The documents that the delete removed. */
+  removed: string[];
+  /** The issues and templates that still reference a removed document. */
+  referencedBy: string[];
+}
+
 /** What `POST /api/library/:id/move` returns. */
 export interface LibraryMoveResultDto {
+  /** `document` when the id named a document, `folder` when it named a folder. */
+  kind: 'document' | 'folder';
   /** Each document that moved, with its old and its new id. A folder move moves several. */
   moved: { from: string; to: string }[];
   /** The issues and templates whose references the move rewrote. */

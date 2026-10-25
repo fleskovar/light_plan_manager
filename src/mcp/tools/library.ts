@@ -4,12 +4,15 @@ import type { LibraryDoc, LoadedBoard } from '../../core/index.js';
 import {
   BoardError,
   createLibraryDoc,
+  createLibraryFolder,
   displayPath,
   libraryReferrers,
   listLibraryDocs,
+  listLibraryFolders,
   moveLibraryDoc,
   readLibraryDoc,
   removeLibraryDoc,
+  removeLibraryFolder,
   updateLibraryDoc,
 } from '../../core/index.js';
 import type { BoardContext } from '../context.js';
@@ -17,7 +20,7 @@ import { guard, json } from '../reply.js';
 
 /**
  * The board library, as an agent sees it: the markdown documents in
- * `.lpm/library/`. `list_library` and `get_library_document` read. The four
+ * `.lpm/library/`. `list_library` and `get_library_document` read. The six
  * write tools register only on a server that is not read-only, and each one
  * calls one operation of `core/operations/library.ts`.
  */
@@ -43,7 +46,9 @@ export function registerLibraryTools(server: McpServer, context: BoardContext): 
       description:
         'The board library: markdown documents stored beside the issues, such as prompts with ' +
         'instructions, summaries of developments and product requirement documents. Returns ' +
-        'the id, the title and the description of each document, without the bodies. An issue ' +
+        'the id, the title and the description of each document, without the bodies, and ' +
+        'every folder, also an empty one. Documents are organised in folders: the id ' +
+        '"prompts/review" names the document "review" in the folder "prompts". An issue ' +
         'references a document with the related file "library:<id>"; get_instructions prints ' +
         'every document that an issue or its ancestors reference.',
       inputSchema: {
@@ -57,8 +62,10 @@ export function registerLibraryTools(server: McpServer, context: BoardContext): 
       const docs = listLibraryDocs(board.paths).filter(
         (doc) => !wanted || [doc.id, doc.title, doc.description].join(' ').toLowerCase().includes(wanted),
       );
+      const folders = listLibraryFolders(board.paths).filter((folder) => !wanted || folder.includes(wanted));
       return json({
         documents: docs.map((doc) => summary(board, doc)),
+        folders,
         total: docs.length,
         hint: docs.length
           ? 'Use get_library_document for the body of one document.'
@@ -169,6 +176,43 @@ export function registerLibraryTools(server: McpServer, context: BoardContext): 
       const board = context.board();
       const result = moveLibraryDoc(board, args.id, args.newId, { updateReferences: args.updateReferences });
       return json(result);
+    }),
+  );
+
+  server.registerTool(
+    'create_library_folder',
+    {
+      title: 'Add a library folder',
+      description:
+        'Create a folder in .lpm/library, and each folder above it, to organise the documents. ' +
+        'A new folder holds a .gitkeep file, so it stays in git while it is empty. To put a ' +
+        'document in a folder, give it an id below the folder: create_library_document with ' +
+        '"prompts/review", or move_library_document to "prompts/review".',
+      inputSchema: { path: z.string().describe('The folder below .lpm/library, for example "prompts/review"') },
+    },
+    guard((args) => {
+      context.assertWritable();
+      return json({ created: createLibraryFolder(context.board(), args.path) });
+    }),
+  );
+
+  server.registerTool(
+    'delete_library_folder',
+    {
+      title: 'Delete a library folder',
+      description:
+        'Delete a folder of .lpm/library. A folder that holds documents is refused unless ' +
+        'recursive is true; then every document inside it goes too. The references to those ' +
+        'documents stay on the issues, and the answer names the issues that hold them.',
+      inputSchema: {
+        path: z.string().describe('The folder below .lpm/library'),
+        recursive: z.boolean().default(false).describe('Delete the documents inside the folder too'),
+      },
+      annotations: { destructiveHint: true },
+    },
+    guard((args) => {
+      context.assertWritable();
+      return json(removeLibraryFolder(context.board(), args.path, { recursive: args.recursive }));
     }),
   );
 

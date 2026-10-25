@@ -140,7 +140,7 @@ one call and return structured JSON; fall back to the CLI in a shell.
 | Survey documents | `list_documents { kind, type, status, assignee, period, parent, under, workUnitsOnly, search, limit }` | `lpm team`, `lpm task next` |
 | One document in full | `get_document { id }` | `lpm open <id> --path`, `lpm comment <id> --list` |
 | **The brief for an issue** | `get_instructions { id }` | `lpm instructions <id>` |
-| The library documents | `list_library { search }` | `lpm library` |
+| The library documents and folders | `list_library { search }` | `lpm library tree` |
 | One library document | `get_library_document { id }` | `lpm library show <id>` |
 | Validate | `check_board` | `lpm check` (exit 1 while errors remain) |
 | Who is loaded | `team_load { period }` | `lpm team [--period <id>] [--open]` |
@@ -198,8 +198,10 @@ layout that can run code, which a human needs to look at. `lpm instructions
 | Add a library document | `create_library_document { id, title, description, body }` | `lpm library new <id> -t "..." -f <file>` |
 | Change a library document | `update_library_document { id, title, description, body, revision }` | `lpm library set <id> …` |
 | Reference a library document | `update_document { id, relatedFiles: [..., "library:<id>"] }` | `lpm set <id> --related library:<id>` |
-| Rename or move a library document | `move_library_document { id, newId }` (rewrites the references) | `lpm library mv <id> <new-id>` |
+| Rename or move a library document or folder | `move_library_document { id, newId }` (rewrites the references) | `lpm library mv <id> <new-id>` |
 | Delete a library document | `delete_library_document { id }` | `lpm library rm <id>` |
+| Add a library folder | `create_library_folder { path }` | `lpm library mkdir <folder>` |
+| Delete a library folder | `delete_library_folder { path, recursive }` | `lpm library rmdir <folder> [-r]` |
 
 ### Working
 

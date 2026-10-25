@@ -7,6 +7,7 @@
   import { WorkspacePool, providePool } from '$lib/workspace/pool.svelte.js';
   import { Workspace as WorkspaceStore } from '$lib/workspace/workspace.svelte.js';
   import IssueView from './routes/IssueView.svelte';
+  import LibraryPage from '$features/library/LibraryPage.svelte';
   import Workspace from './routes/Workspace.svelte';
 
   /**
@@ -15,7 +16,8 @@
    * window to the view that this browser showed last.
    *
    * The popup for one issue (`#/issue/...`) is the exception. It has no tabs
-   * and loads its own workspace.
+   * and loads its own workspace. The Library page (`#/library`) is the other
+   * one: it has no tabs and no workspace, and reads the library routes only.
    */
   const router = createRouter();
 
@@ -31,7 +33,9 @@
   const tabs = provideTabs(browserTabs((id, deleted) => pool.release(id, deleted)));
 
   const initial = router.route;
-  if (initial.name !== 'issue') void tabs.start(initial.name === 'view' ? initial.id : null);
+  if (initial.name !== 'issue' && initial.name !== 'library') {
+    void tabs.start(initial.name === 'view' ? initial.id : null);
+  }
 
   // The address is what the reader, the Back button and a bookmark change, so
   // the tabs follow it. The writes are untracked: this effect reacts to the
@@ -68,7 +72,9 @@
 
 <svelte:window {onbeforeunload} />
 
-{#if router.route.name === 'issue'}
+{#if router.route.name === 'library'}
+  <LibraryPage route={router.route} />
+{:else if router.route.name === 'issue'}
   {#key router.route.nodeId}
     <IssueView nodeId={router.route.nodeId} viewId={router.route.viewId} />
   {/key}

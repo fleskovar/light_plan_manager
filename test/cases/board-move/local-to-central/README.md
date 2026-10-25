@@ -35,14 +35,15 @@ folder, called `<tmp>` below, and replaces `{{tmp}}` with that folder. It sets
    board has no `lock` file in this case. A lock file is never copied.
 4. It compares the two trees: the file lists, the sizes and the SHA-256
    digests. They are equal.
-5. It renames `project/.lpm` aside, then writes:
+5. It writes:
    - `store/.lpm_central/project/project.json`, which names `<tmp>/project`;
    - the line `project.json` in `store/.lpm_central/project/.gitignore`,
      because the board is not a git repository (a git board gets the line in
      `.git/info/exclude` instead);
    - the pointer `project/.lpm/config.yml`, with `store:` and the path of the
-     central board folder.
-6. It deletes the old folder that it renamed aside.
+     central board folder. The pointer replaces the board config in one file
+     rename.
+6. It deletes every other entry of `project/.lpm`. It renames no folder.
 
 `outputs/tree.txt` lists every file after the move, without `home/`:
 

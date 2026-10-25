@@ -59,12 +59,6 @@ export class Shell {
   confirmation = $state<Confirmation | null>(null);
   /** The view dialog that is open, or null. `ViewDialogRequest` lists what it does. */
   viewDialog = $state<ViewDialogRequest | null>(null);
-  /**
-   * The Library dialog, or null while it is closed. `id` names the document
-   * to open first. File ▸ Library opens it with none, and a `library:` link
-   * in a body or in the files of an issue opens it on that document.
-   */
-  library = $state<{ id: string | null } | null>(null);
   /** The board overview that View ▸ Board overview opens. */
   overviewOpen = $state(false);
   /**

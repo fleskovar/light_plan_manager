@@ -25,7 +25,24 @@ Each document is one file below the folder `library` of the board folder:
 | Local board | `<project>/.lpm/library/` |
 | Central board | `<central_store>/.lpm_central/<name>/library/` |
 
-Folders below the library folder are allowed, up to 8 levels.
+### Folders
+
+Folders below the library folder organise the documents, up to 8 levels. A
+folder name obeys the same rule as a part of an id (see below).
+
+| Action | Result |
+| --- | --- |
+| Create a folder (`lpm library mkdir`, `create_library_folder`, **New folder**) | Creates the folder and each folder above it |
+| Add a document whose id holds a folder | Creates the folders of the id |
+| Delete or move out the last document of a folder | The folder stays |
+| Move a folder (`lpm library mv`, `move_library_document`, **Move**, a drag) | Renames the folder with everything inside it, also its empty folders |
+| Delete a folder (`lpm library rmdir`, `delete_library_folder`, **Delete**) | Refused while the folder holds a document, unless the request asks to delete the documents too |
+
+Each folder that the library creates holds an empty file `.gitkeep`. Git
+stores files and no folders, so without the file an empty folder would
+disappear on the next clone. `lpm library` skips the file, because its name
+starts with a dot. A folder made by hand without `.gitkeep` works the same on
+this computer, and git keeps it only while it holds a file.
 
 ### The id of a document
 
@@ -123,13 +140,16 @@ shows to each layout in `.lpm/templates/context/`.
 | --- | --- |
 | `lpm library` | Lists each document: id, title and description |
 | `lpm library list --json` | The same list as JSON, without the bodies |
+| `lpm library tree [<folder>] [--json]` | Prints the folders and the documents nested, also the empty folders. `--json` prints `{ folders, documents }` |
 | `lpm library show <id>` | Prints the body on stdout, and the title and the path on stderr, so the output can be redirected |
 | `lpm library show <id> --json` | Every field, with the body and the revision |
 | `lpm library new <id> [-t <title>] [-d <description>] [-m <text> \| -f <file>]` | Adds a document. `-f -` reads the body from stdin |
 | `lpm library set <id> [-t] [-d] [-m \| -f]` | Changes the title, the description or the body |
-| `lpm library mv <id> <new-id> [--no-refs]` | Renames the document, or moves every document of the folder `<id>`, and rewrites the references. Aliases: `move`, `rename` |
+| `lpm library mv <id> <new-id> [--no-refs]` | Renames the document, or moves the folder `<id>` with everything inside it, and rewrites the references. Aliases: `move`, `rename` |
 | `lpm library refs <id>` | Lists the issues and templates that reference the document |
-| `lpm library rm <id>` | Deletes the file and each folder that the delete left empty. The references stay, and the command names them |
+| `lpm library rm <id>` | Deletes the file. Its folder stays. The references stay, and the command names them |
+| `lpm library mkdir <folder>` | Creates the folder and each folder above it |
+| `lpm library rmdir <folder> [-r]` | Deletes an empty folder. `-r` (`--recursive`) also deletes the documents inside it, and the command names the issues that still reference them |
 
 `lpm lib` and `lpm docs` are aliases of `lpm library`.
 
@@ -137,26 +157,28 @@ shows to each layout in `.lpm/templates/context/`.
 
 | Tool | Writes | Result |
 | --- | --- | --- |
-| `list_library` | No | The id, title, description and path of each document |
+| `list_library` | No | The id, title, description and path of each document, and every folder |
 | `get_library_document` | No | One document with its body, its revision and the ids that reference it |
 | `create_library_document` | Yes | Adds a document |
 | `update_library_document` | Yes | Changes the title, the description or the body. With `revision`, the update fails when the file changed after the read |
 | `move_library_document` | Yes | Gives a document, or every document of a folder, a new id, and rewrites the references. `updateReferences: false` keeps the old references |
 | `delete_library_document` | Yes | Deletes a document, and names the ids that still reference it |
+| `create_library_folder` | Yes | Creates a folder and each folder above it |
+| `delete_library_folder` | Yes | Deletes a folder. `recursive: true` also deletes the documents inside it |
 
 A server that `lpm mcp --read-only` starts registers the two tools that only
 read.
 
 ## Renaming and moving
 
-`lpm library mv`, the MCP tool `move_library_document` and **Rename** in the
-web app call one operation, `moveLibraryDoc` in
+`lpm library mv`, the MCP tool `move_library_document`, and **Move** and a
+drag on the Library page call one operation, `moveLibraryDoc` in
 `src/core/operations/library.ts`.
 
 | The first id names | What moves | Example |
 | --- | --- | --- |
 | A document (`<id>.md` exists) | That document | `lpm library mv prd/payments requirements/payments` |
-| A folder and no document | Every document below the folder, to the same place below the new folder | `lpm library mv prompts agent-prompts` moves `prompts/review` to `agent-prompts/review` |
+| A folder and no document | The folder with everything inside it, also its empty folders. Each document gets the same place below the new folder | `lpm library mv prompts agent-prompts` moves `prompts/review` to `agent-prompts/review` |
 
 When both `prd.md` and the folder `prd/` exist, the id `prd` names the
 document, so only the document moves.
@@ -169,7 +191,8 @@ references, and the answer names the issues that hold them.
 
 The operation checks everything before it changes anything:
 
-- No document may have a new id already.
+- No document may have the new id already, and for a folder, no folder may
+  have the new path already.
 - A folder cannot move into itself (`prompts` to `prompts/old`).
 - Each new id must obey the id rule, which allows 8 parts at most.
 - No issue or template whose references change may have changed on disk since
@@ -177,42 +200,87 @@ The operation checks everything before it changes anything:
 
 The files and the rewritten issues are written in one board write, so a board
 that `git_sync` shares gets one commit, with the message
-`lpm: move library document <id> to <new-id>`. The activity section of a
+`lpm: move library <id> to <new-id>`. The activity section of a
 rewritten issue does not change, because `updateNode` keeps the activity
 section that is on disk.
 
-## The web app
+## The Library page
 
-**File ▸ Library…** opens the Library dialog. The list on the left shows each
-document with its title, its id and its description, and the search field
-filters the list. **New** adds a document.
+The Library page manages the documents and the folders of the board. It has
+the address `#/library` on the server of `lpm ui`, and it runs in a browser
+window of its own, so the canvas and the library can stay side by side. Three
+things on the board page open it:
 
-The right side shows the open document. **Rename** opens a field for the new
-id, and the rename rewrites the references, as the CLI does. **Edit** opens the
-editor of the issue window: **Write** shows the markdown source and **Preview** shows the rendered
-text. Edit also opens the title and the description for editing. **Save**
-writes the file. The reference `library:<id>` has a **Copy** button, and the
-list "Referenced by" names the issues that reference the document.
+- The button **Library** in the top row, beside the status label.
+- **File ▸ Library…**.
+- A `library:<id>` entry in the files of an issue, or a `[label](library:<id>)`
+  link in a body. These open the page on that document.
 
-A `library:<id>` entry in the files of an issue, and a `[label](library:<id>)`
-link in a body, open the Library dialog on that document.
+A second request brings the same window to the front. A request for a
+document gives the window the address `#/library?doc=<id>&view=<view>`, and
+the page opens the document. The parameter `view` names the view whose issue
+windows the "Referenced by" links open.
+
+### The tree
+
+The left side shows the folders and the documents as a tree, folders first.
+The row **Library** stands for the top level. Each folder shows the number of
+documents below it.
+
+| Gesture | Result |
+| --- | --- |
+| Click a folder | Makes it the current folder, where **New document** and **New folder** put the new item, and opens it |
+| Click the arrow of a folder | Opens or closes the folder |
+| Click a document | Opens the document on the right |
+| Drag a document or a folder onto a folder, or onto **Library** | Moves it into that folder, and rewrites the references |
+| Right-click a row | Shows the actions for the row: New document here, New folder here, Rename or move, Delete, and for a document Open, Edit and Copy the reference |
+| Type in the search field | Shows the documents whose id, title or description holds every word, with the folders above them open |
+
+The bar under the tree names the current folder, with **Move** and **Delete**
+for it. **Delete** on a folder that holds documents asks first, and then
+deletes the documents too.
+
+**Move** opens a form with the path of the item. Change the last part to
+rename the item, and the folders before it to move it. A drag and the form
+call the same move.
+
+### The document
+
+The right side shows the open document. **Edit** opens the editor of the issue
+window: **Write** shows the markdown source and **Preview** shows the rendered
+text. Edit also opens the title and the description. **Save** writes the file
+and closes the editor, and Ctrl+S saves and keeps the editor open. The
+reference `library:<id>` has a **Copy** button, and the list "Referenced by"
+names each issue that references the document, with its title. A click on an
+issue opens its issue window.
+
+The page refuses to move or delete the open document while the editor holds
+unsaved changes, and it asks before it opens another document over them.
 
 The published viewer (`lpm export --site`) does not show the library.
 
+`web/src/features/library/` holds the page: `tree.ts` builds the tree from the
+two lists of `GET /api/library` (pure functions), `library.svelte.ts` holds the
+state and the actions (`LibraryBrowser`), and `LibraryPage`, `LibraryTree` and
+`LibraryDocument` draw them. `lib/app/library-window.ts` opens the window.
+
 ### The HTTP routes
 
-`src/server/routes/library.ts` serves the dialog:
+`src/server/routes/library.ts` serves the page:
 
 | Route | Body | Answer |
 | --- | --- | --- |
-| `GET /api/library` | — | `LibraryEntryDto[]`, sorted by id |
+| `GET /api/library` | — | `LibraryListDto`: `documents` (sorted by id, without bodies) and `folders` (every folder, sorted by path) |
 | `GET /api/library/:id` | — | `LibraryDocDto` |
 | `POST /api/library` | `{ id, title?, description?, body? }` | 201 and the new `LibraryDocDto` |
 | `PUT /api/library/:id` | `LibraryDocPatch` | The changed `LibraryDocDto`. 409 when `revision` is stale |
-| `POST /api/library/:id/move` | `{ to, updateReferences? }` | `LibraryMoveResultDto`: `moved`, `rewritten` and `stale` |
+| `POST /api/library/:id/move` | `{ to, updateReferences? }` | `LibraryMoveResultDto`: `kind`, `moved`, `rewritten` and `stale`. `:id` can name a folder |
 | `DELETE /api/library/:id` | — | `{ deleted, referencedBy }` |
+| `POST /api/library-folders` | `{ path }` | 201 and `{ folder }` |
+| `DELETE /api/library-folders/:path` | — | `LibraryFolderRemovalDto`. `?recursive=true` deletes the documents inside the folder too. Without it, a folder that holds documents answers 400 |
 
-The id holds `/`, so the client encodes it with `encodeURIComponent`. The
+The folder routes have their own prefix, so a document with the id `folders`
+cannot collide with them. The id holds `/`, so the client encodes it with `encodeURIComponent`. The
 router splits the path before it decodes a segment, so `prd%2Fpayments` stays
 one parameter.
 
@@ -221,7 +289,7 @@ one parameter.
 Each read of a document returns its revision: the first 16 hex digits of the
 SHA-256 digest of the file. The web app and `update_library_document` send the
 revision back with a change. When the file holds another revision, the update
-fails with a `ConflictError` (HTTP 409) and writes nothing. The Library dialog
+fails with a `ConflictError` (HTTP 409) and writes nothing. The Library page
 then keeps the draft and offers **Reload the document**.
 
 `lpm library set` sends no revision, so the command writes over the file.
@@ -249,6 +317,15 @@ changed below the board folder, so the library folder needed no change there.
 
 **The web app writes at once.** A library document is not part of the plan, so
 the view holds no queued change for it, in the same way as a comment.
+
+**The Library page is a page of the editor app, in its own window.** It uses
+the same server and the same routes, and it needs no view and no workspace. A
+window of its own gives the tree and the editor the whole screen, and keeps
+the canvas open beside it. The issue window follows the same pattern.
+
+**A folder is a folder on disk.** No index file lists the folders, so a person
+who makes a folder in the file manager sees it on the page. `.gitkeep` is the
+one addition, and only for git.
 
 ## Known limits
 

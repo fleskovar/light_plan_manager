@@ -1,5 +1,16 @@
-import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import {
+  closeSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -234,6 +245,63 @@ describe('refused moves', () => {
   });
 });
 
+// On Windows, a folder cannot be renamed while any file below it is open, even
+// by this process. A move that renamed `<project>/.lpm` failed with EPERM when
+// another program had a board file open. The move now copies, then deletes.
+describe.runIf(process.platform === 'win32')('a move while a file of the board is open', () => {
+  it('moves a local board to the central store', () => {
+    const local = localBoard();
+    const issue = findIssue(loadBoard(local), 'LP-1')!.file;
+    const fd = openSync(issue, 'r');
+    try {
+      const result = relocateBoard(local, 'central');
+
+      const central = path.join(store, '.lpm_central', 'shop');
+      expect(result.paths.lpmDir).toBe(central);
+      expect(readStorePointer(path.join(local.root, '.lpm', 'config.yml'))).toBe(central);
+      expect(loadBoard(findBoardPaths(local.root)!).issues.map((each) => each.title)).toEqual(['Payments', 'Checkout']);
+    } finally {
+      closeSync(fd);
+    }
+    expect(readdirSync(path.join(local.root, '.lpm'))).toEqual(['config.yml']);
+  });
+
+  it('moves a central board into its project while a process works in the pointer folder', async () => {
+    const central = centralBoard();
+    const pointerDir = path.join(central.root, '.lpm');
+    // A process holds its working folder open, as a terminal in `<project>/.lpm` does.
+    const terminal = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { cwd: pointerDir, stdio: 'ignore' });
+    await new Promise((resolve, reject) => terminal.once('spawn', resolve).once('error', reject));
+    try {
+      const result = relocateBoard(central, 'local');
+
+      expect(result.paths.lpmDir).toBe(pointerDir);
+      expect(readStorePointer(path.join(pointerDir, 'config.yml'))).toBeNull();
+      expect(loadBoard(findBoardPaths(central.root)!).issues.map((each) => each.title)).toEqual(['Payments', 'Checkout']);
+      expect(existsSync(central.lpmDir)).toBe(false);
+    } finally {
+      terminal.kill();
+      await new Promise((resolve) => terminal.once('exit', resolve));
+    }
+  });
+});
+
+describe('a pointer folder that holds more than the pointer', () => {
+  it('refuses the move into the project, names the files, and changes nothing', () => {
+    const central = centralBoard();
+    const pointerDir = path.join(central.root, '.lpm');
+    mkdirSync(path.join(pointerDir, 'board'));
+    writeFileSync(path.join(pointerDir, 'board', 'old.md'), 'left over\n');
+    const before = files(central.lpmDir);
+
+    expect(() => relocateBoard(central, 'local', { backup: false })).toThrow(/holds files other than the pointer: board/);
+
+    expect(files(central.lpmDir)).toEqual(before);
+    expect(readdirSync(pointerDir).sort()).toEqual(['board', 'config.yml']);
+    expect(findBoardPaths(central.root)!.lpmDir).toBe(central.lpmDir);
+  });
+});
+
 describe('a move that fails halfway', () => {
   it('leaves a local board where it was and removes the partial copy', () => {
     const local = localBoard();
@@ -264,5 +332,52 @@ describe('a move that fails halfway', () => {
     expect(readdirSync(path.join(central.root, '.lpm'))).toEqual(['config.yml']);
     expect(findBoardPaths(central.root)!.lpmDir).toBe(central.lpmDir);
     expect(readdirSync(central.root).filter((name) => name.startsWith('.lpm'))).toEqual(['.lpm']);
+  });
+});
+
+// After each `git commit`, git starts `git maintenance run --auto --detach`.
+// That background process can repack `.git/objects` while a move copies the
+// board, and a CI run failed on the temporary pack file that it wrote. The
+// `copy` hooks below write into the source the way that repack does.
+describe('a board that git changes during the copy', () => {
+  it('copies again when the source changed after the first copy, and moves the board', () => {
+    const central = centralBoard();
+    const pack = path.join(central.lpmDir, '.git', 'objects', 'pack');
+    let calls = 0;
+    const repackDuringCopy = (from: string, to: string, filter: (source: string) => boolean) => {
+      calls++;
+      // The second copy finds the finished pack, which replaced the temporary file.
+      if (calls === 2) rmSync(path.join(pack, 'tmp_idx_test'));
+      if (calls === 2) writeFileSync(path.join(pack, 'pack-test.idx'), 'index\n');
+      cpSync(from, to, { recursive: true, filter });
+      // The first copy misses the temporary file, which git writes after the copy passed the folder.
+      if (calls === 1) writeFileSync(path.join(pack, 'tmp_idx_test'), 'partial\n');
+    };
+
+    const result = relocateBoard(central, 'local', { copy: repackDuringCopy, backup: false });
+
+    expect(calls).toBe(2);
+    expect(existsSync(path.join(result.paths.lpmDir, '.git', 'objects', 'pack', 'pack-test.idx'))).toBe(true);
+    expect(existsSync(path.join(result.paths.lpmDir, '.git', 'objects', 'pack', 'tmp_idx_test'))).toBe(false);
+    expect(existsSync(central.lpmDir)).toBe(false);
+  });
+
+  it('fails after three copies when the source changes during each copy, and moves nothing', () => {
+    const central = centralBoard();
+    const pack = path.join(central.lpmDir, '.git', 'objects', 'pack');
+    let calls = 0;
+    const repackEveryCopy = (from: string, to: string, filter: (source: string) => boolean) => {
+      calls++;
+      cpSync(from, to, { recursive: true, filter });
+      writeFileSync(path.join(pack, `tmp_idx_${calls}`), 'partial\n');
+    };
+
+    expect(() => relocateBoard(central, 'local', { copy: repackEveryCopy, backup: false })).toThrow(
+      /The copy of the board is not complete: .*tmp_idx_3 is missing from the copy/,
+    );
+
+    expect(calls).toBe(3);
+    expect(readdirSync(path.join(central.root, '.lpm'))).toEqual(['config.yml']);
+    expect(findBoardPaths(central.root)!.lpmDir).toBe(central.lpmDir);
   });
 });

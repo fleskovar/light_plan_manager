@@ -78,7 +78,7 @@ function renameWithRetry(from: string, to: string): void {
  * only atomic within one filesystem and `.lpm` may well be a mount of its own.
  * A failed write takes its temporary with it.
  */
-export function writeFileAtomic(file: string, data: string): void {
+export function writeFileAtomic(file: string, data: string | Uint8Array): void {
   const temp = tempNameFor(file);
   try {
     writeFileSync(temp, data, 'utf8');

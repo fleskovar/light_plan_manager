@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { BoardError } from '../errors.js';
 import { isCentralBoard, samePath, writeProjectFile, writeStorePointer } from '../storage/central.js';
@@ -17,7 +17,9 @@ import {
   readStorePointer,
 } from '../storage/paths.js';
 import type { TreeSkip } from '../storage/tree.js';
-import { compareTrees, copyCheckedAsync, freeSibling, removeTreeOrWarn } from '../storage/tree.js';
+import type { KeptNames } from '../storage/tree.js';
+import { copyCheckedAsync, copyCheckedWith, discardCopy, removeEntriesOrWarn, removeTreeOrWarn } from '../storage/tree.js';
+import { writeFileAtomic } from '../storage/atomic.js';
 import type { BoardBackup, ProgressListener } from './backup.js';
 import { BACKUP_SUFFIX, allocateBackupName, backupLocked, backupLockedAsync, stepReporter } from './backup.js';
 import type { CentralBoardEntry } from './central-store.js';
@@ -48,12 +50,22 @@ import type { BoardStore } from './init.js';
  *    This step replaces the earlier backup of the project. The option
  *    `backup: false` skips it.
  * 1. Copy the board folder to the target, without the lock file (and without
- *    `project.json` on the way back). The central store can be on another
- *    drive, where `renameSync` fails with `EXDEV`, so the move never renames
- *    across folders.
+ *    `project.json` on the way back). The move to the project copies into the
+ *    pointer folder `<project>/.lpm`, without `config.yml`.
  * 2. Compare the two trees: the file lists, the sizes and the SHA-256 digests.
- * 3. Switch. Each step of the switch is a rename inside one parent folder, and
- *    the old folder is deleted only after the new one is in place.
+ *    When they differ, discard the copy, wait, and copy again (`storage/tree.ts`).
+ * 3. Switch. The move replaces the file `<project>/.lpm/config.yml`: the
+ *    pointer replaces the board config, or the board config replaces the
+ *    pointer. This replacement is the only rename, and it renames one file.
+ * 4. Delete the old files. A file that another program holds open stays, and
+ *    the result holds a warning that names it.
+ *
+ * The move never renames a folder. On Windows, a folder rename fails with
+ * `EPERM` while any program has a file below the folder open. A program such
+ * as an editor, a git client or a virus scanner can do that. The deletion in
+ * step 4 does not fail for a file that is open with delete sharing. The
+ * central store can also be on another drive, where `renameSync` fails with
+ * `EXDEV`.
  *
  * The whole move runs under the board lock, so no `lpm` process writes while
  * the files are copied. A process that already holds `BoardPaths` of the old
@@ -95,22 +107,23 @@ const defaultCopy: NonNullable<RelocateOptions['copy']> = (from, to, filter) => 
 const NOTHING_MOVED = 'Nothing was moved.';
 
 /**
- * Copy `source` into the new folder `target` with `copy`, and compare the two
- * trees. On a failure, remove `target` and throw: the source is not touched.
+ * Copy `source` into `target` with `copy`, and compare the two trees. `target`
+ * is a new folder, or with `keep` an existing folder that holds only those
+ * names. `copyCheckedWith` copies again when the trees differ, and undoes the
+ * copy on a failure. The source is not touched.
  */
-function copyChecked(source: string, target: string, skip: TreeSkip, copy: NonNullable<RelocateOptions['copy']>): void {
-  try {
-    const filter = (file: string): boolean => {
-      const relative = path.relative(source, file);
-      return relative === '' || !skip(relative);
-    };
-    copy(source, target, filter);
-    const problem = compareTrees(source, target, skip);
-    if (problem) throw new BoardError(`The copy of the board is not complete: ${problem}`, [NOTHING_MOVED]);
-  } catch (error) {
-    rmSync(target, { recursive: true, force: true });
-    throw error;
-  }
+function copyChecked(
+  source: string,
+  target: string,
+  skip: TreeSkip,
+  copy: NonNullable<RelocateOptions['copy']>,
+  keep: KeptNames = [],
+): void {
+  const filter = (file: string): boolean => {
+    const relative = path.relative(source, file);
+    return relative === '' || !skip(relative);
+  };
+  copyCheckedWith(() => copy(source, target, filter), source, target, skip, NOTHING_MOVED, keep);
 }
 
 /** One board that `moveCentralStore` moved. */
@@ -308,12 +321,15 @@ function lockLabel(to: BoardStore): string {
 /**
  * A move that is ready to copy. The caller copies `source` to `target`
  * without the paths that `skip` names, compares the two trees, and then calls
- * `commit`, which switches the folders. A failed copy removes `target`.
+ * `commit`, which switches the board and deletes the old files. `target` is a
+ * new folder, or an existing folder that holds only the names in `keep`. A
+ * failed copy removes `target`, or with `keep` the files that the copy wrote.
  */
 interface MovePlan {
   source: string;
   target: string;
   skip: TreeSkip;
+  keep: KeptNames;
   commit(backup: BoardBackup | null): RelocateResult;
 }
 
@@ -331,10 +347,10 @@ export function relocateBoard(paths: BoardPaths, to: BoardStore, options: Reloca
     try {
       if (options.backup !== false) backup = backupLocked(paths, { replace: true });
     } catch (error) {
-      rmSync(plan.target, { recursive: true, force: true });
+      discardCopy(plan.target, plan.keep);
       throw error;
     }
-    copyChecked(plan.source, plan.target, plan.skip, copy);
+    copyChecked(plan.source, plan.target, plan.skip, copy, plan.keep);
     return plan.commit(backup);
   });
 }
@@ -354,10 +370,17 @@ export function relocateBoardAsync(paths: BoardPaths, to: BoardStore, options: R
     try {
       if (withBackup) backup = await backupLockedAsync(paths, { replace: true, onProgress: options.onProgress }, 1, steps);
     } catch (error) {
-      rmSync(plan.target, { recursive: true, force: true });
+      discardCopy(plan.target, plan.keep);
       throw error;
     }
-    await copyCheckedAsync(plan.source, plan.target, plan.skip, NOTHING_MOVED, stepReporter(options.onProgress, 'copy', steps, steps));
+    await copyCheckedAsync(
+      plan.source,
+      plan.target,
+      plan.skip,
+      NOTHING_MOVED,
+      stepReporter(options.onProgress, 'copy', steps, steps),
+      plan.keep,
+    );
     return plan.commit(backup);
   });
 }
@@ -376,35 +399,52 @@ function planToCentral(paths: BoardPaths): MovePlan {
     source,
     target,
     skip: isLockFileName,
+    keep: [],
     commit: (backup) => {
       const moved = boardPathsAt(target, { root });
-      const warnings: string[] = [];
-      // Switch: the old folder steps aside, the pointer takes its place.
-      const aside = freeSibling(source, 'moved');
-      try {
-        renameSync(source, aside);
-      } catch (error) {
-        rmSync(target, { recursive: true, force: true });
-        throw new BoardError(`Could not move ${source} aside: ${(error as Error).message}`, [
-          'Another program can have a file in it open. Close it and try again. Nothing was moved.',
-        ]);
-      }
       try {
         writeProjectFile(target, root);
         // A committed `.gitignore` must not change, so a git board ignores the file locally.
         if (existsSync(path.join(target, '.git'))) excludeLocally(moved, [PROJECT_FILE]);
         else ensureLocalIgnored(moved);
+        // Switch: the pointer replaces the board config in `<project>/.lpm/config.yml`.
         writeStorePointer(root, target);
       } catch (error) {
-        rmSync(path.join(root, LPM_DIR), { recursive: true, force: true });
-        renameSync(aside, source);
+        // `writeStorePointer` replaces the file in one rename, so the board config is still there.
         rmSync(target, { recursive: true, force: true });
-        throw error;
+        throw new BoardError(`Could not write the pointer ${path.join(source, CONFIG_FILE)}: ${(error as Error).message}`, [
+          `Another program can have the file open. Close it and try again. ${NOTHING_MOVED}`,
+        ]);
       }
-      removeTreeOrWarn(aside, warnings);
+      // The project finds the board through the pointer now. The old files go,
+      // except the pointer and the lock, which the lock releases.
+      const warnings: string[] = [];
+      removeEntriesOrWarn(source, (name) => name === CONFIG_FILE || isLockFileName(name), warnings);
       return { from: 'local', to: 'central', paths: moved, previousDir: source, warnings, backup };
     },
   };
+}
+
+/**
+ * The names in the pointer folder `dir` that the move to the project keeps:
+ * `config.yml` and lock files. Throws when the folder holds anything else,
+ * because the board copy would mix with those files. Returns [] when the
+ * folder does not exist.
+ */
+function pointerFolderNames(dir: string): string[] {
+  let names: string[];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return [];
+  }
+  const others = names.filter((name) => name !== CONFIG_FILE && !isLockFileName(name)).sort();
+  if (others.length > 0) {
+    throw new BoardError(`The folder ${dir} holds files other than the pointer: ${others.join(', ')}`, [
+      `An earlier move could not delete them. Delete them, then run the move again. ${NOTHING_MOVED}`,
+    ]);
+  }
+  return names;
 }
 
 function planToLocal(paths: BoardPaths): MovePlan {
@@ -416,26 +456,24 @@ function planToLocal(paths: BoardPaths): MovePlan {
     ]);
   }
   const local = boardPathsFor(root);
-  const staging = freeSibling(local.lpmDir, 'incoming');
+  const keep = pointerFolderNames(local.lpmDir);
   return {
     source,
-    target: staging,
-    skip: (relative) => isLockFileName(relative) || relative === PROJECT_FILE,
+    target: local.lpmDir,
+    // `config.yml` is copied last, in the switch, because it replaces the pointer.
+    skip: (relative) => isLockFileName(relative) || relative === PROJECT_FILE || relative === CONFIG_FILE,
+    keep,
     commit: (backup) => {
-      const warnings: string[] = [];
-      // Switch: the pointer steps aside, the copy takes its place.
-      const pointerAside = existsSync(local.lpmDir) ? freeSibling(local.lpmDir, 'pointer') : null;
+      // Switch: the board config replaces the pointer in `<project>/.lpm/config.yml`.
       try {
-        if (pointerAside) renameSync(local.lpmDir, pointerAside);
-        renameSync(staging, local.lpmDir);
+        writeFileAtomic(local.configPath, readFileSync(path.join(source, CONFIG_FILE)));
       } catch (error) {
-        if (pointerAside && !existsSync(local.lpmDir)) renameSync(pointerAside, local.lpmDir);
-        rmSync(staging, { recursive: true, force: true });
-        throw new BoardError(`Could not put the board in ${local.lpmDir}: ${(error as Error).message}`, [
-          'Another program can have a file in it open. Close it and try again. Nothing was moved.',
+        discardCopy(local.lpmDir, keep);
+        throw new BoardError(`Could not write the board config ${local.configPath}: ${(error as Error).message}`, [
+          `Another program can have the file open. Close it and try again. ${NOTHING_MOVED}`,
         ]);
       }
-      if (pointerAside) removeTreeOrWarn(pointerAside, warnings);
+      const warnings: string[] = [];
       removeTreeOrWarn(source, warnings);
       return { from: 'central', to: 'local', paths: local, previousDir: source, warnings, backup };
     },

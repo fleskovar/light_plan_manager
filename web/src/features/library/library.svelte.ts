@@ -1,35 +1,65 @@
-import type { LibraryDocDto, LibraryDocPatch, LibraryEntryDto, LibraryMoveResultDto } from '$shared';
+import type {
+  LibraryDocDto,
+  LibraryDocPatch,
+  LibraryEntryDto,
+  LibraryFolderRemovalDto,
+  LibraryListDto,
+  LibraryMoveResultDto,
+} from '$shared';
 import { libraryRef, normalizeLibraryId } from '$shared';
 import { BodyDraft } from '$features/issue/body-draft.svelte.js';
+import {
+  ancestorsOf,
+  buildLibraryTree,
+  dropTarget,
+  join,
+  nameOf,
+  parentOf,
+  visibleRows,
+  within,
+  type FolderNode,
+  type LibraryItem,
+  type TreeRow,
+} from './tree.js';
 
 /**
- * The Library dialog: the documents in `.lpm/library/`, one of them open, and
- * its editor.
+ * The Library page: the folders and the documents of `.lpm/library/`, one
+ * document open, and its editor.
  *
- * The list on the left comes from `GET /api/library`. A click on an entry reads
- * the document with its body (`GET /api/library/:id`). The editor is the editor
- * of the issue window: `BodyDraft` holds the markdown while the reader writes,
- * and the dialog shows it as source (Write) or rendered (Preview). Edit also
- * opens the title and the description for editing.
+ * The tree on the left comes from `GET /api/library`, which sends every folder
+ * and every document. A click on a document reads it with its body
+ * (`GET /api/library/:id`). The editor is the editor of the issue window:
+ * `BodyDraft` holds the markdown while the reader writes, and the page shows
+ * it as source (Write) or rendered (Preview).
  *
- * Save sends the revision that the dialog read. When the file changed on disk
+ * The page manages the folder structure too. **New folder** creates a folder
+ * in the current folder. **Move** gives a document or a folder a new path,
+ * and a drag of a row onto a folder does the same. The server renames the file
+ * or the folder and rewrites the `library:` references of the issues and
+ * templates. **Delete** on a folder that holds documents asks first, and then
+ * deletes the documents too.
+ *
+ * Save sends the revision that the page read. When the file changed on disk
  * after the read, the server answers 409, the draft stays, and `conflict` is
  * true until the reader reloads the document.
  *
- * Rename gives the open document a new id. The server renames the file and
- * rewrites the `library:` references of the issues and templates, so the
- * board shows the new id after its next pull.
- *
- * The logic is here and `LibraryDialog.svelte` only draws it, so the tests in
+ * The logic is here and `LibraryPage.svelte` only draws it, so the tests in
  * `web/test/library.test.ts` need no browser.
  */
 export interface LibraryApi {
-  list(): Promise<LibraryEntryDto[]>;
+  list(): Promise<LibraryListDto>;
   get(id: string): Promise<LibraryDocDto>;
   create(input: { id: string; title?: string; description?: string; body?: string }): Promise<LibraryDocDto>;
   update(id: string, patch: LibraryDocPatch): Promise<LibraryDocDto>;
   remove(id: string): Promise<{ deleted: string; referencedBy: string[] }>;
   move(id: string, to: string): Promise<LibraryMoveResultDto>;
+  createFolder(path: string): Promise<{ folder: string }>;
+  removeFolder(path: string, recursive: boolean): Promise<LibraryFolderRemovalDto>;
+}
+
+export interface LibraryBrowserOptions {
+  /** Called with the id of each document the page opens, and with null when none is open. */
+  onselect?: (id: string | null) => void;
 }
 
 /** The form that adds a document. */
@@ -38,6 +68,20 @@ export interface NewDocForm {
   title: string;
   description: string;
 }
+
+/** The form that adds a folder inside `parent`. */
+export interface NewFolderForm {
+  parent: string;
+  name: string;
+}
+
+/** The form that gives `item` the new path `to`. */
+export interface MoveForm {
+  item: LibraryItem;
+  to: string;
+}
+
+const ID_RULE = 'Use lowercase letters, digits, "-", "_" and ".", with "/" between folders.';
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -58,12 +102,22 @@ export function matchesSearch(entry: LibraryEntryDto, search: string): boolean {
 export class LibraryBrowser {
   /** Replaced as a whole on each load, so it is not a deep proxy. */
   entries = $state.raw<LibraryEntryDto[]>([]);
+  folders = $state.raw<string[]>([]);
   loading = $state(true);
   /** The message of the last failure, or null. The next action clears it. */
   error = $state<string | null>(null);
   /** A line that says what the last action did, or null. */
   notice = $state<string | null>(null);
   search = $state('');
+
+  /** The folders whose contents the tree shows. */
+  expanded = $state.raw<ReadonlySet<string>>(new Set());
+  /**
+   * The folder that New document and New folder put the new item in. An
+   * empty text names the library folder itself. A click on a folder sets it,
+   * and so does opening a document.
+   */
+  currentFolder = $state('');
 
   /** The id of the open document, or null. */
   selected = $state<string | null>(null);
@@ -82,20 +136,30 @@ export class LibraryBrowser {
 
   /** The id that the reader asked to open while the draft held changes. */
   pendingSelect = $state<string | null>(null);
-  /** True while the dialog asks whether to delete the open document. */
+  /** True while the page asks whether to delete the open document. */
   confirmingDelete = $state(false);
-  /** The form that adds a document, or null while it is closed. */
+  /** The folder that the page asks about before it deletes it with its documents, or null. */
+  folderToDelete = $state<{ path: string; count: number } | null>(null);
+
   creating = $state<NewDocForm | null>(null);
-  /** The new id that the rename form holds, or null while the form is closed. */
-  renaming = $state<string | null>(null);
+  creatingFolder = $state<NewFolderForm | null>(null);
+  moving = $state<MoveForm | null>(null);
 
   readonly #api: LibraryApi;
+  readonly #onselect: (id: string | null) => void;
 
-  constructor(api: LibraryApi) {
+  constructor(api: LibraryApi, options: LibraryBrowserOptions = {}) {
     this.#api = api;
+    this.#onselect = options.onselect ?? (() => {});
   }
 
-  visible = $derived.by<LibraryEntryDto[]>(() => this.entries.filter((entry) => matchesSearch(entry, this.search)));
+  tree = $derived.by<FolderNode>(() => buildLibraryTree(this.folders, this.entries));
+
+  /** The rows of the tree, as the page draws them. A search opens every folder that holds a match. */
+  rows = $derived.by<TreeRow[]>(() => {
+    const search = this.search.trim();
+    return visibleRows(this.tree, this.expanded, search ? (entry) => matchesSearch(entry, search) : null);
+  });
 
   /** True when the editor holds a change that no save wrote. */
   get dirty(): boolean {
@@ -110,30 +174,48 @@ export class LibraryBrowser {
 
   /** The problem of the id in the new-document form, or null when the id is valid and free. */
   get newIdProblem(): string | null {
-    return this.creating ? this.#idProblem(this.creating.id) : null;
+    return this.creating ? this.#docIdProblem(this.creating.id) : null;
   }
 
-  /** The problem of the id in the rename form, or null when the id is valid, free and new. */
-  get renameProblem(): string | null {
-    if (this.renaming === null) return null;
-    if (normalizeLibraryId(this.renaming) === this.selected) return 'The document already has this id.';
-    return this.#idProblem(this.renaming);
+  /** The problem of the name in the new-folder form, or null when the folder can be created. */
+  get newFolderProblem(): string | null {
+    const form = this.creatingFolder;
+    if (!form || !form.name.trim()) return null;
+    const path = normalizeLibraryId(join(form.parent, form.name.trim()));
+    if (path === null) return ID_RULE;
+    if (this.folders.includes(path)) return `The library already has a folder "${path}".`;
+    return null;
   }
 
-  #idProblem(raw: string): string | null {
+  /** The problem of the path in the move form, or null when the move can run. */
+  get moveProblem(): string | null {
+    const form = this.moving;
+    if (!form || !form.to.trim()) return null;
+    const to = normalizeLibraryId(form.to);
+    if (to === null) return ID_RULE;
+    if (to === form.item.path) return 'This is the path it has now.';
+    if (form.item.kind === 'folder') {
+      if (within(to, form.item.path)) return 'A folder cannot move into itself.';
+      if (this.folders.includes(to)) return `The library already has a folder "${to}".`;
+      return null;
+    }
+    return this.entries.some((entry) => entry.id === to) ? `The library already has a document "${to}".` : null;
+  }
+
+  #docIdProblem(raw: string): string | null {
     if (!raw.trim()) return null;
     const id = normalizeLibraryId(raw);
-    if (id === null) return 'Use lowercase letters, digits, "-", "_" and ".", with "/" between folders.';
+    if (id === null) return ID_RULE;
     if (this.entries.some((entry) => entry.id === id)) return `The library already has a document "${id}".`;
     return null;
   }
 
-  /** Read the list, then open `initial` when it is given. */
+  /** Read the tree, then open `initial` when it is given. */
   async load(initial: string | null = null): Promise<void> {
     this.loading = true;
     this.error = null;
     try {
-      this.entries = await this.#api.list();
+      await this.#readList();
     } catch (error) {
       this.error = messageOf(error);
     } finally {
@@ -144,7 +226,35 @@ export class LibraryBrowser {
     else if (initial !== null) this.error = `"${initial}" is not a valid library id.`;
   }
 
-  /** Open a document. With unsaved changes, the dialog asks first (`pendingSelect`). */
+  async #readList(): Promise<void> {
+    const list = await this.#api.list();
+    this.entries = list.documents;
+    this.folders = list.folders;
+  }
+
+  // -- The tree ----------------------------------------------------------------
+
+  toggleFolder(path: string): void {
+    const next = new Set(this.expanded);
+    if (next.has(path)) next.delete(path);
+    else next.add(path);
+    this.expanded = next;
+  }
+
+  /** Make `path` the current folder, and open it in the tree. */
+  selectFolder(path: string): void {
+    this.currentFolder = path;
+    if (path) this.#expand([...ancestorsOf(path), path]);
+  }
+
+  #expand(paths: string[]): void {
+    if (paths.every((path) => this.expanded.has(path))) return;
+    this.expanded = new Set([...this.expanded, ...paths]);
+  }
+
+  // -- Documents ---------------------------------------------------------------
+
+  /** Open a document. With unsaved changes, the page asks first (`pendingSelect`). */
   async select(id: string): Promise<void> {
     if (id === this.selected) return;
     if (this.dirty) {
@@ -170,10 +280,11 @@ export class LibraryBrowser {
     this.draft.discard();
     this.conflict = false;
     this.confirmingDelete = false;
-    this.renaming = null;
     this.error = null;
-    this.notice = null;
     this.reading = true;
+    this.currentFolder = parentOf(id);
+    this.#expand(ancestorsOf(id));
+    this.#onselect(id);
     try {
       this.doc = await this.#api.get(id);
     } catch (error) {
@@ -181,6 +292,14 @@ export class LibraryBrowser {
     } finally {
       this.reading = false;
     }
+  }
+
+  #close(): void {
+    this.selected = null;
+    this.doc = null;
+    this.draft.discard();
+    this.confirmingDelete = false;
+    this.#onselect(null);
   }
 
   /** Open the editor on the open document. */
@@ -214,27 +333,23 @@ export class LibraryBrowser {
       if (close) this.draft.discard();
       return true;
     }
-    this.busy = true;
-    this.error = null;
-    try {
-      const saved = await this.#api.update(doc.id, patch);
-      this.doc = saved;
-      this.draft.commit(close);
-      if (!close) {
-        this.title = saved.title;
-        this.description = saved.description;
+    return this.#run(async () => {
+      try {
+        const saved = await this.#api.update(doc.id, patch);
+        this.doc = saved;
+        this.draft.commit(close);
+        if (!close) {
+          this.title = saved.title;
+          this.description = saved.description;
+        }
+        this.conflict = false;
+        this.notice = `Saved ${libraryRef(saved.id)}.`;
+        this.#replaceEntry(saved);
+      } catch (error) {
+        this.conflict = statusOf(error) === 409;
+        throw error;
       }
-      this.conflict = false;
-      this.notice = `Saved ${libraryRef(saved.id)}.`;
-      this.#replaceEntry(saved);
-      return true;
-    } catch (error) {
-      this.conflict = statusOf(error) === 409;
-      this.error = messageOf(error);
-      return false;
-    } finally {
-      this.busy = false;
-    }
+    });
   }
 
   /** Drop the draft and read the open document again, after a conflict. */
@@ -244,8 +359,9 @@ export class LibraryBrowser {
     await this.#open(this.selected);
   }
 
+  /** Open the form that adds a document in the current folder. */
   openCreate(): void {
-    this.creating = { id: '', title: '', description: '' };
+    this.creating = { id: this.currentFolder ? `${this.currentFolder}/` : '', title: '', description: '' };
     this.error = null;
   }
 
@@ -258,80 +374,168 @@ export class LibraryBrowser {
     const form = this.creating;
     const id = form ? normalizeLibraryId(form.id) : null;
     if (!form || id === null || this.newIdProblem || this.busy) return false;
-    this.busy = true;
-    this.error = null;
-    try {
+    return this.#run(async () => {
       const doc = await this.#api.create({
         id,
         title: form.title.trim() || undefined,
         description: form.description.trim() || undefined,
       });
       this.creating = null;
-      this.entries = [...this.entries, doc].sort((a, b) => a.id.localeCompare(b.id));
       this.search = '';
-      this.selected = doc.id;
-      this.doc = doc;
-      this.draft.discard();
+      await this.#readList();
+      await this.#open(doc.id);
       this.startEdit();
       this.notice = `Added ${libraryRef(doc.id)}.`;
-      return true;
-    } catch (error) {
-      this.error = messageOf(error);
-      return false;
-    } finally {
-      this.busy = false;
-    }
+    });
   }
 
-  /** Open the rename form on the id of the open document. */
-  openRename(): void {
-    if (this.selected !== null && !this.draft.editing) this.renaming = this.selected;
-  }
-
-  closeRename(): void {
-    this.renaming = null;
-  }
-
-  /** Give the open document the id of the rename form, then open it under that id. */
-  async rename(): Promise<boolean> {
-    const from = this.selected;
-    const to = this.renaming === null ? null : normalizeLibraryId(this.renaming);
-    if (from === null || to === null || this.renameProblem || this.busy) return false;
-    this.busy = true;
-    this.error = null;
-    try {
-      const result = await this.#api.move(from, to);
-      this.renaming = null;
-      this.entries = await this.#api.list();
-      await this.#open(to);
-      this.notice = result.rewritten.length
-        ? `Renamed to ${libraryRef(to)}. Rewrote the references of ${result.rewritten.join(', ')}.`
-        : `Renamed to ${libraryRef(to)}.`;
-      return true;
-    } catch (error) {
-      this.error = messageOf(error);
-      return false;
-    } finally {
-      this.busy = false;
-    }
-  }
-
-  /** Delete the open document. The dialog asks first (`confirmingDelete`). */
+  /** Delete the open document. The page asks first (`confirmingDelete`). */
   async remove(): Promise<boolean> {
     const doc = this.doc;
     if (!doc || this.busy) return false;
-    this.busy = true;
-    this.error = null;
-    try {
+    return this.#run(async () => {
       const result = await this.#api.remove(doc.id);
-      this.entries = this.entries.filter((entry) => entry.id !== doc.id);
-      this.selected = null;
-      this.doc = null;
-      this.draft.discard();
-      this.confirmingDelete = false;
+      await this.#readList();
+      this.#close();
       this.notice = result.referencedBy.length
         ? `Deleted ${libraryRef(doc.id)}. ${result.referencedBy.join(', ')} still reference it.`
         : `Deleted ${libraryRef(doc.id)}.`;
+    });
+  }
+
+  // -- Folders -----------------------------------------------------------------
+
+  /** Open the form that adds a folder inside `parent`, the current folder by default. */
+  openCreateFolder(parent: string = this.currentFolder): void {
+    this.creatingFolder = { parent, name: '' };
+    this.error = null;
+  }
+
+  closeCreateFolder(): void {
+    this.creatingFolder = null;
+  }
+
+  async createFolder(): Promise<boolean> {
+    const form = this.creatingFolder;
+    const path = form ? normalizeLibraryId(join(form.parent, form.name.trim())) : null;
+    if (!form || path === null || this.newFolderProblem || this.busy) return false;
+    return this.#run(async () => {
+      const { folder } = await this.#api.createFolder(path);
+      this.creatingFolder = null;
+      await this.#readList();
+      this.selectFolder(folder);
+      this.notice = `Created the folder ${folder}/.`;
+    });
+  }
+
+  /**
+   * Ask before deleting a folder. An empty folder goes at once. A folder that
+   * holds documents sets `folderToDelete`, and `removeFolder` deletes it with
+   * its documents.
+   */
+  async requestRemoveFolder(path: string): Promise<boolean> {
+    const count = this.entries.filter((entry) => within(entry.id, path)).length;
+    if (count) {
+      this.folderToDelete = { path, count };
+      return false;
+    }
+    return this.#removeFolder(path, false);
+  }
+
+  /** Answer the question of `folderToDelete`. */
+  async resolveRemoveFolder(confirmed: boolean): Promise<boolean> {
+    const target = this.folderToDelete;
+    this.folderToDelete = null;
+    return confirmed && target ? this.#removeFolder(target.path, true) : false;
+  }
+
+  async #removeFolder(path: string, recursive: boolean): Promise<boolean> {
+    if (recursive && this.selected !== null && within(this.selected, path) && this.dirty) {
+      this.error = 'The open document is inside this folder and has unsaved changes. Save or cancel them first.';
+      return false;
+    }
+    return this.#run(async () => {
+      const result = await this.#api.removeFolder(path, recursive);
+      await this.#readList();
+      if (this.selected !== null && within(this.selected, path)) this.#close();
+      if (within(this.currentFolder, path)) this.currentFolder = parentOf(path);
+      const removed = result.removed.length ? ` and ${result.removed.length} document${result.removed.length === 1 ? '' : 's'}` : '';
+      const stale = result.referencedBy.length ? ` ${result.referencedBy.join(', ')} still reference them.` : '';
+      this.notice = `Deleted the folder ${path}/${removed}.${stale}`;
+    });
+  }
+
+  // -- Moving ------------------------------------------------------------------
+
+  /** Open the form that gives `item` a new path. */
+  openMove(item: LibraryItem): void {
+    this.moving = { item, to: item.path };
+    this.error = null;
+  }
+
+  closeMove(): void {
+    this.moving = null;
+  }
+
+  /** Run the move of the form. */
+  async move(): Promise<boolean> {
+    const form = this.moving;
+    const to = form ? normalizeLibraryId(form.to) : null;
+    if (!form || to === null || this.moveProblem || this.busy) return false;
+    const done = await this.moveItem(form.item, to);
+    if (done) this.moving = null;
+    return done;
+  }
+
+  /** Move a row that the reader dropped onto `folder`. A drop that changes nothing does nothing. */
+  async drop(item: LibraryItem, folder: string): Promise<boolean> {
+    const to = dropTarget(item, folder);
+    if (to === null) return false;
+    const taken = item.kind === 'folder' ? this.folders.includes(to) : this.entries.some((entry) => entry.id === to);
+    if (taken) {
+      this.error = `${folder ? `The folder ${folder}/` : 'The library'} already holds "${nameOf(to)}".`;
+      return false;
+    }
+    return this.moveItem(item, to);
+  }
+
+  /**
+   * Give a document or a folder the path `to`. The server rewrites the
+   * references to every document that moved. The open document stays open
+   * under its new id.
+   */
+  async moveItem(item: LibraryItem, to: string): Promise<boolean> {
+    if (this.selected !== null && within(this.selected, item.path) && this.dirty) {
+      this.error = 'The open document has unsaved changes. Save or cancel them before you move it.';
+      return false;
+    }
+    return this.#run(async () => {
+      const result = await this.#api.move(item.path, to);
+      await this.#readList();
+      const opened = this.selected;
+      const next = opened === null ? undefined : result.moved.find((entry) => entry.from === opened)?.to;
+      if (next !== undefined) await this.#open(next);
+      if (item.kind === 'folder') {
+        if (within(this.currentFolder, item.path)) this.currentFolder = to + this.currentFolder.slice(item.path.length);
+        this.#expand([...ancestorsOf(to), to]);
+      } else {
+        this.#expand(ancestorsOf(to));
+      }
+      const what = item.kind === 'folder' ? `the folder ${item.path}/ to ${to}/` : `${libraryRef(item.path)} to ${libraryRef(to)}`;
+      const rewritten = result.rewritten.length ? ` Rewrote the references of ${result.rewritten.join(', ')}.` : '';
+      this.notice = `Moved ${what}.${rewritten}`;
+    });
+  }
+
+  // -- Helpers -----------------------------------------------------------------
+
+  /** Run a write. A failure goes to `error`, and the method returns false. */
+  async #run(action: () => Promise<void>): Promise<boolean> {
+    this.busy = true;
+    this.error = null;
+    this.notice = null;
+    try {
+      await action();
       return true;
     } catch (error) {
       this.error = messageOf(error);

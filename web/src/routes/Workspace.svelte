@@ -3,6 +3,7 @@
   import { SvelteFlowProvider } from '@xyflow/svelte';
   import { DEFAULT_DRAWER_HEIGHT } from '$shared';
   import { issueWindowLinks } from '$lib/app/issue-window.js';
+  import { openLibraryWindow } from '$lib/app/library-window.js';
   import { Shell, provideShell } from '$lib/app/shell.svelte.js';
   import { provideNodeLinks } from '$lib/ui/node-links.js';
   import { useTabs } from '$lib/app/tabs.svelte.js';
@@ -19,7 +20,6 @@
   import CommandBar from '$features/commandbar/CommandBar.svelte';
   import ShortcutsDialog from '$features/commandbar/ShortcutsDialog.svelte';
   import ViewDialog from '$features/commandbar/ViewDialog.svelte';
-  import LibraryDialog from '$features/library/LibraryDialog.svelte';
   import ViewTabs from '$features/commandbar/ViewTabs.svelte';
   import OverviewDialog from '$features/overview/OverviewDialog.svelte';
   import Drawer from '$features/drawer/Drawer.svelte';
@@ -58,10 +58,10 @@
   // svelte-ignore state_referenced_locally
   const workspace = provideWorkspace(opened);
   // `[[ID]]` in a body or a comment opens the issue window, and a `library:`
-  // link opens the Library dialog on that document.
+  // link opens the Library page on that document.
   provideNodeLinks({
     ...issueWindowLinks(workspace, () => workspace.doc.id),
-    openLibrary: (id) => (shell.library = { id }),
+    openLibrary: (id) => openLibraryWindow(id, workspace.doc.id),
   });
   const shell = provideShell(new Shell());
   const tabs = useTabs();
@@ -413,12 +413,6 @@
 {#if shell.viewDialog}
   {#key shell.viewDialog}
     <ViewDialog request={shell.viewDialog} onclose={() => (shell.viewDialog = null)} />
-  {/key}
-{/if}
-
-{#if shell.library}
-  {#key shell.library}
-    <LibraryDialog initial={shell.library.id} onclose={() => (shell.library = null)} />
   {/key}
 {/if}
 

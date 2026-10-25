@@ -148,7 +148,7 @@ describe('library operations', () => {
     expect(() => updateLibraryDoc(reload(paths), 'gone', { body: 'x' })).toThrow('has no document "gone"');
   });
 
-  it('deletes a document and the folders it left empty, and names the issues that still reference it', () => {
+  it('deletes a document, keeps its folders, and names the issues that still reference it', () => {
     const paths = makeBoard();
     createLibraryDoc(reload(paths), { id: 'prompts/review/strict' });
     createIssue(reload(paths), { type: 'program', title: 'Checkout', relatedFiles: ['library:prompts/review/strict'] });
@@ -158,8 +158,9 @@ describe('library operations', () => {
     const result = removeLibraryDoc(reload(paths), 'prompts/review/strict');
 
     expect(result.referencedBy).toEqual(['LP-1', 'LP-2']);
-    expect(existsSync(path.join(libraryDir(paths), 'prompts'))).toBe(false);
-    expect(existsSync(libraryDir(paths))).toBe(true);
+    // A folder is part of the structure somebody set up, so it stays, with the
+    // file that keeps it in git.
+    expect(existsSync(path.join(libraryDir(paths), 'prompts', 'review', '.gitkeep'))).toBe(true);
     expect(libraryReferrers(reload(paths), 'prompts/review/strict')).toEqual(['LP-1', 'LP-2']);
   });
 });
@@ -185,7 +186,12 @@ describe('moving a library document', () => {
     const paths = seedMoves();
     const result = moveLibraryDoc(reload(paths), 'prd', 'requirements/payments');
 
-    expect(result).toEqual({ moved: [{ from: 'prd', to: 'requirements/payments' }], rewritten: ['LP-2'], stale: [] });
+    expect(result).toEqual({
+      kind: 'document',
+      moved: [{ from: 'prd', to: 'requirements/payments' }],
+      rewritten: ['LP-2'],
+      stale: [],
+    });
     expect(readLibraryDoc(paths, 'prd')).toBeNull();
     expect(readLibraryDoc(paths, 'requirements/payments')!.body).toBe('PRD.\n');
     expect(findIssue(reload(paths), 'LP-2')!.related_files).toEqual(['library:requirements/payments', 'src/app.ts']);

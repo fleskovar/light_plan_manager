@@ -3,6 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync,
 import { copyFile, mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { BoardError } from '../errors.js';
+import { sleepSync } from './atomic.js';
 
 /**
  * Copying a folder tree and checking the copy, for the operations that move a
@@ -17,7 +18,19 @@ import { BoardError } from '../errors.js';
  * The sync versions serve the CLI, which has nothing else to do meanwhile.
  *
  * Symbolic links are not copied and not compared. A board holds none.
+ *
+ * A checked copy compares the two trees after the copy. A program that writes
+ * below the source during the copy makes the trees differ. Git does this: after
+ * each `git commit`, git starts `git maintenance run --auto --detach`. That
+ * background process can repack `.git/objects` while the board is copied. When
+ * the comparison finds a difference, the checked copy discards the copy, waits
+ * for the next delay in `COPY_RETRY_DELAYS_MS`, and copies again. After the
+ * last delay, the next difference fails the copy. An error of the copy itself
+ * fails the copy at once.
  */
+
+/** The waits before the second and the third attempt of a checked copy, in milliseconds. */
+export const COPY_RETRY_DELAYS_MS: readonly number[] = [1000, 3000];
 
 /** One folder or file below the root of a tree. */
 export interface TreeEntry {
@@ -118,13 +131,31 @@ function listDifference(expected: readonly TreeEntry[], copied: readonly TreeEnt
 }
 
 /**
+ * The names in the top folder of a copy target that were there before the
+ * copy. The copy must not write them. The comparison leaves them out of the
+ * target, and a failed copy keeps them.
+ */
+export type KeptNames = readonly string[];
+
+function keptSkip(keep: KeptNames): TreeSkip {
+  return (relative) => keep.includes(relative);
+}
+
+/**
  * Compare the tree of `source` with the tree of `target`: the same folders and
  * files, the same sizes and the same SHA-256 digests. `skip` applies to the
- * source only. Returns the first difference, or null when the trees match.
+ * source only. `keep` leaves names out of the top folder of `target`. Returns
+ * the first difference, or null when the trees match.
  */
-export function compareTrees(source: string, target: string, skip: TreeSkip = () => false, onProgress?: ByteProgress): string | null {
+export function compareTrees(
+  source: string,
+  target: string,
+  skip: TreeSkip = () => false,
+  onProgress?: ByteProgress,
+  keep: KeptNames = [],
+): string | null {
   const expected = listTree(source, skip);
-  const problem = listDifference(expected, listTree(target));
+  const problem = listDifference(expected, listTree(target, keptSkip(keep)));
   if (problem) return problem;
   const total = treeBytes(expected);
   let done = 0;
@@ -145,9 +176,10 @@ export async function compareTreesAsync(
   target: string,
   skip: TreeSkip = () => false,
   onProgress?: ByteProgress,
+  keep: KeptNames = [],
 ): Promise<string | null> {
   const expected = listTree(source, skip);
-  const problem = listDifference(expected, listTree(target));
+  const problem = listDifference(expected, listTree(target, keptSkip(keep)));
   if (problem) return problem;
   const total = treeBytes(expected);
   let done = 0;
@@ -174,9 +206,33 @@ function incomplete(problem: string, consequence: string): BoardError {
 }
 
 /**
- * Copy `source` into the new folder `target`, then compare the two trees. On
- * a failure, remove `target` and throw a `BoardError` that holds
- * `consequence` as its hint. `source` is never changed.
+ * Undo a failed copy. Without `keep`, remove the folder `target`. With `keep`,
+ * remove each entry of the top folder of `target` that `keep` does not name,
+ * and keep the folder.
+ */
+export function discardCopy(target: string, keep: KeptNames = []): void {
+  if (keep.length === 0) {
+    rmSync(target, { recursive: true, force: true });
+    return;
+  }
+  let names: string[];
+  try {
+    names = readdirSync(target);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (!keep.includes(name)) rmSync(path.join(target, name), { recursive: true, force: true });
+  }
+}
+
+/**
+ * Copy `source` into `target`, then compare the two trees. `target` is a new
+ * folder, or with `keep` an existing folder that holds only the names in
+ * `keep`. `skip` must leave those names out of the copy. When the trees
+ * differ, the call copies again after each delay in `COPY_RETRY_DELAYS_MS`.
+ * On a failure, `discardCopy` undoes the copy, and the call throws a
+ * `BoardError` that holds `consequence` as its hint. `source` is never changed.
  */
 export async function copyCheckedAsync(
   source: string,
@@ -184,30 +240,65 @@ export async function copyCheckedAsync(
   skip: TreeSkip,
   consequence: string,
   onProgress?: (progress: CheckedCopyProgress) => void,
+  keep: KeptNames = [],
 ): Promise<void> {
-  try {
-    const entries = listTree(source, skip);
-    await copyTreeAsync(source, target, entries, (done, total) => onProgress?.({ phase: 'copy', done, total }));
-    const problem = await compareTreesAsync(source, target, skip, (done, total) =>
-      onProgress?.({ phase: 'compare', done, total }),
-    );
-    if (problem) throw incomplete(problem, consequence);
-  } catch (error) {
-    rmSync(target, { recursive: true, force: true });
-    throw error;
+  for (let attempt = 0; ; attempt++) {
+    let problem: string | null;
+    try {
+      const entries = listTree(source, skip);
+      await copyTreeAsync(source, target, entries, (done, total) => onProgress?.({ phase: 'copy', done, total }));
+      problem = await compareTreesAsync(
+        source,
+        target,
+        skip,
+        (done, total) => onProgress?.({ phase: 'compare', done, total }),
+        keep,
+      );
+    } catch (error) {
+      discardCopy(target, keep);
+      throw error;
+    }
+    if (problem === null) return;
+    discardCopy(target, keep);
+    const delay = COPY_RETRY_DELAYS_MS[attempt];
+    if (delay === undefined) throw incomplete(problem, consequence);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+}
+
+/**
+ * Run `copy`, which copies `source` into `target`, then compare the two trees.
+ * The rules of `copyCheckedAsync` apply, with sync file calls. A caller that
+ * copies with its own function, such as `operations/relocate.ts`, passes it.
+ */
+export function copyCheckedWith(
+  copy: () => void,
+  source: string,
+  target: string,
+  skip: TreeSkip,
+  consequence: string,
+  keep: KeptNames = [],
+): void {
+  for (let attempt = 0; ; attempt++) {
+    let problem: string | null;
+    try {
+      copy();
+      problem = compareTrees(source, target, skip, undefined, keep);
+    } catch (error) {
+      discardCopy(target, keep);
+      throw error;
+    }
+    if (problem === null) return;
+    discardCopy(target, keep);
+    const delay = COPY_RETRY_DELAYS_MS[attempt];
+    if (delay === undefined) throw incomplete(problem, consequence);
+    sleepSync(delay);
   }
 }
 
 /** `copyCheckedAsync` with sync file calls, for the CLI. */
-export function copyCheckedSync(source: string, target: string, skip: TreeSkip, consequence: string): void {
-  try {
-    copyTree(source, target, listTree(source, skip));
-    const problem = compareTrees(source, target, skip);
-    if (problem) throw incomplete(problem, consequence);
-  } catch (error) {
-    rmSync(target, { recursive: true, force: true });
-    throw error;
-  }
+export function copyCheckedSync(source: string, target: string, skip: TreeSkip, consequence: string, keep: KeptNames = []): void {
+  copyCheckedWith(() => copyTree(source, target, listTree(source, skip)), source, target, skip, consequence, keep);
 }
 
 /** A sibling path of `dir` that does not exist yet, for a rename inside one parent folder. */
@@ -224,5 +315,23 @@ export function removeTreeOrWarn(dir: string, warnings: string[]): void {
     rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
   } catch (error) {
     warnings.push(`Could not delete ${dir}: ${(error as Error).message}. Delete it by hand.`);
+  }
+}
+
+/**
+ * Remove each entry of the folder `dir` that `keep` does not name, and keep
+ * the folder. An entry that the platform refuses to remove adds a warning to
+ * `warnings`, and the other entries are still removed.
+ */
+export function removeEntriesOrWarn(dir: string, keep: (name: string) => boolean, warnings: string[]): void {
+  let names: string[];
+  try {
+    names = readdirSync(dir);
+  } catch (error) {
+    warnings.push(`Could not read ${dir}: ${(error as Error).message}. Delete its old files by hand.`);
+    return;
+  }
+  for (const name of names) {
+    if (!keep(name)) removeTreeOrWarn(path.join(dir, name), warnings);
   }
 }

@@ -31,14 +31,14 @@ folder, called `<tmp>` below, and replaces `{{tmp}}` with that folder.
 2. `relocateBoard` backs the board up. It copies every file of the board
    folder to `store/.lpm_backups/project_backup/board`, compares the copy, and
    writes `backup.json` beside `board/`. The backup keeps `project.json`.
-3. It copies the board folder to a new folder beside `project/.lpm`, without
-   `project.json`. A local board has no use for the file, because its project
-   is the parent folder.
+3. It copies the board folder into the pointer folder `project/.lpm`, without
+   `project.json` and without `config.yml`. A local board has no use for
+   `project.json`, because its project is the parent folder.
 4. It compares the two trees: the file lists, the sizes and the SHA-256
-   digests. They are equal.
-5. It renames the pointer folder `project/.lpm` aside, and renames the copy to
-   `project/.lpm`.
-6. It deletes the pointer folder and `store/.lpm_central/project`.
+   digests. The comparison leaves out the pointer. The trees are equal.
+5. It writes the board `config.yml` over the pointer `project/.lpm/config.yml`
+   in one file rename. It renames no folder.
+6. It deletes `store/.lpm_central/project`.
 
 `outputs/tree.txt` lists every file after the move, without `home/`:
 

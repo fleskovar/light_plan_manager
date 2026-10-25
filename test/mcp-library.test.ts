@@ -70,6 +70,7 @@ describe('the MCP library tools', () => {
 
     const moved = await call(client, 'move_library_document', { id: 'prd/payments', newId: 'requirements/payments' });
     expect(moved.data).toEqual({
+      kind: 'document',
       moved: [{ from: 'prd/payments', to: 'requirements/payments' }],
       rewritten: ['LP-1'],
       stale: [],
@@ -80,6 +81,25 @@ describe('the MCP library tools', () => {
     const deleted = await call(client, 'delete_library_document', { id: 'requirements/payments' });
     expect(deleted.data).toEqual({ deleted: 'requirements/payments', stillReferencedBy: ['LP-1'] });
     expect((await call(client, 'list_library')).data.total).toBe(0);
+  });
+
+  it('creates, lists, moves and deletes folders', async () => {
+    const paths = makeBoard();
+    const client = await connect(paths);
+
+    expect((await call(client, 'create_library_folder', { path: 'prompts/review' })).data).toEqual({ created: 'prompts/review' });
+    await call(client, 'create_library_document', { id: 'prompts/review/strict', body: 'Strict.\n' });
+    expect((await call(client, 'list_library')).data.folders).toEqual(['prompts', 'prompts/review']);
+
+    const moved = await call(client, 'move_library_document', { id: 'prompts', newId: 'agent-prompts' });
+    expect(moved.data).toMatchObject({ kind: 'folder', moved: [{ from: 'prompts/review/strict', to: 'agent-prompts/review/strict' }] });
+
+    const refused = await call(client, 'delete_library_folder', { path: 'agent-prompts' });
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toContain('holds 1 document');
+    const removed = await call(client, 'delete_library_folder', { path: 'agent-prompts', recursive: true });
+    expect(removed.data).toEqual({ folder: 'agent-prompts', removed: ['agent-prompts/review/strict'], referencedBy: [] });
+    expect((await call(client, 'list_library')).data.folders).toEqual([]);
   });
 
   it('registers only the reading tools on a read-only server', async () => {

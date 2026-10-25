@@ -5,12 +5,13 @@
   import MenuBar from '$lib/ui/menu/MenuBar.svelte';
   import { usePool } from '$lib/workspace/pool.svelte.js';
   import { useWorkspace } from '$lib/workspace/workspace.svelte.js';
-  import { barMenus } from './menus.js';
+  import { barMenus, openLibrary } from './menus.js';
   import ModeSwitch from './ModeSwitch.svelte';
 
   /**
    * The top bar, in two rows. The first row holds the name of the board on
-   * the left. On the right it holds how far behind `.lpm` the active view is,
+   * the left. On the right it holds the Library button, which opens the
+   * Library page in its own window, how far behind `.lpm` the active view is,
    * and the switch between read mode and edit mode. The second row holds the
    * menu bar (File, Edit, View, Help). The component also sets the title of
    * the browser window to the name of the board.
@@ -79,6 +80,14 @@
     {#if workspace.ready}
       <span class="board" title="The board that this window shows">{workspace.config.boardName}</span>
       <span class="spacer"></span>
+      <button
+        type="button"
+        class="library"
+        title="Open the library of this board in its own window: prompts, summaries and requirement documents"
+        onclick={() => openLibrary({ tabs, workspace }, null)}
+      >
+        Library
+      </button>
       <span class="status" class:dirty={workspace.dirty || workspace.unsaved}>{statusLabel}</span>
       <ModeSwitch mode={workspace.canvasMode} />
     {/if}
@@ -129,6 +138,20 @@
     font-size: var(--text-xl);
     font-weight: 700;
     letter-spacing: 0.01em;
+  }
+
+  .library {
+    padding: 0.15rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-0);
+    color: var(--ink);
+    font-size: var(--text-sm);
+  }
+
+  .library:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
   }
 
   .status {

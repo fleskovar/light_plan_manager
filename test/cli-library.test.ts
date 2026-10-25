@@ -106,6 +106,22 @@ describe('lpm library', () => {
     expect(lpm('library', 'mv', 'spec').all).toContain('Pass the id to move and the new id');
   });
 
+  it('creates folders, prints the tree, moves a document into a folder and deletes a folder', () => {
+    expect(lpm('library', 'mkdir', 'archive/2026').stdout).toContain('Created the folder archive/2026/');
+    lpm('library', 'new', 'prd', '-t', 'Payments PRD');
+    lpm('library', 'mv', 'prd', 'archive/2026/prd');
+
+    expect(lpm('library', 'tree').stdout).toContain('archive/\n  2026/\n    prd  Payments PRD');
+    const json = JSON.parse(lpm('library', 'tree', '--json').stdout) as { folders: string[] };
+    expect(json.folders).toEqual(['archive', 'archive/2026']);
+
+    expect(lpm('library', 'rmdir', 'archive').all).toContain('The folder "archive" holds 1 document');
+    const removed = lpm('library', 'rmdir', 'archive', '-r');
+    expect(removed.stdout).toContain('Deleted the folder archive/');
+    expect(removed.stdout).toContain('With 1 document: archive/2026/prd');
+    expect(lpm('library', 'tree').stdout).toContain('The library is empty');
+  });
+
   it('refuses an invalid id, an unknown subcommand and an empty change', () => {
     expect(lpm('library', 'new', '../escape').all).toContain('is not a valid library id');
     expect(lpm('library', 'frobnicate').all).toContain('Unknown subcommand "frobnicate"');

@@ -1,5 +1,6 @@
 import { appearanceEntries } from '$lib/app/options.js';
 import type { Preferences } from '$lib/app/preferences.svelte.js';
+import { openLibraryWindow } from '$lib/app/library-window.js';
 import { goToProjects } from '$lib/app/projects-link.js';
 import type { Shell } from '$lib/app/shell.svelte.js';
 import type { Tabs } from '$lib/app/tabs.svelte.js';
@@ -134,7 +135,8 @@ const submenu = (items: MenuEntry[]): MenuEntry[] | undefined => (items.length ?
 /**
  * The File menu: the commands that act on a view file and on its tab, and the
  * two entries that open the configuration of the board. **Library…** opens the
- * dialog that lists and edits the documents in `.lpm/library`. **Remote board…** opens
+ * Library page, which manages the folders and the documents in `.lpm/library`,
+ * in a window of its own. **Remote board…** opens
  * the same dialog on the tab that shares the board through git or mirrors it
  * onto a tracker. **All projects…** goes to the page `/projects`, which lists
  * every project that `lpm` worked on, on this computer.
@@ -194,8 +196,8 @@ export function fileMenu(context: ViewContext): MenuEntry[] {
     { separator: true },
     { label: 'Board configuration…', disabled: !ready, onSelect: () => shell.openConfig('types') },
     { label: 'Remote board…', disabled: !ready, onSelect: () => shell.openConfig('remote') },
-    // The markdown documents in .lpm/library: prompts, summaries, requirements.
-    { label: 'Library…', onSelect: () => (shell.library = { id: null }) },
+    // The markdown documents in .lpm/library, on a page of their own.
+    { label: 'Library…', onSelect: () => openLibrary(context, null) },
     { separator: true },
     // Every project that lpm worked on, on this computer: the page /projects.
     { label: 'All projects…', onSelect: () => goToProjects() },
@@ -336,6 +338,17 @@ export function barMenus(context: MenuBarContext): BarMenu[] {
 }
 
 /** The entries of the menu that a right-click on a tab opens. */
+/**
+ * Open the Library page in its own window, on the document `docId` when it is
+ * not null. The links of the page open issue windows on the active view.
+ */
+export function openLibrary(context: Pick<ViewContext, 'tabs' | 'workspace'>, docId: string | null): void {
+  if (openLibraryWindow(docId, context.tabs.active)) return;
+  context.workspace.notify('error', 'The browser blocked the Library window', [
+    'Allow pop-up windows for this address, then try again.',
+  ]);
+}
+
 /** Open the dialog that changes the name and the description of the view `id`. */
 export function editView(context: ViewContext, id: string | null): void {
   if (id !== null) context.shell.viewDialog = { kind: 'edit', id };

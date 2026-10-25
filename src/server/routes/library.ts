@@ -1,8 +1,12 @@
 import type { BoardPaths, LibraryDoc } from '../../core/index.js';
 import {
   createLibraryDoc,
+  createLibraryFolder,
   displayPath,
   libraryDocExists,
+  libraryFolderExists,
+  listLibraryFolders,
+  removeLibraryFolder,
   libraryReferrers,
   listLibraryDocs,
   moveLibraryDoc,
@@ -11,7 +15,14 @@ import {
   requireLibraryId,
   updateLibraryDoc,
 } from '../../core/index.js';
-import type { LibraryDocDto, LibraryDocPatch, LibraryEntryDto, LibraryMoveResultDto } from '../../shared/index.js';
+import type {
+  LibraryDocDto,
+  LibraryDocPatch,
+  LibraryEntryDto,
+  LibraryFolderRemovalDto,
+  LibraryListDto,
+  LibraryMoveResultDto,
+} from '../../shared/index.js';
 import { readBoard } from '../board-cache.js';
 import { pullBeforeWrite } from '../git.js';
 import { HttpError, readJson, sendJson } from '../http/respond.js';
@@ -22,12 +33,17 @@ import type { Router } from '../http/router.js';
  *
  * | Route | Body | Answer |
  * | --- | --- | --- |
- * | `GET /api/library` | — | `LibraryEntryDto[]`, sorted by id |
+ * | `GET /api/library` | — | `LibraryListDto`: the documents, sorted by id, and every folder |
  * | `GET /api/library/:id` | — | `LibraryDocDto` |
  * | `POST /api/library` | `{ id, title?, description?, body? }` | 201 and the new `LibraryDocDto` |
  * | `PUT /api/library/:id` | `LibraryDocPatch` | The changed `LibraryDocDto`. 409 when `revision` is stale |
  * | `POST /api/library/:id/move` | `{ to, updateReferences? }` | `LibraryMoveResultDto`: the moves and the issues whose references changed |
  * | `DELETE /api/library/:id` | — | `{ deleted, referencedBy }` |
+ * | `POST /api/library-folders` | `{ path }` | 201 and `{ folder }` |
+ * | `DELETE /api/library-folders/:path?recursive=true` | — | `LibraryFolderRemovalDto`. Without `recursive`, a folder that holds documents answers 400 |
+ *
+ * `POST /api/library/:id/move` moves a folder too: when `:id` names no
+ * document and a folder, the folder moves with everything inside it.
  *
  * The id holds `/` between folders, so a client encodes it with
  * `encodeURIComponent`, and the router decodes the one path segment.
@@ -69,7 +85,31 @@ function requireExisting(paths: BoardPaths, id: string): void {
 
 export function libraryRoutes(router: Router, paths: BoardPaths): void {
   router.get('/api/library', ({ res }) => {
-    sendJson(res, 200, listLibraryDocs(paths).map((doc) => entryOf(paths, doc)));
+    const body: LibraryListDto = {
+      documents: listLibraryDocs(paths).map((doc) => entryOf(paths, doc)),
+      folders: listLibraryFolders(paths),
+    };
+    sendJson(res, 200, body);
+  });
+
+  router.post('/api/library-folders', async ({ req, res }) => {
+    const body = await readJson<Record<string, unknown>>(req);
+    const folder = optionalText(body, 'path');
+    if (!folder) throw new HttpError(400, 'A folder needs a path in the key "path"');
+    pullBeforeWrite(paths);
+    sendJson(res, 201, { folder: createLibraryFolder(readBoard(paths), folder) });
+  });
+
+  router.delete('/api/library-folders/:path', ({ res, params, query }) => {
+    requireLibraryId(params.path!);
+    if (!libraryFolderExists(paths, params.path!)) {
+      throw new HttpError(404, `The library has no folder "${params.path}"`);
+    }
+    pullBeforeWrite(paths);
+    const result: LibraryFolderRemovalDto = removeLibraryFolder(readBoard(paths), params.path!, {
+      recursive: query.get('recursive') === 'true',
+    });
+    sendJson(res, 200, result);
   });
 
   router.get('/api/library/:id', ({ res, params }) => {
