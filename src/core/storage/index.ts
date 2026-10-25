@@ -3,8 +3,9 @@
  * out on disk: where things live (paths), how a document is encoded
  * (frontmatter, document), the work log beside it (comments), the activity
  * section inside a document's body (activity), the id counters (state),
- * per-checkout settings (local), saved views (views), the context templates a
- * brief is rendered with (templates), the user folder that holds the board
+ * per-checkout settings (local), saved views (views), the markdown documents
+ * of the board library (library), the context templates a brief is rendered
+ * with (templates), the user folder that holds the board
  * templates of one person (user), and authorship (git).  Nothing here knows
  * what a valid board looks like; that is validation's job.
  *
@@ -21,6 +22,7 @@ export * from './comments.js';
 export * from './document.js';
 export * from './frontmatter.js';
 export * from './git.js';
+export * from './library.js';
 export * from './local.js';
 export * from './lock.js';
 export * from './paths.js';

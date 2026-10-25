@@ -1,3 +1,5 @@
+import { isLibraryRef, normalizeLibraryId } from '$shared';
+
 /**
  * Markdown for a document body, rendered safely by construction.
  *
@@ -23,6 +25,10 @@
  * `[[LP-12]]` links to the document with the id `LP-12`. The caller passes
  * `RenderOptions.nodeLink`, which gives the address and the title for an id.
  * Without that function, the text `[[LP-12]]` stays as it is.
+ *
+ * `[the PRD](library:prd/payments)` links to a document of the board library
+ * when the caller sets `RenderOptions.libraryLink`. Without it, the text stays
+ * as it is, because `library:` is not a scheme that a browser can open.
  *
  * Line breaks follow CommonMark: the lines of one paragraph join with a space,
  * because bodies are hard-wrapped at 80 columns. A line that ends in two
@@ -73,6 +79,17 @@ export interface RenderOptions {
    * document with that id. Without this function, `[[ID]]` stays as text.
    */
   nodeLink?: (id: string) => NodeLinkTarget | null;
+  /**
+   * With `true`, `[label](library:<id>)` renders as a link with the attribute
+   * `data-library`, which `Markdown.svelte` reads to open the Library dialog.
+   * Without it, or for an id that breaks the id rule, the text stays as it is.
+   */
+  libraryLink?: boolean;
+}
+
+/** The markup for `[label](library:<id>)`. `label` is escaped already. */
+function libraryLinkHtml(id: string, label: string): string {
+  return `<a class="library-link" href="#" data-library="${escape(id)}" title="Library document ${escape(id)}">${label}</a>`;
 }
 
 /**
@@ -143,6 +160,10 @@ function inline(text: string, options: RenderOptions): string {
     .replace(
       /(!?)\[([^\]]*)\]\(([^)\s]+)(?:\s+&quot;[^\n]*?&quot;)?\)/g,
       (whole, bang: string, label: string, url: string) => {
+        if (!bang && isLibraryRef(url)) {
+          const id = options.libraryLink ? normalizeLibraryId(url) : null;
+          return id === null ? whole : keep(libraryLinkHtml(id, label.trim() ? emphasis(label) : id));
+        }
         const href = safeUrl(url);
         if (!href) return whole;
         const text = label.trim() ? emphasis(label) : bang ? 'image' : href;

@@ -68,6 +68,12 @@ export interface WorkspaceOptions {
 
 export type WorkspaceStatus = 'idle' | 'loading' | 'saving' | 'pushing';
 
+/** The two texts of a view that the Edit view dialog changes. */
+export interface ViewDetails {
+  name: string;
+  description: string;
+}
+
 export interface Notice {
   id: number;
   level: 'info' | 'error';
@@ -683,13 +689,26 @@ export class Workspace {
    * and saved addresses keep working. The write does not save the layout.
    */
   async rename(name: string): Promise<boolean> {
+    return this.editDetails({ name, description: this.doc.description ?? '' });
+  }
+
+  /**
+   * Give the view another name and another description. The id and the file
+   * name stay. The write does not save the layout. When the server refuses,
+   * the view gets its old name and description back, and the method returns
+   * false.
+   */
+  async editDetails(details: ViewDetails): Promise<boolean> {
     const view = this.doc;
-    const previous = view.name;
-    view.name = name;
-    if (this.#baseline) this.#baseline = { ...this.#baseline, name };
+    const previous: ViewDetails = { name: view.name, description: view.description ?? '' };
+    const apply = (next: ViewDetails): void => {
+      view.name = next.name;
+      view.description = next.description;
+      if (this.#baseline) this.#baseline = { ...this.#baseline, ...next };
+    };
+    apply(details);
     if (await this.#write(this.#autoSave())) return true;
-    view.name = previous;
-    if (this.#baseline) this.#baseline = { ...this.#baseline, name: previous };
+    apply(previous);
     return false;
   }
 
@@ -701,15 +720,16 @@ export class Workspace {
    * The pending push runs first, so the copy holds the ids that the board
    * allocated and no temporary id.
    */
-  async saveCopy(name: string): Promise<string | null> {
+  async saveCopy(name: string, description = this.doc.description ?? ''): Promise<string | null> {
     try {
       await this.flush();
-      const created = await api.createView(name, this.mode);
+      const created = await api.createView(name, this.mode, description);
       const live = $state.snapshot(this.doc) as ViewDocument;
       await api.saveView({
         ...live,
         id: created.id,
         name: created.name,
+        description: created.description,
         created: created.created,
         changes: [],
       });

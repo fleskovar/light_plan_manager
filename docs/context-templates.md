@@ -144,7 +144,10 @@ At the root of a brief:
 | `blocks` | issues that depend on it (derived) |
 | `relates_to` | its non-blocking links |
 | `related_files` | the file references written on it, as strings |
+| `project_files` | `related_files` without the `library:` references |
 | `upstream_files` | what the work before it touched: one `{ issue, files }` per entry in `blocked_by` that names a file |
+| `docs` | the library documents that the issue references, then the documents that its ancestors reference, nearest ancestor first, each once (see [Library documents](#library-documents)) |
+| `library` | every document of the board library, sorted by id |
 | `period` | the period it is scheduled in, or nothing |
 | `assignee` | the person or pool it is assigned to, or nothing |
 | `comments` | its work log, oldest first |
@@ -176,6 +179,8 @@ Every document — `issue`, an ancestor, a child, a blocker — has the same sha
 | `status`, `status_label`, `done`, `active` | issues; empty/false elsewhere |
 | `flag`, `flag_label` | why work on it has stopped (`blocked`, `paused`, `help`) and how to print it; **empty strings** when it has not, so `<% if (issue.flag) { %>` reads as expected |
 | `related_files` | the file references written on it, as strings, exactly as typed — never resolved, never checked against the filesystem |
+| `project_files` | `related_files` without the entries that start with `library:` |
+| `library_refs` | the ids of the library documents that it references: the `library:` entries of `related_files` first, then the `[label](library:<id>)` links of its body |
 | `parent`, `ancestors`, `children`, `descendants`, `siblings` | documents |
 | `blocked_by`, `blocks`, `relates_to` | documents |
 | `period`, `assignee` | documents, or nothing |
@@ -201,6 +206,44 @@ only as titles:
 `upstream_files` at the root is the same thing already gathered and already
 filtered to the issues that named a file, because the guard for "is there
 anything to print here?" is otherwise written in every layout that wants it.
+
+### Library documents
+
+The board library holds markdown documents in `.lpm/library/<id>.md`
+([library.md](library.md) describes it). An issue references a document in two
+ways: the entry `library:<id>` in its related files, or a markdown link
+`[label](library:<id>)` in its body. `docs` holds one entry for each id that
+the issue or one of its ancestors references. Each entry has these fields:
+
+| Field | Notes |
+| --- | --- |
+| `id` | for example `prd/payments` |
+| `ref` | the reference text, for example `library:prd/payments` |
+| `title`, `description` | from the frontmatter of the file. Without `title`, the first `# ` heading of the body, or the last part of the id |
+| `body` | the markdown after the frontmatter, trimmed. Empty when `missing` |
+| `path` | the file, relative to the project folder. Empty when `missing` |
+| `missing` | `true` when the library has no file for the id |
+| `referenced_by` | the document whose reference brought the entry into `docs`. `null` in `library` |
+
+The built-in layout and every starter print `docs` in a section "Library
+documents", and print `project_files` instead of `related_files` in the list of
+files. A layout that a board ejected before the library existed still prints
+`related_files`, so the `library:` entries show there as text. To print the
+documents, add this section to the layout:
+
+```
+<% for (const doc of docs) { %>
+### <%= doc.title %> (`<%= doc.ref %>`)
+
+<%= heading(doc.body, 4) %>
+
+<% } %>
+```
+
+`library` holds every document, also the ones that nothing references. It is
+a list, so a layout reads one document with `find`, for example
+`<% const style = library.find((doc) => doc.id === 'guides/style') %>`. The
+safety check accepts this call.
 
 A `flag` is the one field a brief should lead with. It means somebody picked the
 work up, stopped, and wrote down why in the work log — so a layout that renders

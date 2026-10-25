@@ -32,14 +32,14 @@ has to keep true.
 
 <%= heading(issue.body, 3) %>
 
-<% if (related_files.length) { %>
+<% if (project_files.length) { %>
 ## Where it lives
 
 The files this bug was filed against — the stack frame, the module, the fixture
 that should have caught it. Start here, and remember that a report can be wrong
 about where the fault is: this is a lead, not a diagnosis.
 
-<% for (const ref of related_files) { %>
+<% for (const ref of project_files) { %>
 - `<%= ref %>`
 <% } %>
 
@@ -80,6 +80,31 @@ introduced the defect, its files below are the first place to look.
 - **<%= waiting.id %>** <%= waiting.title %> — <%= waiting.status_label %>
 <% } %>
 
+<% } %>
+<% if (docs.length) { %>
+## Library documents
+
+The board library holds these documents, and this issue or the work above it
+references them. Read them before you start.
+
+<% for (const doc of docs) { %>
+<% if (doc.missing) { %>
+### `<%= doc.ref %>` (not in the library)
+
+<%= doc.referenced_by.id %> references this document, and the library does not
+hold it. Ask whoever runs the plan where it went.
+
+<% } else { %>
+### <%= doc.title %> (`<%= doc.ref %>`, referenced by <%= doc.referenced_by.id %>)
+
+<% if (doc.description) { %>
+<%= doc.description %>
+
+<% } %>
+<%= heading(doc.body, 4) %>
+
+<% } %>
+<% } %>
 <% } %>
 <% if (comments.length) { %>
 ## Work log

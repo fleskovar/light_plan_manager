@@ -19,6 +19,7 @@
   import CommandBar from '$features/commandbar/CommandBar.svelte';
   import ShortcutsDialog from '$features/commandbar/ShortcutsDialog.svelte';
   import ViewDialog from '$features/commandbar/ViewDialog.svelte';
+  import LibraryDialog from '$features/library/LibraryDialog.svelte';
   import ViewTabs from '$features/commandbar/ViewTabs.svelte';
   import OverviewDialog from '$features/overview/OverviewDialog.svelte';
   import Drawer from '$features/drawer/Drawer.svelte';
@@ -56,8 +57,12 @@
   // App.svelte keys this component on the id, so one read of the prop is correct.
   // svelte-ignore state_referenced_locally
   const workspace = provideWorkspace(opened);
-  // `[[ID]]` in a body or a comment opens the issue window.
-  provideNodeLinks(issueWindowLinks(workspace, () => workspace.doc.id));
+  // `[[ID]]` in a body or a comment opens the issue window, and a `library:`
+  // link opens the Library dialog on that document.
+  provideNodeLinks({
+    ...issueWindowLinks(workspace, () => workspace.doc.id),
+    openLibrary: (id) => (shell.library = { id }),
+  });
   const shell = provideShell(new Shell());
   const tabs = useTabs();
   const remote = provideRemoteState(
@@ -407,7 +412,13 @@
 
 {#if shell.viewDialog}
   {#key shell.viewDialog}
-    <ViewDialog kind={shell.viewDialog} onclose={() => (shell.viewDialog = null)} />
+    <ViewDialog request={shell.viewDialog} onclose={() => (shell.viewDialog = null)} />
+  {/key}
+{/if}
+
+{#if shell.library}
+  {#key shell.library}
+    <LibraryDialog initial={shell.library.id} onclose={() => (shell.library = null)} />
   {/key}
 {/if}
 

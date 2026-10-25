@@ -8,6 +8,7 @@ import {
   checkGitignore,
   checkIndex,
   checkIssues,
+  checkLibrary,
   checkPeriods,
   checkRemoteScopes,
   checkResources,
@@ -27,6 +28,7 @@ export function checkBoard(board: LoadedBoard): Problem[] {
   checkResources(board, problems);
   checkSquads(board, problems);
   checkTemplates(board, problems);
+  checkLibrary(board, problems);
   checkRollup(board, problems);
   checkFlagRollup(board, problems);
   checkDependencies(board, problems);

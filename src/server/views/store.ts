@@ -126,6 +126,7 @@ export function createView(
   paths: BoardPaths,
   name: string,
   mode: ViewMode = 'board',
+  description = '',
 ): ViewDocument {
   const trimmed = name.trim();
   if (!trimmed) throw new BoardError('A view needs a name');
@@ -135,7 +136,8 @@ export function createView(
       'Pick another name, or open the existing view.',
     ]);
   }
-  return saveView(paths, { ...emptyView(freeViewId(paths, trimmed), trimmed), mode });
+  const view = emptyView(freeViewId(paths, trimmed), trimmed, undefined, description.trim());
+  return saveView(paths, { ...view, mode });
 }
 
 export function removeView(paths: BoardPaths, id: string): void {

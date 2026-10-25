@@ -133,7 +133,8 @@ const submenu = (items: MenuEntry[]): MenuEntry[] | undefined => (items.length ?
 
 /**
  * The File menu: the commands that act on a view file and on its tab, and the
- * two entries that open the configuration of the board. **Remote board…** opens
+ * two entries that open the configuration of the board. **Library…** opens the
+ * dialog that lists and edits the documents in `.lpm/library`. **Remote board…** opens
  * the same dialog on the tab that shares the board through git or mirrors it
  * onto a tracker. **All projects…** goes to the page `/projects`, which lists
  * every project that `lpm` worked on, on this computer.
@@ -145,7 +146,7 @@ export function fileMenu(context: ViewContext): MenuEntry[] {
   const autoSave = preferences?.values.autoSave ?? true;
 
   return [
-    { label: 'New view…', onSelect: () => (shell.viewDialog = 'new') },
+    { label: 'New view…', onSelect: () => (shell.viewDialog = { kind: 'new' }) },
     {
       label: 'Open',
       disabled: tabs.views.length === 0,
@@ -164,8 +165,12 @@ export function fileMenu(context: ViewContext): MenuEntry[] {
       disabled: !ready,
       onSelect: () => void workspace.save(),
     },
-    { label: 'Save as…', disabled: !ready, onSelect: () => (shell.viewDialog = 'save-as') },
-    { label: 'Rename…', disabled: !ready, onSelect: () => (shell.viewDialog = 'rename') },
+    { label: 'Save as…', disabled: !ready, onSelect: () => (shell.viewDialog = { kind: 'save-as' }) },
+    {
+      label: 'Edit view…',
+      disabled: !ready || tabs.active === null,
+      onSelect: () => editView(context, tabs.active),
+    },
     ...(preferences
       ? [
           {
@@ -189,6 +194,8 @@ export function fileMenu(context: ViewContext): MenuEntry[] {
     { separator: true },
     { label: 'Board configuration…', disabled: !ready, onSelect: () => shell.openConfig('types') },
     { label: 'Remote board…', disabled: !ready, onSelect: () => shell.openConfig('remote') },
+    // The markdown documents in .lpm/library: prompts, summaries, requirements.
+    { label: 'Library…', onSelect: () => (shell.library = { id: null }) },
     { separator: true },
     // Every project that lpm worked on, on this computer: the page /projects.
     { label: 'All projects…', onSelect: () => goToProjects() },
@@ -329,9 +336,16 @@ export function barMenus(context: MenuBarContext): BarMenu[] {
 }
 
 /** The entries of the menu that a right-click on a tab opens. */
+/** Open the dialog that changes the name and the description of the view `id`. */
+export function editView(context: ViewContext, id: string | null): void {
+  if (id !== null) context.shell.viewDialog = { kind: 'edit', id };
+}
+
 export function tabMenu(context: ViewContext, id: string): MenuEntry[] {
   const single = context.tabs.open.length < 2;
   return [
+    { label: 'Edit…', onSelect: () => editView(context, id) },
+    { separator: true },
     { label: 'Close', disabled: single, onSelect: () => closeTab(context, id) },
     { label: 'Close other tabs', disabled: single, onSelect: () => closeOtherTabs(context, id) },
     { separator: true },

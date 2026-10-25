@@ -13,6 +13,11 @@ export interface NodeLinks {
   target(id: string): NodeLinkTarget | null;
   /** Show the document `id` to the reader. */
   open(id: string): void;
+  /**
+   * Show the library document `id` (`[label](library:<id>)`) to the reader.
+   * Without this function, a body renders such a link as text.
+   */
+  openLibrary?(id: string): void;
 }
 
 const KEY = Symbol('node-links');

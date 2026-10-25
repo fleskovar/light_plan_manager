@@ -6,6 +6,7 @@
   import Button from '$lib/ui/Button.svelte';
   import Markdown from '$lib/ui/Markdown.svelte';
   import Modal from '$lib/ui/Modal.svelte';
+  import LibraryDialog from '$features/library/LibraryDialog.svelte';
   import { provideNodeLinks } from '$lib/ui/node-links.js';
   import Splitter from '$lib/ui/Splitter.svelte';
   import TypeIcon from '$lib/ui/TypeIcon.svelte';
@@ -57,8 +58,14 @@
   const PANE_MIN = 120;
 
   const workspace = provideWorkspace(new Workspace());
-  // `[[ID]]` in the description or a comment opens another issue window.
-  provideNodeLinks(issueWindowLinks(workspace, () => viewId));
+  // `[[ID]]` in the description or a comment opens another issue window, and
+  // a `library:` link opens the Library dialog in this window.
+  provideNodeLinks({
+    ...issueWindowLinks(workspace, () => viewId),
+    openLibrary: (id) => (library = { id }),
+  });
+  /** The Library dialog of this window, or null while it is closed. */
+  let library = $state<{ id: string | null } | null>(null);
 
   /** The window with the canvas. It pulls after a push here, and it can select this issue. */
   const canvas = canvasWindow();
@@ -463,6 +470,12 @@
       </div>
     </div>
   </div>
+
+  {#if library}
+    {#key library}
+      <LibraryDialog initial={library.id} onclose={() => (library = null)} />
+    {/key}
+  {/if}
 
   {#if prompt}
     <Modal title={prompt.title} size="sm" onclose={() => (prompt = null)}>

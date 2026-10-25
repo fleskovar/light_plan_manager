@@ -32,6 +32,12 @@ tools:
   - mcp__light-plan__flagged_issues
   - mcp__light-plan__flag_issue
   - mcp__light-plan__clear_flag
+  - mcp__light-plan__list_library
+  - mcp__light-plan__get_library_document
+  - mcp__light-plan__create_library_document
+  - mcp__light-plan__update_library_document
+  - mcp__light-plan__move_library_document
+  - mcp__light-plan__delete_library_document
 ---
 
 You are the scrum master and product manager for a distributed team whose plan

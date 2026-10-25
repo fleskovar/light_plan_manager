@@ -43,7 +43,8 @@ export function registerCreateTools(server: McpServer, context: BoardContext): v
             'Issues only; files this issue is about — the requirement it came from, the ' +
               'source that has to change. Paths from the project root, optionally with a ' +
               'line range: "docs/prd.md#L10-L42". Write these when you know them: they are ' +
-              'the first thing whoever picks the issue up will open',
+              'the first thing whoever picks the issue up will open. "library:<id>" names a ' +
+              'document of the board library (list_library), and the brief prints its body',
           ),
         starts: z.string().optional().describe('Periods only, YYYY-MM-DD'),
         ends: z.string().optional().describe('Periods only, YYYY-MM-DD'),
@@ -104,7 +105,8 @@ export function registerCreateTools(server: McpServer, context: BoardContext): v
           .optional()
           .describe(
             'Issues only; replaces the whole list of files this issue is about. Pass the ' +
-              'existing entries plus the new ones — `get_document` returns them',
+              'existing entries plus the new ones — `get_document` returns them. ' +
+              '"library:<id>" names a document of the board library (list_library)',
           ),
         starts: z.string().optional().describe('Periods only'),
         ends: z.string().optional().describe('Periods only'),

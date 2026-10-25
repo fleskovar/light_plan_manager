@@ -23,10 +23,10 @@ Status: <%= issue.status_label %><% if (issue.attributes.size) { %> · size <%= 
 
 <%= heading(issue.body, 3) %>
 
-<% if (related_files.length) { %>
+<% if (project_files.length) { %>
 ## Files this is about
 
-<% for (const ref of related_files) { %>
+<% for (const ref of project_files) { %>
 - `<%= ref %>`
 <% } %>
 
@@ -66,10 +66,35 @@ Add anything else you end up changing with
 What comes after this card. It is what your work has to be usable for.
 
 <% for (const waiting of blocks) { %>
-- **<%= waiting.id %>** <%= waiting.title %> — <%= waiting.status_label %><% if (waiting.related_files.length) { %>
-  · expects to touch <%= join(waiting.related_files, ", ") %><% } %>
+- **<%= waiting.id %>** <%= waiting.title %> — <%= waiting.status_label %><% if (waiting.project_files.length) { %>
+  · expects to touch <%= join(waiting.project_files, ", ") %><% } %>
 <% } %>
 
+<% } %>
+<% if (docs.length) { %>
+## Library documents
+
+The board library holds these documents, and this issue or the work above it
+references them. Read them before you start.
+
+<% for (const doc of docs) { %>
+<% if (doc.missing) { %>
+### `<%= doc.ref %>` (not in the library)
+
+<%= doc.referenced_by.id %> references this document, and the library does not
+hold it. Ask whoever runs the plan where it went.
+
+<% } else { %>
+### <%= doc.title %> (`<%= doc.ref %>`, referenced by <%= doc.referenced_by.id %>)
+
+<% if (doc.description) { %>
+<%= doc.description %>
+
+<% } %>
+<%= heading(doc.body, 4) %>
+
+<% } %>
+<% } %>
 <% } %>
 <% if (comments.length) { %>
 ## Work log

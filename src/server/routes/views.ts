@@ -32,12 +32,15 @@ export function viewRoutes(router: Router, paths: BoardPaths): void {
   });
 
   router.post('/api/views', async ({ req, res }) => {
-    const body = await readJson<{ name?: string; mode?: string }>(req);
+    const body = await readJson<{ name?: string; mode?: string; description?: unknown }>(req);
     if (!body.name) throw new HttpError(400, 'A view needs a name');
     if (body.mode !== undefined && body.mode !== 'board' && body.mode !== 'templates') {
       throw new HttpError(400, `Unknown view mode "${body.mode}"`);
     }
-    sendJson(res, 201, createView(paths, body.name, body.mode ?? 'board'));
+    if (body.description !== undefined && typeof body.description !== 'string') {
+      throw new HttpError(400, 'The key "description" must hold a string');
+    }
+    sendJson(res, 201, createView(paths, body.name, body.mode ?? 'board', body.description ?? ''));
   });
 
   router.get('/api/views/:id', ({ res, params }) => {

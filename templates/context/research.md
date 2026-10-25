@@ -34,14 +34,14 @@ Status: <%= issue.status_label %><% if (issue.attributes.method) { %> · <%= iss
 
 <%= heading(issue.body, 3) %>
 
-<% if (related_files.length) { %>
+<% if (project_files.length) { %>
 ## Where to look
 
 The code, data or documents this question is about. Read them; do not change
 them. A research issue that leaves a diff behind has answered a different
 question from the one it was asked.
 
-<% for (const ref of related_files) { %>
+<% for (const ref of project_files) { %>
 - `<%= ref %>`
 <% } %>
 
@@ -52,13 +52,38 @@ question from the one it was asked.
 These cannot be estimated, designed or committed to until this is answered:
 
 <% for (const waiting of blocks) { %>
-- **<%= waiting.id %>** <%= waiting.title %> — <%= waiting.status_label %><% if (waiting.related_files.length) { %>
-  · expects to touch <%= join(waiting.related_files, ", ") %><% } %>
+- **<%= waiting.id %>** <%= waiting.title %> — <%= waiting.status_label %><% if (waiting.project_files.length) { %>
+  · expects to touch <%= join(waiting.project_files, ", ") %><% } %>
 <% } %>
 
 Where those name files, your answer has to be good enough for somebody to change
 them on the strength of it.
 
+<% } %>
+<% if (docs.length) { %>
+## Library documents
+
+The board library holds these documents, and this issue or the work above it
+references them. Read them before you start.
+
+<% for (const doc of docs) { %>
+<% if (doc.missing) { %>
+### `<%= doc.ref %>` (not in the library)
+
+<%= doc.referenced_by.id %> references this document, and the library does not
+hold it. Ask whoever runs the plan where it went.
+
+<% } else { %>
+### <%= doc.title %> (`<%= doc.ref %>`, referenced by <%= doc.referenced_by.id %>)
+
+<% if (doc.description) { %>
+<%= doc.description %>
+
+<% } %>
+<%= heading(doc.body, 4) %>
+
+<% } %>
+<% } %>
 <% } %>
 <% if (comments.length) { %>
 ## Work log

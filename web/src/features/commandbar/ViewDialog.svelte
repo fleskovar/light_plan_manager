@@ -1,54 +1,73 @@
 <script lang="ts">
   import type { ViewMode } from '$shared';
-  import type { ViewDialogKind } from '$lib/app/shell.svelte.js';
+  import { api } from '$lib/api/client.js';
+  import type { ViewDialogKind, ViewDialogRequest } from '$lib/app/shell.svelte.js';
   import { useTabs } from '$lib/app/tabs.svelte.js';
   import Button from '$lib/ui/Button.svelte';
   import Modal from '$lib/ui/Modal.svelte';
+  import { usePool } from '$lib/workspace/pool.svelte.js';
   import { useWorkspace } from '$lib/workspace/workspace.svelte.js';
+  import { currentDetails, saveDetails, type ViewDetailsHost } from './view-details.js';
 
   /**
-   * The dialog of the File menu that asks for a name.
+   * The dialog that asks for the name and the description of a view.
    *
    * `new` creates a view and shows it in a new tab. `save-as` copies the open
-   * view to a new view file and shows the copy in the same tab. `rename`
-   * changes the name of the open view and keeps its id.
+   * view to a new view file and shows the copy in the same tab. `edit` changes
+   * the name and the description of the view of any open tab and keeps its id.
    */
   interface Props {
-    kind: ViewDialogKind;
+    request: ViewDialogRequest;
     onclose: () => void;
   }
 
-  let { kind, onclose }: Props = $props();
+  let { request, onclose }: Props = $props();
 
   const tabs = useTabs();
+  const pool = usePool();
   const workspace = useWorkspace();
+
+  const host: ViewDetailsHost = {
+    tabs,
+    workspaceOf: (id) => pool.get(id),
+    loadView: api.loadView,
+    saveView: api.saveView,
+  };
 
   const TITLES: Record<ViewDialogKind, string> = {
     new: 'New view',
     'save-as': 'Save view as',
-    rename: 'Rename view',
+    edit: 'Edit view',
   };
   const ACTIONS: Record<ViewDialogKind, string> = {
     new: 'Create',
     'save-as': 'Save',
-    rename: 'Rename',
+    edit: 'Save',
   };
 
-  // The dialog is mounted for one kind, so each of these reads its prop once.
+  // The dialog is mounted for one request, so each of these reads its prop once.
   // svelte-ignore state_referenced_locally
-  const current = kind === 'new' ? null : workspace.doc;
+  const kind = request.kind;
   // svelte-ignore state_referenced_locally
-  let name = $state(kind === 'rename' ? current!.name : kind === 'save-as' ? `${current!.name} copy` : '');
+  const target = request.kind === 'edit' ? request.id : null;
+  const current = kind === 'save-as' ? workspace.doc : null;
+  const initial =
+    target !== null
+      ? currentDetails(host, target)
+      : { name: current ? `${current.name} copy` : '', description: current?.description ?? '' };
+
+  let name = $state(initial.name);
+  let description = $state(initial.description);
   let mode = $state<ViewMode>('board');
   let busy = $state(false);
   let error = $state<string | null>(null);
   let input = $state<HTMLInputElement | null>(null);
 
   const trimmed = $derived(name.trim());
-  const taken = $derived(
-    trimmed !== '' && tabs.nameTaken(trimmed, kind === 'rename' ? (current?.id ?? null) : null),
+  const taken = $derived(trimmed !== '' && tabs.nameTaken(trimmed, target));
+  const unchanged = $derived(
+    kind === 'edit' && trimmed === initial.name && description.trim() === initial.description.trim(),
   );
-  const unchanged = $derived(kind === 'rename' && trimmed === current?.name);
   const problem = $derived(taken ? `A view called "${trimmed}" already exists.` : error);
 
   $effect(() => {
@@ -63,13 +82,12 @@
     error = null;
     try {
       if (kind === 'new') {
-        await tabs.create(trimmed, mode);
-      } else if (kind === 'rename') {
-        // A refusal is already in the notices of the workspace.
-        if (!(await workspace.rename(trimmed))) return;
-        await tabs.refresh();
+        await tabs.create(trimmed, mode, description.trim());
+      } else if (target !== null) {
+        // A refusal of a workspace is already in its notices.
+        if (!(await saveDetails(host, target, { name: trimmed, description }))) return;
       } else {
-        const id = await workspace.saveCopy(trimmed);
+        const id = await workspace.saveCopy(trimmed, description.trim());
         if (id === null) return;
         await tabs.refresh();
         tabs.replace(current!.id, id);
@@ -94,6 +112,15 @@
           ? 'Delivery patterns, Release checklists…'
           : 'Roadmap, Sprint 12, Payments…'}
       />
+    </label>
+
+    <label class="name">
+      <span>Description</span>
+      <textarea
+        bind:value={description}
+        rows="3"
+        placeholder="What this view shows, and for whom. The tab tooltip and the All projects page show this text."
+      ></textarea>
     </label>
 
     {#if kind === 'new'}
@@ -155,12 +182,20 @@
     letter-spacing: 0.04em;
   }
 
-  .name input {
+  .name input,
+  .name textarea {
     padding: 0.4rem 0.6rem;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     background: var(--surface-0);
     font-size: var(--text-md);
+    font-family: inherit;
+  }
+
+  .name textarea {
+    resize: vertical;
+    font-size: var(--text-sm);
+    line-height: 1.5;
   }
 
   .modes {

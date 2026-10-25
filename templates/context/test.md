@@ -28,8 +28,8 @@ Status: <%= issue.status_label %><% if (issue.attributes.test_level) { %> · <%=
 ### <%= item.type_label %>: <%= item.title %> (<%= item.id %> · <%= item.status_label %>)
 
 <%= heading(item.body, 4) %>
-<% if (item.related_files.length) { %>
-Files it names: <%= join(item.related_files, ", ") %>
+<% if (item.project_files.length) { %>
+Files it names: <%= join(item.project_files, ", ") %>
 <% } %>
 
 <% } %>
@@ -38,18 +38,43 @@ Files it names: <%= join(item.related_files, ", ") %>
 
 <%= heading(issue.body, 3) %>
 
-<% if (related_files.length) { %>
+<% if (project_files.length) { %>
 ### Files this test is about
 
 The code under test, and the file the test itself belongs in — which may not
 exist yet.
 
-<% for (const ref of related_files) { %>
+<% for (const ref of project_files) { %>
 - `<%= ref %>`
 <% } %>
 
 <% } %>
 
+<% if (docs.length) { %>
+## Library documents
+
+The board library holds these documents, and this issue or the work above it
+references them. Read them before you start.
+
+<% for (const doc of docs) { %>
+<% if (doc.missing) { %>
+### `<%= doc.ref %>` (not in the library)
+
+<%= doc.referenced_by.id %> references this document, and the library does not
+hold it. Ask whoever runs the plan where it went.
+
+<% } else { %>
+### <%= doc.title %> (`<%= doc.ref %>`, referenced by <%= doc.referenced_by.id %>)
+
+<% if (doc.description) { %>
+<%= doc.description %>
+
+<% } %>
+<%= heading(doc.body, 4) %>
+
+<% } %>
+<% } %>
+<% } %>
 <% if (comments.length) { %>
 ## Work log
 

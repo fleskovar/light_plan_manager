@@ -189,6 +189,13 @@ describe('with auto-save off', () => {
     expect(workspace.doc.name).toBe('Quarter');
     expect(workspace.unsaved).toBe(true);
   });
+
+  it('writes a new name and a new description in one save', async () => {
+    const workspace = await open(true);
+    expect(await workspace.editDetails({ name: 'Quarter', description: 'The epics of Q3' })).toBe(true);
+    expect(server.state.saves.at(-1)).toMatchObject({ id: 'roadmap', name: 'Quarter', description: 'The epics of Q3' });
+    expect(workspace.doc.description).toBe('The epics of Q3');
+  });
 });
 
 describe('the File menu', () => {

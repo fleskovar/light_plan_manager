@@ -13,6 +13,7 @@ export { checkDependencies } from './dependencies.js';
 export { checkGitignore } from './gitignore.js';
 export { checkIndex } from './index-file.js';
 export { checkIssues } from './issues.js';
+export { checkLibrary } from './library.js';
 export { checkPeriods } from './periods.js';
 export { checkRemoteScopes } from './remotes.js';
 export { checkResources } from './resources.js';

@@ -12,6 +12,7 @@ import { boardRoutes } from './routes/board.js';
 import { commentRoutes } from './routes/comments.js';
 import { configRoutes } from './routes/config.js';
 import { flagRoutes } from './routes/flags.js';
+import { libraryRoutes } from './routes/library.js';
 import { meRoutes } from './routes/me.js';
 import { planningRoutes } from './routes/planning.js';
 import { gitRoutes } from './routes/git.js';
@@ -103,6 +104,7 @@ export function buildRouter(paths: BoardPaths, options: RouterOptions = {}): Rou
   planningRoutes(router, paths);
   configRoutes(router, paths, options.desktopLauncher);
   viewRoutes(router, paths);
+  libraryRoutes(router, paths);
   // Not registered at all rather than refused per request: the web app hides
   // the tracker surface when `experimental` is false, and a route that is not
   // there cannot be reached by anything that ignores the hint.

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { ProjectEntryDto } from '$shared';
+import type { ProjectEntryDto, ViewSummary } from '$shared';
+import { emptyView, summarize } from '$shared';
 import type { ProjectsApi } from '$features/projects/projects.svelte.js';
-import { ProjectsPage } from '$features/projects/projects.svelte.js';
+import { ProjectsPage, viewUrl } from '$features/projects/projects.svelte.js';
 import { PROJECTS_PATH, goToProjects } from '$lib/app/projects-link.js';
 import { fileMenu, type ViewContext } from '$features/commandbar/menus.js';
 
@@ -24,7 +25,18 @@ function entry(name: string, overrides: Partial<ProjectEntryDto> = {}): ProjectE
   };
 }
 
-function fakeApi(projects: ProjectEntryDto[], options: { openFails?: boolean; revealFails?: boolean } = {}) {
+function view(id: string, name: string, description = ''): ViewSummary {
+  return summarize(emptyView(id, name, '2026-10-24T10:00:00.000Z', description));
+}
+
+interface FakeOptions {
+  openFails?: boolean;
+  revealFails?: boolean;
+  /** The views of each board folder. A folder that is absent fails the request. */
+  views?: Record<string, ViewSummary[]>;
+}
+
+function fakeApi(projects: ProjectEntryDto[], options: FakeOptions = {}) {
   const calls: string[] = [];
   const api: ProjectsApi = {
     list: async () => projects,
@@ -32,6 +44,12 @@ function fakeApi(projects: ProjectEntryDto[], options: { openFails?: boolean; re
       calls.push(`open ${lpmDir}`);
       if (options.openFails) throw new Error('Every port is taken');
       return { url: 'http://127.0.0.1:4573' };
+    },
+    views: async (lpmDir) => {
+      calls.push(`views ${lpmDir}`);
+      const list = options.views?.[lpmDir];
+      if (!list) throw new Error('View "x" is not valid JSON');
+      return list;
     },
     reveal: async (lpmDir) => {
       calls.push(`reveal ${lpmDir}`);
@@ -128,6 +146,75 @@ describe('ProjectsPage', () => {
     expect(page.emptyText).toBeNull();
     await page.load();
     expect(page.emptyText).toContain('lpm');
+  });
+});
+
+/**
+ * The section of views of a project row. The first expand reads the view list
+ * of the board, a second expand shows the list that the page kept, and a click
+ * on a view goes to the board server at that view.
+ */
+describe('the views of a project', () => {
+  const shop = '/work/shop/.lpm';
+  const views = {
+    [shop]: [view('roadmap', 'Roadmap', 'Epics of 2026, by quarter'), view('triage', 'Triage')],
+  };
+
+  it('reads the views of a board on the first expand only', async () => {
+    const { api, calls } = fakeApi([entry('shop')], { views });
+    const page = new ProjectsPage(api, () => {});
+    await page.load();
+    expect(page.rows[0]).toMatchObject({ expanded: false, views: { list: null } });
+
+    await page.toggleViews(shop);
+    expect(page.rows[0]!.expanded).toBe(true);
+    expect(page.rows[0]!.views.list?.map((entry) => [entry.name, entry.description])).toEqual([
+      ['Roadmap', 'Epics of 2026, by quarter'],
+      ['Triage', ''],
+    ]);
+
+    await page.toggleViews(shop);
+    expect(page.rows[0]!.expanded).toBe(false);
+    await page.toggleViews(shop);
+    expect(calls).toEqual([`views ${shop}`]);
+  });
+
+  it('keeps the failure of the list in the section, and reads the list again on request', async () => {
+    const options: FakeOptions = { views: {} };
+    const { api } = fakeApi([entry('shop')], options);
+    const page = new ProjectsPage(api, () => {});
+    await page.load();
+
+    await page.toggleViews(shop);
+    expect(page.rows[0]!.views).toMatchObject({ loading: false, list: null, error: 'View "x" is not valid JSON' });
+
+    options.views = views;
+    await page.reloadViews(shop);
+    expect(page.rows[0]!.views.error).toBeNull();
+    expect(page.rows[0]!.views.list).toHaveLength(2);
+  });
+
+  it('does not expand a board that is not at its recorded place', async () => {
+    const { api, calls } = fakeApi([entry('gone', { state: 'missing' })], { views });
+    const page = new ProjectsPage(api, () => {});
+    await page.load();
+    await page.toggleViews('/work/gone/.lpm');
+    expect(page.rows[0]).toMatchObject({ canListViews: false, expanded: false });
+    expect(calls).toEqual([]);
+  });
+
+  it('opens the board on the view that was clicked', async () => {
+    const { api } = fakeApi([entry('shop')], { views });
+    const visited: string[] = [];
+    const page = new ProjectsPage(api, (url) => visited.push(url));
+    await page.load();
+    await page.openView(shop, 'roadmap');
+    expect(visited).toEqual(['http://127.0.0.1:4573/#/view/roadmap']);
+  });
+
+  it('builds the address of a view from a server address with or without a slash', () => {
+    expect(viewUrl('http://127.0.0.1:4573/', 'q3 plan')).toBe('http://127.0.0.1:4573/#/view/q3%20plan');
+    expect(viewUrl('http://127.0.0.1:4573', 'roadmap')).toBe('http://127.0.0.1:4573/#/view/roadmap');
   });
 });
 

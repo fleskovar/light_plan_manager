@@ -18,6 +18,7 @@ import {
   samePath,
 } from '../../core/index.js';
 import type { BackupListDto, BoardBackupDto, BoardStoreInfoDto, ProjectEntryDto } from '../../shared/index.js';
+import { listViews } from '../views/store.js';
 import type { DesktopLauncher } from '../desktop.js';
 import { onDesktop } from '../desktop.js';
 import { HttpError, readJson, sendJson } from '../http/respond.js';
@@ -33,6 +34,7 @@ import type { BoardLauncher } from '../launcher.js';
  * | `GET /api/projects` | — | `ProjectEntryDto[]`, from `listProjects` |
  * | `POST /api/projects/open` | `{ lpmDir }` | `{ url }` of a server for that board |
  * | `POST /api/projects/reveal` | `{ lpmDir }` | Shows `<root>/.lpm` in the file manager |
+ * | `POST /api/projects/views` | `{ lpmDir }` | `ViewSummary[]`: the views in `<lpmDir>/views`, newest save first |
  * | `GET /api/projects/backups` | — | `BackupListDto`, from `listBackups` |
  * | `GET /api/projects/jobs` | — | `StoreJobDto[]`: the background jobs of this process |
  * | `POST /api/projects/move` | `{ lpmDir, to }` | 202 and the job that moves the board to `to` (`local` or `central`) |
@@ -128,6 +130,18 @@ export function projectRoutes(router: Router, options: ProjectRoutesOptions): vo
     const folder = path.join(entry.root, LPM_DIR);
     await onDesktop('reveal', folder, options.desktopLauncher);
     sendJson(res, 200, { revealed: folder });
+  });
+
+  // The views of one board, for the collapsible section of a row on the
+  // "All projects" page. The route reads the view files only, so it works for
+  // a board that no server holds open.
+  router.post('/api/projects/views', async ({ req, res }) => {
+    const entry = await entryOf(await readJson(req));
+    if (entry.state === 'missing') {
+      throw new HttpError(409, `The board of ${entry.name} is not at ${entry.lpmDir}`);
+    }
+    const paths = boardPathsAt(entry.lpmDir, { root: entry.root ?? entry.lpmDir });
+    sendJson(res, 200, listViews(paths));
   });
 
   router.get('/api/projects/backups', ({ res }) => {

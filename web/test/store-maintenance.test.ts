@@ -99,6 +99,7 @@ function fakeServer(projects: ProjectEntryDto[], list: BackupListDto) {
       return projects;
     },
     open: async () => ({ url: '' }),
+    views: async () => [],
     reveal: async () => {},
     backups: async () => list,
     jobs: async () => jobs,

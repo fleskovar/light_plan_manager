@@ -34,7 +34,14 @@ export interface ReparentRequest {
   onDone: () => void;
 }
 
-export type ViewDialogKind = 'new' | 'save-as' | 'rename';
+export type ViewDialogKind = 'new' | 'save-as' | 'edit';
+
+/**
+ * What the view dialog does. `new` creates a view. `save-as` copies the open
+ * view. `edit` changes the name and the description of the view `id`, which
+ * can be any open tab.
+ */
+export type ViewDialogRequest = { kind: 'new' } | { kind: 'save-as' } | { kind: 'edit'; id: string };
 
 /** The tabs of the board configuration dialog. */
 export type ConfigTab = 'types' | 'statuses' | 'remote' | 'templates' | 'storage';
@@ -50,11 +57,14 @@ export class Shell {
   newResourceType = $state<string | null>(null);
   reparentRequest = $state<ReparentRequest | null>(null);
   confirmation = $state<Confirmation | null>(null);
+  /** The view dialog that is open, or null. `ViewDialogRequest` lists what it does. */
+  viewDialog = $state<ViewDialogRequest | null>(null);
   /**
-   * The dialog of the File menu that asks for a name. `new` creates a view,
-   * `save-as` copies the open view, and `rename` renames the open view.
+   * The Library dialog, or null while it is closed. `id` names the document
+   * to open first. File ▸ Library opens it with none, and a `library:` link
+   * in a body or in the files of an issue opens it on that document.
    */
-  viewDialog = $state<ViewDialogKind | null>(null);
+  library = $state<{ id: string | null } | null>(null);
   /** The board overview that View ▸ Board overview opens. */
   overviewOpen = $state(false);
   /**

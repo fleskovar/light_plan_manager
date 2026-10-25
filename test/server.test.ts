@@ -491,6 +491,28 @@ describe('http api', () => {
     expect(await json<unknown[]>('/api/views')).toEqual([]);
   });
 
+  it('stores the description of a new view, and lists it', async () => {
+    const created = await json<ViewDocument>(
+      '/api/views',
+      post('/api/views', { name: 'Described', description: '  The epics of Q3, for the review.  ' }),
+    );
+    expect(created.description).toBe('The epics of Q3, for the review.');
+    expect(await json<{ id: string; description: string }[]>('/api/views')).toContainEqual(
+      expect.objectContaining({ id: 'described', description: 'The epics of Q3, for the review.' }),
+    );
+
+    const edited = await json<ViewDocument>(`/api/views/${created.id}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...created, name: 'Q3 review', description: 'Only the epics of Q3.' }),
+    });
+    expect(edited).toMatchObject({ id: 'described', name: 'Q3 review', description: 'Only the epics of Q3.' });
+
+    const refused = await fetch(`${base}/api/views`, post('/api/views', { name: 'Bad', description: 12 }));
+    expect(refused.status).toBe(400);
+    await fetch(`${base}/api/views/described`, { method: 'DELETE' });
+  });
+
   it('keeps the id of a renamed view and gives the next view a free id', async () => {
     const put = (view: ViewDocument): RequestInit => ({
       method: 'PUT',
@@ -799,6 +821,11 @@ describe('view files', () => {
   it('gives a view written before the queue panel existed one, open', () => {
     const view = parseView({ id: 'old', name: 'Old' }, 'old');
     expect(view.queue).toEqual({ open: true, width: 300 });
+  });
+
+  it('gives a view written before descriptions existed an empty description', () => {
+    expect(parseView({ id: 'old', name: 'Old' }, 'old').description).toBe('');
+    expect(parseView({ id: 'v', name: 'V', description: 'Sprint 12 only' }, 'v').description).toBe('Sprint 12 only');
   });
 
   it('keeps the queue panel as somebody left it', () => {

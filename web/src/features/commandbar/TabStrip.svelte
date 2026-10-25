@@ -2,6 +2,8 @@
   export interface TabItem {
     id: string;
     label: string;
+    /** The description of the view. The tooltip of the tab shows it under the name. */
+    description: string;
     /** True when the layout of the view waits for a Save. */
     unsaved: boolean;
   }
@@ -13,7 +15,8 @@
    *
    * Presentational: the parent owns the tabs and passes the callbacks. A click
    * selects a tab, a middle click or the × closes it, and a right-click asks
-   * the parent for a menu. The row takes the width of its container and
+   * the parent for a menu. The tooltip of a tab shows the name and the
+   * description of its view. The row takes the width of its container and
    * scrolls sideways when the tabs need more room.
    */
   interface Props {
@@ -31,6 +34,11 @@
   const closable = $derived(tabs.length > 1);
 
   let strip = $state<HTMLDivElement | null>(null);
+
+  function tooltip(tab: TabItem): string {
+    const head = tab.unsaved ? `${tab.label}: the layout is not saved` : tab.label;
+    return tab.description ? `${head}\n${tab.description}` : head;
+  }
 
   // A window with many tabs scrolls the strip. Keep the active tab in sight.
   $effect(() => {
@@ -52,7 +60,7 @@
         type="button"
         role="tab"
         aria-selected={tab.id === active}
-        title={tab.unsaved ? `${tab.label}: the layout is not saved` : tab.label}
+        title={tooltip(tab)}
         onclick={() => onselect(tab.id)}
         onauxclick={(event) => {
           if (event.button !== 1) return;

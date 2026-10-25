@@ -33,6 +33,7 @@ import * as set from './commands/set.js';
 import * as split from './commands/split.js';
 import * as task from './commands/task.js';
 import * as team from './commands/team.js';
+import * as library from './commands/library.js';
 import * as template from './commands/template.js';
 import * as ui from './commands/ui.js';
 import * as upstream from './commands/upstream.js';
@@ -66,6 +67,7 @@ const commands: Record<string, Command> = {
   instructions,
   team,
   template,
+  library,
   queue,
   remote,
   git,
@@ -103,6 +105,8 @@ const aliases: Record<string, string> = {
   delete: 'rm',
   remove: 'rm',
   note: 'comment',
+  lib: 'library',
+  docs: 'library',
   // Deliberately no `unflag` alias: `lpm unflag LP-3` would read as "clear it"
   // and would in fact raise one, because the id is the first positional.
   block: 'flag',
@@ -131,6 +135,7 @@ const summaries: Record<string, string> = {
   instructions: 'Print the working brief for an issue: the context to start it',
   team: 'Show the roster and how loaded everyone is',
   template: 'Reusable pieces of plan: the registry, and putting one on the board',
+  library: 'Markdown documents beside the board: prompts, summaries, requirements',
   queue: 'Predict the work queue, or drain it with the pi coding agent',
   remote: 'Push and pull a board\'s remotes, and settle sync conflicts',
   git: 'Share the board through git: pull before every change, push after',

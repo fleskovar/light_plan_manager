@@ -72,7 +72,7 @@ export function neighbour(open: string[], id: string): string | null {
 /** What the store needs from the server and the browser, so a test can pass fakes. */
 export interface TabsHost {
   listViews(): Promise<ViewSummary[]>;
-  createView(name: string, mode?: ViewMode): Promise<ViewDocument>;
+  createView(name: string, mode?: ViewMode, description?: string): Promise<ViewDocument>;
   deleteView(id: string): Promise<void>;
   /** The root folder of the board. It names the storage entry. */
   boardRoot(): Promise<string>;
@@ -188,8 +188,8 @@ export class Tabs {
   }
 
   /** Create a view on the board and show it in a new tab. Throws what the server refuses. */
-  async create(name: string, mode: ViewMode = 'board'): Promise<string> {
-    const view = await this.#host.createView(name, mode);
+  async create(name: string, mode: ViewMode = 'board', description = ''): Promise<string> {
+    const view = await this.#host.createView(name, mode, description);
     await this.refresh();
     this.#go(view.id);
     return view.id;
@@ -242,6 +242,11 @@ export class Tabs {
   /** The name of a view, or its id until the list holds the view. */
   name(id: string): string {
     return this.views.find((view) => view.id === id)?.name ?? id;
+  }
+
+  /** The description of a view, or an empty text until the list holds the view. */
+  description(id: string): string {
+    return this.views.find((view) => view.id === id)?.description ?? '';
   }
 
   /** True when another view already has this name. Capitals do not count. */

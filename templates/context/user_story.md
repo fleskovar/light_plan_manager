@@ -45,7 +45,7 @@ Status: <%= issue.status_label %><% if (issue.period) { %> · <%= issue.period.t
 
 <%= heading(issue.body, 3) %>
 
-<% if (related_files.length) { %>
+<% if (project_files.length) { %>
 ## Files this story is about
 
 Open these before writing anything: they are the requirement it was written from
@@ -53,7 +53,7 @@ and the code it expects to change. A reference may carry a line range, and it ma
 name a file that does not exist yet — that is often exactly what the story is
 asking you to create.
 
-<% for (const ref of related_files) { %>
+<% for (const ref of project_files) { %>
 - `<%= ref %>`
 <% } %>
 
@@ -108,10 +108,35 @@ what you leave behind has to be something these can be built on, so a shortcut
 that closes this story and blocks one of them has not finished the job.
 
 <% for (const waiting of blocks) { %>
-- **<%= waiting.id %>** <%= waiting.title %> — <%= waiting.status_label %><% if (waiting.related_files.length) { %>
-  · expects to touch <%= join(waiting.related_files, ", ") %><% } %>
+- **<%= waiting.id %>** <%= waiting.title %> — <%= waiting.status_label %><% if (waiting.project_files.length) { %>
+  · expects to touch <%= join(waiting.project_files, ", ") %><% } %>
 <% } %>
 
+<% } %>
+<% if (docs.length) { %>
+## Library documents
+
+The board library holds these documents, and this issue or the work above it
+references them. Read them before you start.
+
+<% for (const doc of docs) { %>
+<% if (doc.missing) { %>
+### `<%= doc.ref %>` (not in the library)
+
+<%= doc.referenced_by.id %> references this document, and the library does not
+hold it. Ask whoever runs the plan where it went.
+
+<% } else { %>
+### <%= doc.title %> (`<%= doc.ref %>`, referenced by <%= doc.referenced_by.id %>)
+
+<% if (doc.description) { %>
+<%= doc.description %>
+
+<% } %>
+<%= heading(doc.body, 4) %>
+
+<% } %>
+<% } %>
 <% } %>
 <% if (comments.length) { %>
 ## Work log

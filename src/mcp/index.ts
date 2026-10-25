@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { BoardPaths } from '../core/index.js';
 import { BoardContext } from './context.js';
+import { registerLibraryTools } from './tools/library.js';
 import { registerPlanTools } from './tools/plan.js';
 import { registerReadTools } from './tools/read.js';
 import { registerRemoteTools } from './tools/remote.js';
@@ -22,6 +23,8 @@ import { registerWorkTools } from './tools/work.js';
  *   read/       what is on the board
  *   plan/       structuring it
  *   templates/  the reusable pieces of plan somebody already worked out
+ *   library/    the markdown documents beside the board: prompts, summaries,
+ *               requirements
  *   work/       picking work up, recording how it went
  *   remote/     the tracker the board mirrors: status and preview always,
  *               the gated sync under `--allow-remote`
@@ -86,6 +89,10 @@ export function createMcpServer(paths: BoardPaths, options: McpOptions = {}): Mc
         'To plan: create documents, link them with link_issues, and reshape with split_issue, ' +
         'insert_between, convert_document and copy_documents — those keep the dependency ' +
         'graph wired up for you, so prefer them to editing edges by hand.\n\n' +
+        'The board library (list_library, get_library_document) holds markdown documents ' +
+        'beside the issues: prompts, summaries of developments, requirement documents. An ' +
+        'issue references one with the related file "library:<id>", and get_instructions ' +
+        'prints each document that the issue or its ancestors reference.\n\n' +
         'To do the work: next_tasks, start_task, then add_comment as you go and finish_task ' +
         'when it is done. Comments are the trail you leave for whoever picks the issue up ' +
         'next, human or agent — say what you tried and what you found, not just that you ' +
@@ -108,6 +115,8 @@ export function createMcpServer(paths: BoardPaths, options: McpOptions = {}): Mc
   // refused. Registering the read tools either way is what keeps "check the
   // registry first" true for an agent that cannot change anything.
   registerTemplateTools(server, context);
+  // The library tools register the write tools only on a server that is not read-only.
+  registerLibraryTools(server, context);
   if (!context.readOnly) registerPlanTools(server, context);
   // The remote tools register themselves with the one gate: `remote_status` and
   // `remote_preview` always, `remote_sync` only under `--allow-remote` (and

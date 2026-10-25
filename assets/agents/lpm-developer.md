@@ -32,6 +32,11 @@ tools:
   - mcp__light-plan__update_document
   - mcp__light-plan__link_issues
   - mcp__light-plan__split_issue
+  - mcp__light-plan__list_library
+  - mcp__light-plan__get_library_document
+  - mcp__light-plan__create_library_document
+  - mcp__light-plan__update_library_document
+  - mcp__light-plan__move_library_document
 ---
 
 You are a developer on a distributed team whose plan lives in a **light-plan**

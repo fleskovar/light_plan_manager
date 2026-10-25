@@ -5,7 +5,15 @@ import type { AnyNode, Issue, NodeKind } from '../model/types.js';
 import { flagLabel } from '../model/types.js';
 import type { Comment } from '../storage/comments.js';
 import { readComments } from '../storage/comments.js';
-import { displayPath } from '../storage/paths.js';
+import type { LibraryDoc } from '../storage/library.js';
+import {
+  isLibraryRef,
+  libraryRef,
+  libraryRefsOf,
+  listLibraryDocs,
+  readLibraryDoc,
+} from '../storage/library.js';
+import { displayPath, projectLinkPath } from '../storage/paths.js';
 import { HELPER_NAMES } from './template.js';
 
 /**
@@ -88,6 +96,13 @@ export interface NodeView {
    * a template prints them and the reader opens them.
    */
   related_files: string[];
+  /** `related_files` without the `library:` references. */
+  project_files: string[];
+  /**
+   * The ids of the library documents that this document references, from
+   * `related_files` and from the links of its body, in that order.
+   */
+  library_refs: string[];
   period: NodeView | null;
   assignee: NodeView | null;
 
@@ -143,9 +158,37 @@ export interface InstructionContext extends Record<string, unknown> {
    */
   related_files: string[];
   upstream_files: FileTrail[];
+  /** `related_files` of the issue without the `library:` references. */
+  project_files: string[];
+  /**
+   * The library documents that the issue references, then the documents that
+   * its ancestors reference, nearest ancestor first. Each document appears
+   * once. A reference to a missing document gives an entry with `missing`.
+   */
+  docs: LibraryDocView[];
+  /** Every document of the library, sorted by id. `referenced_by` is null on each. */
+  library: LibraryDocView[];
   period: NodeView | null;
   assignee: NodeView | null;
   comments: Comment[];
+}
+
+/** One document of the board library, as a context template sees it. */
+export interface LibraryDocView {
+  /** For example `prompts/code-review`. */
+  id: string;
+  /** The reference text, for example `library:prompts/code-review`. */
+  ref: string;
+  title: string;
+  description: string;
+  /** The markdown after the frontmatter. Empty when `missing`. */
+  body: string;
+  /** The file, relative to the project root. */
+  path: string;
+  /** True when a document references this id and the library has no such document. */
+  missing: boolean;
+  /** The issue whose reference brought the document into `docs`. Null in `library`. */
+  referenced_by: NodeView | null;
 }
 
 /** One upstream issue and the files it named. */
@@ -174,6 +217,9 @@ const RESERVED_ROOT_KEYS = new Set([
   'relates_to',
   'related_files',
   'upstream_files',
+  'project_files',
+  'docs',
+  'library',
   'period',
   'assignee',
   'comments',
@@ -248,6 +294,8 @@ function baseView(board: LoadedBoard, node: AnyNode): NodeView {
     blocks: [],
     relates_to: [],
     related_files: issue?.related_files ?? [],
+    project_files: (issue?.related_files ?? []).filter((ref) => !isLibraryRef(ref)),
+    library_refs: issue ? libraryRefsOf(issue) : [],
     period: null,
     assignee: null,
 
@@ -321,6 +369,47 @@ function buildViews(board: LoadedBoard): Map<string, NodeView> {
   return views;
 }
 
+function docView(board: LoadedBoard, doc: LibraryDoc, referencedBy: NodeView | null): LibraryDocView {
+  return {
+    id: doc.id,
+    ref: libraryRef(doc.id),
+    title: doc.title,
+    description: doc.description,
+    body: doc.body.trim(),
+    path: projectLinkPath(board.paths, doc.file),
+    missing: false,
+    referenced_by: referencedBy,
+  };
+}
+
+/** The library documents of the issue and of its ancestors, nearest first, each once. */
+function referencedDocs(board: LoadedBoard, target: NodeView): LibraryDocView[] {
+  const out: LibraryDocView[] = [];
+  const seen = new Set<string>();
+  for (const view of [target, ...[...target.ancestors].reverse()]) {
+    for (const id of view.library_refs) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const doc = readLibraryDoc(board.paths, id);
+      out.push(
+        doc
+          ? docView(board, doc, view)
+          : {
+              id,
+              ref: libraryRef(id),
+              title: id,
+              description: '',
+              body: '',
+              path: '',
+              missing: true,
+              referenced_by: view,
+            },
+      );
+    }
+  }
+  return out;
+}
+
 export interface ContextOptions {
   /** Today as YYYY-MM-DD. Injectable so a brief is testable. */
   today?: string;
@@ -367,6 +456,9 @@ export function buildContext(
     upstream_files: target.blocked_by
       .filter((view) => view.related_files.length)
       .map((view) => ({ issue: view, files: view.related_files })),
+    project_files: target.project_files,
+    docs: referencedDocs(board, target),
+    library: listLibraryDocs(board.paths).map((doc) => docView(board, doc, null)),
     period: target.period,
     assignee: target.assignee,
     comments: target.comments,

@@ -32,6 +32,7 @@
     tabs.open.map((id) => ({
       id,
       label: tabs.name(id),
+      description: tabs.description(id),
       unsaved: pool.get(id)?.unsaved === true,
     })),
   );
@@ -43,5 +44,5 @@
   onselect={(id) => tabs.activate(id)}
   onclose={(id) => closeTab(context, id)}
   onmenu={(event, id) => shell.openMenu(event, tabMenu(context, id))}
-  onadd={() => (shell.viewDialog = 'new')}
+  onadd={() => (shell.viewDialog = { kind: 'new' })}
 />

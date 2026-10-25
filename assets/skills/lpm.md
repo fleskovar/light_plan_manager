@@ -140,6 +140,8 @@ one call and return structured JSON; fall back to the CLI in a shell.
 | Survey documents | `list_documents { kind, type, status, assignee, period, parent, under, workUnitsOnly, search, limit }` | `lpm team`, `lpm task next` |
 | One document in full | `get_document { id }` | `lpm open <id> --path`, `lpm comment <id> --list` |
 | **The brief for an issue** | `get_instructions { id }` | `lpm instructions <id>` |
+| The library documents | `list_library { search }` | `lpm library` |
+| One library document | `get_library_document { id }` | `lpm library show <id>` |
 | Validate | `check_board` | `lpm check` (exit 1 while errors remain) |
 | Who is loaded | `team_load { period }` | `lpm team [--period <id>] [--open]` |
 
@@ -151,9 +153,17 @@ comment log together.
 walks the hierarchy and returns **one piece of markdown**: the titles and bodies
 of every ancestor (the epic and feature this issue belongs to, whatever the board
 calls them), then the issue itself, its breakdown, **the files it names**, **where
-the work comes from and where it is going**, the research it rests on and its work
-log. `get_document` hands you a record; `get_instructions` hands you the reason it
+the work comes from and where it is going**, the research it rests on, **the
+library documents that it and its ancestors reference**, and its work log.
+`get_document` hands you a record; `get_instructions` hands you the reason it
 exists. **Read it before writing any code.**
+
+The board library stores markdown documents in `.lpm/library/<id>.md`: prompts
+with instructions, summaries of developments, product requirement documents. An
+issue references one with the related file `library:<id>` (for example
+`library:prd/payments`), or with a link `[label](library:<id>)` in its body.
+The brief prints the body of each referenced document, so you do not need to
+open them one by one.
 
 If the brief opens with a **flag**, somebody picked this up and stopped — read the
 work log before anything else.
@@ -185,6 +195,11 @@ layout that can run code, which a human needs to look at. `lpm instructions
 | Dependency | `link_issues { blocked, blockedBy, remove }` | `lpm link <id> --depends-on <ids>` |
 | Non-blocking link | *(CLI only)* | `lpm link <id> --relates-to <ids>` |
 | Coverage | *(CLI only)* | `lpm link RS-1 --covers RS-4` |
+| Add a library document | `create_library_document { id, title, description, body }` | `lpm library new <id> -t "..." -f <file>` |
+| Change a library document | `update_library_document { id, title, description, body, revision }` | `lpm library set <id> …` |
+| Reference a library document | `update_document { id, relatedFiles: [..., "library:<id>"] }` | `lpm set <id> --related library:<id>` |
+| Rename or move a library document | `move_library_document { id, newId }` (rewrites the references) | `lpm library mv <id> <new-id>` |
+| Delete a library document | `delete_library_document { id }` | `lpm library rm <id>` |
 
 ### Working
 

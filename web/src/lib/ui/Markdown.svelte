@@ -10,6 +10,9 @@
    * When the window provides `NodeLinks`, `[[ID]]` renders as a link. A click
    * on that link calls `NodeLinks.open`. A click with Ctrl, Cmd, Shift or the
    * middle button goes to the browser, which opens the address in a new tab.
+   *
+   * When `NodeLinks` has `openLibrary`, `[label](library:<id>)` renders as a
+   * link too, and a click on it calls `NodeLinks.openLibrary`.
    */
   interface Props {
     source: string;
@@ -20,7 +23,18 @@
   let { source, placeholder = 'No description yet.' }: Props = $props();
 
   const links = useNodeLinks();
-  const html = $derived(renderMarkdown(source, links ? { nodeLink: (id) => links.target(id) } : {}));
+  const html = $derived(
+    renderMarkdown(
+      source,
+      links ? { nodeLink: (id) => links.target(id), libraryLink: links.openLibrary !== undefined } : {},
+    ),
+  );
+
+  /** The id in the `data-library` attribute of the link that the event targets. */
+  function libraryId(event: Event): string | null {
+    const link = event.target instanceof Element ? event.target.closest('a[data-library]') : null;
+    return link?.getAttribute('data-library') ?? null;
+  }
 
   /** The id in the `data-node` attribute of the link that the event targets. */
   function linkedId(event: Event): string | null {
@@ -29,6 +43,13 @@
   }
 
   function onclick(event: MouseEvent): void {
+    const library = libraryId(event);
+    if (library !== null) {
+      // The address of the link is `#`, so every click stays in the window.
+      event.preventDefault();
+      links?.openLibrary?.(library);
+      return;
+    }
     const id = linkedId(event);
     if (!id || !links) return;
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
@@ -38,7 +59,7 @@
 
   /** A double-click on a link does not reach the parent, which opens the editor on a double-click. */
   function ondblclick(event: MouseEvent): void {
-    if (linkedId(event)) event.stopPropagation();
+    if (linkedId(event) || libraryId(event) !== null) event.stopPropagation();
   }
 </script>
 
@@ -268,6 +289,13 @@
   }
 
   /* An id that the board does not hold. */
+  /* A link to a document of the board library, written `[label](library:<id>)`. */
+  .prose :global(a.library-link) {
+    color: var(--accent);
+    text-decoration: underline dotted;
+    text-underline-offset: 0.15em;
+  }
+
   .prose :global(.node-link.missing) {
     background: var(--surface-3);
     color: var(--ink-faint);

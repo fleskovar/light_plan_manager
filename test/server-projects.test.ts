@@ -10,6 +10,7 @@ import { desktopCommand } from '../src/server/desktop.js';
 import type { RunningHub } from '../src/server/hub.js';
 import { startHubServer } from '../src/server/hub.js';
 import { startBoardServer } from '../src/server/index.js';
+import { createView } from '../src/server/views/store.js';
 
 // The project routes (LPM-52): a board server and the hub both list every
 // project of the index, open any of them, and reveal its .lpm folder.
@@ -152,6 +153,24 @@ describe('the project routes on a board server', () => {
     rmSync(gone.root, { recursive: true, force: true });
     const url = await boardServer(shop);
     expect((await post(`${url}/api/projects/open`, { lpmDir: gone.lpmDir })).status).toBe(409);
+    expect((await post(`${url}/api/projects/views`, { lpmDir: gone.lpmDir })).status).toBe(409);
+  });
+
+  it('lists the views of another board, with the description of each', async () => {
+    createView(blog, 'Roadmap', 'board', 'Epics of 2026, by quarter');
+    createView(blog, 'Patterns', 'templates');
+    const url = await boardServer(shop);
+
+    const { status, body } = await post(`${url}/api/projects/views`, { lpmDir: blog.lpmDir });
+
+    expect(status).toBe(200);
+    const views = body as { id: string; name: string; description: string; mode: string }[];
+    expect(views.map((view) => [view.id, view.description, view.mode]).sort()).toEqual([
+      ['patterns', '', 'templates'],
+      ['roadmap', 'Epics of 2026, by quarter', 'board'],
+    ]);
+    expect((await post(`${url}/api/projects/views`, { lpmDir: shop.lpmDir })).body).toEqual([]);
+    expect((await post(`${url}/api/projects/views`, { lpmDir: tempDir('lpm-elsewhere-') })).status).toBe(404);
   });
 });
 

@@ -50,6 +50,10 @@ import type {
   ViewDocument,
   ViewMode,
   ViewSummary,
+  LibraryDocDto,
+  LibraryDocPatch,
+  LibraryEntryDto,
+  LibraryMoveResultDto,
 } from '$shared';
 
 /**
@@ -179,6 +183,8 @@ export const api = {
   /** Every project of the project index, on a board server and on the hub. */
   projects: (): Promise<ProjectEntryDto[]> => request('/api/projects'),
   openProject: (lpmDir: string): Promise<{ url: string }> => request('/api/projects/open', send('POST', { lpmDir })),
+  /** The views of the board in `lpmDir`, newest save first. */
+  projectViews: (lpmDir: string): Promise<ViewSummary[]> => request('/api/projects/views', send('POST', { lpmDir })),
   revealProject: (lpmDir: string): Promise<void> =>
     request<unknown>('/api/projects/reveal', send('POST', { lpmDir })).then(() => undefined),
 
@@ -240,8 +246,23 @@ export const api = {
 
   listViews: (): Promise<ViewSummary[]> => request('/api/views'),
 
-  createView: (name: string, mode: ViewMode = 'board'): Promise<ViewDocument> =>
-    request('/api/views', send('POST', { name, mode })),
+  /** The documents of the board library, without their bodies, sorted by id. */
+  listLibrary: (): Promise<LibraryEntryDto[]> => request('/api/library'),
+  /** One library document. The id holds `/`, so the client encodes it as one path segment. */
+  getLibraryDoc: (id: string): Promise<LibraryDocDto> => request(`/api/library/${encodeURIComponent(id)}`),
+  createLibraryDoc: (input: { id: string; title?: string; description?: string; body?: string }): Promise<LibraryDocDto> =>
+    request('/api/library', send('POST', input)),
+  /** Answers 409 when `patch.revision` is not the revision of the file. */
+  updateLibraryDoc: (id: string, patch: LibraryDocPatch): Promise<LibraryDocDto> =>
+    request(`/api/library/${encodeURIComponent(id)}`, send('PUT', patch)),
+  /** Rename a document, or move a folder, and rewrite the references to it. */
+  moveLibraryDoc: (id: string, to: string): Promise<LibraryMoveResultDto> =>
+    request(`/api/library/${encodeURIComponent(id)}/move`, send('POST', { to })),
+  deleteLibraryDoc: (id: string): Promise<{ deleted: string; referencedBy: string[] }> =>
+    request(`/api/library/${encodeURIComponent(id)}`, send('DELETE')),
+
+  createView: (name: string, mode: ViewMode = 'board', description = ''): Promise<ViewDocument> =>
+    request('/api/views', send('POST', { name, mode, description })),
 
   loadView: (id: string): Promise<ViewDocument> => request(`/api/views/${encodeURIComponent(id)}`),
 

@@ -92,6 +92,8 @@ const viewSchema = z.object({
   version: z.number().int().positive().default(VIEW_VERSION),
   id: z.string().min(1),
   name: z.string().min(1),
+  // A view written before descriptions existed has none.
+  description: z.string().default(''),
   created: z.string().optional(),
   updated: z.string().optional(),
   members: z.array(z.string()).default([]),

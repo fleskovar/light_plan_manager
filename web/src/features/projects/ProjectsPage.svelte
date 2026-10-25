@@ -8,7 +8,9 @@
 
   /**
    * The "All projects" page. The tab Projects has one row for each project of
-   * the project index, and the tab Backups has one row for each backup in the
+   * the project index. The button before the name of a project opens a
+   * section with the views of its board, and a click on a view opens the board
+   * on that view. The tab Backups has one row for each backup in the
    * central store. `page` holds the state and the actions. `hub` is set on the
    * hub of `lpm ui`, which has no board to go back to.
    */
@@ -70,7 +72,22 @@
         {#each page.rows as row (row.lpmDir)}
           <li class="row" class:dim={row.state === 'missing'}>
             <div class="identity">
-              <span class="name">{row.name}</span>
+              <button
+                class="disclosure"
+                type="button"
+                aria-expanded={row.expanded}
+                aria-controls="views-{row.lpmDir}"
+                disabled={!row.canListViews}
+                title={row.canListViews
+                  ? row.expanded
+                    ? 'Hide the views of this board'
+                    : 'Show the views of this board'
+                  : 'The board is not at its recorded place'}
+                onclick={() => page.toggleViews(row.lpmDir)}
+              >
+                <span class="chevron" class:open={row.expanded} aria-hidden="true">▸</span>
+                <span class="name">{row.name}</span>
+              </button>
               <span class="tag">{row.store}</span>
               {#if row.keyPrefix}<span class="prefix">{row.keyPrefix}</span>{/if}
               {#if row.label}<span class="label">{row.label}</span>{/if}
@@ -108,6 +125,40 @@
             </div>
             {#if row.job}
               <div class="progress"><JobProgress job={row.job} /></div>
+            {/if}
+            {#if row.expanded}
+              <div class="views" id="views-{row.lpmDir}">
+                {#if row.views.loading && row.views.list === null}
+                  <p class="muted">Loading the views…</p>
+                {:else if row.views.error}
+                  <p class="view-error" role="alert">
+                    {row.views.error}
+                    <Button size="sm" onclick={() => page.reloadViews(row.lpmDir)}>Try again</Button>
+                  </p>
+                {:else if row.views.list && row.views.list.length === 0}
+                  <p class="muted">This board has no saved view yet. The first open of the board creates the view "Default".</p>
+                {:else if row.views.list}
+                  <ul class="view-list" aria-label="Views of {row.name}">
+                    {#each row.views.list as view (view.id)}
+                      <li>
+                        <button
+                          class="view-name"
+                          type="button"
+                          disabled={!row.canOpen || page.busy !== null}
+                          title="Open {row.name} on the view {view.name}"
+                          onclick={() => page.openView(row.lpmDir, view.id)}
+                        >
+                          {view.name}
+                        </button>
+                        {#if view.mode === 'templates'}<span class="tag">registry</span>{/if}
+                        <span class="view-description" class:empty={!view.description}>
+                          {view.description || 'No description'}
+                        </span>
+                      </li>
+                    {/each}
+                  </ul>
+                {/if}
+              </div>
             {/if}
           </li>
         {/each}
@@ -255,8 +306,106 @@
     opacity: 0.65;
   }
 
-  .progress {
+  .progress,
+  .views {
     grid-column: 1 / -1;
+  }
+
+  .disclosure {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--space-1);
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+  }
+
+  .disclosure:disabled {
+    cursor: default;
+  }
+
+  .disclosure:not(:disabled):hover .name {
+    color: var(--accent);
+  }
+
+  .chevron {
+    display: inline-block;
+    width: 1em;
+    color: var(--ink-muted);
+    font-size: var(--text-xs);
+    transition: transform 120ms ease;
+  }
+
+  .chevron.open {
+    transform: rotate(90deg);
+  }
+
+  .views {
+    border-top: 1px solid var(--border);
+    padding-top: var(--space-2);
+  }
+
+  .views .muted {
+    margin: 0;
+  }
+
+  .view-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--space-1);
+  }
+
+  .view-list li {
+    display: grid;
+    grid-template-columns: minmax(9rem, 14rem) auto 1fr;
+    align-items: baseline;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+  }
+
+  .view-name {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .view-name:not(:disabled):hover {
+    text-decoration: underline;
+  }
+
+  .view-name:disabled {
+    color: var(--ink-muted);
+  }
+
+  .view-description {
+    grid-column: 3;
+    color: var(--ink-muted);
+  }
+
+  .view-description.empty {
+    color: var(--ink-faint);
+    font-style: italic;
+  }
+
+  .view-error {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0;
+    color: var(--danger);
+    font-size: var(--text-sm);
   }
 
   .identity {
@@ -311,6 +460,14 @@
   @media (max-width: 52rem) {
     .row {
       grid-template-columns: 1fr;
+    }
+
+    .view-list li {
+      grid-template-columns: 1fr;
+    }
+
+    .view-description {
+      grid-column: 1;
     }
   }
 </style>

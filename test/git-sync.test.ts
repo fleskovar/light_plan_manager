@@ -11,6 +11,7 @@ import {
   PROJECT_BOARD_BRANCH,
   claimIssue,
   createIssue,
+  createLibraryDoc,
   createPeriod,
   createResource,
   disableGitSync,
@@ -22,10 +23,13 @@ import {
   loadConfig,
   parseConfigText,
   pullBoard,
+  readLibraryDoc,
+  removeLibraryDoc,
   setupGitSync,
   syncBoard,
   turnRemoteOn,
   turnRemotesOff,
+  updateLibraryDoc,
   updateNode,
 } from '../src/core/index.js';
 import { removeRemote } from '../src/remote/config-file.js';
@@ -192,6 +196,27 @@ describe('every write is committed and pushed', () => {
     createIssue(loadBoard(ada), { type: 'program', title: 'Second' });
     expect(git(remote, 'show', '--name-only', '--format=', 'main')).not.toContain('views/scratch.json');
     expect(readFileSync(scratch, 'utf8')).toBe('{"draft":true}\n');
+  });
+});
+
+describe('the board library under git sync', () => {
+  it('commits and pushes a new library document, its edit and its delete', () => {
+    const { remote, ada, bob } = team();
+
+    createLibraryDoc(loadBoard(ada), { id: 'prd/payments', title: 'Payments PRD', body: 'Take cards.\n' });
+    expect(git(remote, 'log', '-1', '--format=%s', 'main')).toBe('lpm: add library document prd/payments');
+    expect(fileAtRemote(remote, 'library/prd/payments.md')).toContain('Take cards.');
+
+    pullBoard(bob);
+    expect(readLibraryDoc(bob, 'prd/payments')?.title).toBe('Payments PRD');
+
+    updateLibraryDoc(loadBoard(bob), 'prd/payments', { body: 'Take cards and wallets.\n' });
+    expect(fileAtRemote(remote, 'library/prd/payments.md')).toContain('wallets');
+
+    pullBoard(ada);
+    removeLibraryDoc(loadBoard(ada), 'prd/payments');
+    expect(git(remote, 'log', '-1', '--format=%s', 'main')).toBe('lpm: delete library document prd/payments');
+    expect(git(remote, 'ls-tree', '-r', '--name-only', 'main')).not.toContain('library/prd/payments.md');
   });
 });
 

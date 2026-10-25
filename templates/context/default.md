@@ -43,13 +43,13 @@ Read down. Each level is the reason the next one exists.
 <% } %>
 
 <% } %>
-<% if (related_files.length) { %>
+<% if (project_files.length) { %>
 ### Files this is about
 
 Open these first. A reference may name a line range, and it may name a file that
 does not exist yet — that is usually the point of naming it.
 
-<% for (const ref of related_files) { %>
+<% for (const ref of project_files) { %>
 - `<%= ref %>`
 <% } %>
 
@@ -62,6 +62,32 @@ does not exist yet — that is usually the point of naming it.
 
 <%= heading(child.body, 5) %>
 
+<% } %>
+<% } %>
+<% if (docs.length) { %>
+## Library documents
+
+The board library holds these documents, and this issue or the work above it
+references them. They hold instructions, requirements or background for this
+work. Read them before you start.
+
+<% for (const doc of docs) { %>
+<% if (doc.missing) { %>
+### `<%= doc.ref %>` (not in the library)
+
+<%= doc.referenced_by.id %> references this document, and the library does not
+hold it. Ask whoever runs the plan where it went.
+
+<% } else { %>
+### <%= doc.title %> (`<%= doc.ref %>`, referenced by <%= doc.referenced_by.id %>)
+
+<% if (doc.description) { %>
+<%= doc.description %>
+
+<% } %>
+<%= heading(doc.body, 4) %>
+
+<% } %>
 <% } %>
 <% } %>
 <% if (blocked_by.length) { %>
@@ -98,8 +124,8 @@ finished the job.
 ### <%= waiting.title %> (<%= waiting.id %> · <%= waiting.status_label %>)
 
 <%= heading(waiting.body, 4) %>
-<% if (waiting.related_files.length) { %>
-Expects to touch: <%= join(waiting.related_files, ", ") %>
+<% if (waiting.project_files.length) { %>
+Expects to touch: <%= join(waiting.project_files, ", ") %>
 <% } %>
 
 <% } %>

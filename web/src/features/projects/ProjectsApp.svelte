@@ -21,6 +21,7 @@
     {
       list: api.projects,
       open: api.openProject,
+      views: api.projectViews,
       reveal: api.revealProject,
       backups: api.backups,
       jobs: api.storeJobs,

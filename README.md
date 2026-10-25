@@ -134,6 +134,9 @@ every target. See [Development](#development).
 │   │   └── _resource.md
 │   └── RS-4/                 a pool anyone can be drawn from — Jr. developer
 │       └── _resource.md
+├── library/                  documents beside the plan: prompts, summaries, PRDs
+│   ├── prd/payments.md       library:prd/payments
+│   └── prompts/code-review.md
 └── templates/context/        what a developer is told to do it
     ├── default.md
     └── user_story.md
@@ -161,6 +164,9 @@ any resource via its `assignee:` field.
 `templates/context/` holds no documents. It is the one folder the engine never
 walks: the layouts `lpm instructions` renders a [working brief](#working-briefs-the-context-to-actually-do-it)
 with, so a team decides what a developer is handed when they pick an issue up.
+
+`library/` holds the [board library](#the-board-library): markdown documents
+that belong beside the plan and are not a piece of it.
 
 ### Keeping boards outside the project: the central store
 
@@ -209,7 +215,10 @@ backup only with `--replace`. `lpm store backups` lists the backups.
 Each `lpm` command also records its project in `projects.json` of the user
 folder, so `lpm projects` lists every board on the computer, local or central.
 In the web app, File > "All projects…" shows the same list. Each row has the
-buttons Open, Reveal, Move to central (or Move to project) and Back up. A move
+buttons Open, Reveal, Move to central (or Move to project) and Back up. The
+arrow before the name of a project opens a section with the views of its
+board: the name and the description of each view. A click on a view name opens
+the board on that view. A move
 or a backup runs in the background, and the row shows a progress bar. The tab
 Backups lists each backup with its date and its age in days, and Restore
 overwrites the board. File ▸ Board configuration… has the same actions for
@@ -406,10 +415,44 @@ this is about* — the first thing to open — and, for each issue this one was
 sequenced after, the files that work touched. And the web app shows them in the
 side panel, where they can be edited as one path per line.
 
+An entry that starts with `library:` names a document of the
+[board library](#the-board-library) instead of a file. The brief prints the
+body of that document, and the side panel shows the entry as a button that
+opens the document.
+
 That second part is what makes the field worth the typing. A story that says
 "depends on LP-4" tells you the order; a story that says "depends on LP-4, which
 touched `src/checkout/session.ts`, and I am about to change the same file" tells
 you to go and read what LP-4 did first.
+
+## The board library
+
+The board library stores markdown documents in `.lpm/library/<id>.md`. The id
+is the path below the folder without `.md`, for example `prd/payments`. Use the
+library for prompts with instructions, summaries of developments and product
+requirement documents.
+
+```bash
+lpm library new prd/payments -t "Payments PRD" -f ./prd.md   # add a document
+lpm set LP-4 --related library:prd/payments                   # reference it from an issue
+lpm library                                                   # list the documents
+lpm library show prd/payments                                 # print the body
+lpm library refs prd/payments                                 # the issues that reference it
+lpm library mv prd/payments requirements/payments             # rename it, and rewrite the references
+lpm library rm requirements/payments                          # delete it
+```
+
+An issue references a document with the related file `library:<id>`, or with a
+link `[label](library:<id>)` in its body. The working brief of the issue prints
+each document that the issue or one of its ancestors references, so
+`lpm instructions` and `lpm queue agent` hand the document to whoever works the
+issue. A registry template can hold the same references, and its placeholders
+work in them. The MCP tools `list_library`, `get_library_document`,
+`create_library_document`, `update_library_document`,
+`move_library_document` and `delete_library_document` give an agent the same
+access. In the web app,
+**File ▸ Library…** lists the documents and edits them with the editor of the
+issue window. [`docs/library.md`](docs/library.md) is the full guide.
 
 ## Time hierarchy
 
@@ -2765,6 +2808,7 @@ still refused.
 | `lpm planning [periods\|queue]` | Plan with sprints and increments, or work the board as one continuous queue that ignores every period. No argument says which. Alias: `lpm mode` |
 | `lpm instructions [<id>]` | Print the working brief for an issue. `--id`, `--template`, `--no-comments`, `--list`, `--init`, `--force`. Aliases: `lpm brief`, `lpm context` |
 | `lpm team` | Roster and load. `--period <id>`, `--open`. Alias: `lpm roster` |
+| `lpm library [<sub>]` | The [board library](#the-board-library). No subcommand lists the documents. `show <id>`, `new <id>`, `set <id>`, `mv <id> <new-id>`, `refs <id>`, `rm <id>`. `-t/--title`, `-d/--description`, `-m/--message`, `-f/--file`, `--json`, `--no-refs`. Aliases: `lpm lib`, `lpm docs` |
 | `lpm queue simulate` | Work the queue through as one person, or the whole team. `--user <id\|name>`, `--role <id\|name>`, `--team`, `--unassigned`, `--parked`, `--limit <n>`, `--skipped` |
 | `lpm queue agent` | Drain the queue with the pi coding agent. `--user`, `--max-tasks`, `--model`, `--effort`, `--commit`, `--unassigned`, `--parked`, `--timeout`, `--command-timeout`, `--plain`, `--file`, `--dry-run` |
 | `lpm remote [<sub>]` | Mirror the board onto an external tracker. No subcommand lists the remotes. `connect`, `push [<id>…]`, `pull [<key>…]`, `sync`, `status`, `ledger`, and the less common `add`, `login`, `setup`, `rm`, `log`, `resolve`, `link`, `unlink`, `decouple`, `relink`, `rebase`. `--remote <name>`, `--all`, `--children`, `--recursive`, `--parent <id>`, `--scope <id>`, `--force`, `--purge`, `--dry-run`, `--changed`, `--limit N`, `--yes`, `--refresh`, `--since <iso>`, `--json` |
@@ -2923,8 +2967,10 @@ The app opens on a view. It has no separate start page.
   canvas, so it moves with the queue panel and the details panel. A click on a
   tab shows the view. The **×** on a tab, or a middle click, closes the tab.
   The **+** after the tabs creates a view. A window always keeps one tab open.
-  A right-click on a tab offers **Close**, **Close other tabs** and **Open in
-  new window**.
+  A right-click on a tab offers **Edit…**, **Close**, **Close other tabs** and
+  **Open in new window**. **Edit…** opens a dialog that changes the name and
+  the description of the view of that tab. The tooltip of a tab shows the
+  description.
 - **Open in new window.** The view opens in a new browser window. Its tab closes
   in the first window when that window holds other tabs. The new window has its
   own tabs.
@@ -2950,7 +2996,7 @@ the pointer on another name opens that menu.
 
 | Menu | Contents |
 | --- | --- |
-| **File** | The commands for views, which the next table lists, **Board configuration…** and **Remote board…**. |
+| **File** | The commands for views, which the next table lists, **Board configuration…**, **Remote board…**, **Library…** and **All projects…**. |
 | **Edit** | **New** creates a document of the chosen type on the board. **Copy**, **Paste**, **Duplicate**, **Clear the selection**, **Remove from the view** and **Delete from the board…** act on the selection. **Push pending changes** pushes at once. |
 | **View** | **Board overview…**, **Arrange the graph**, **Hierarchy display…**, a switch for each pane (**Queue panel**, **Details panel**, **Drawer**) and **Appearance**. |
 | **Help** | **Keyboard shortcuts…** lists every shortcut. |
@@ -2962,17 +3008,24 @@ The **File** menu holds the commands for views:
 
 | Command | Result |
 | --- | --- |
-| **New view…** | Asks for a name, and whether the view shows the board or the template registry. Creates the view file and opens it in a new tab. |
+| **New view…** | Asks for a name, a description, and whether the view shows the board or the template registry. Creates the view file and opens it in a new tab. |
 | **Open** | Lists every view of the board. A tick marks the views that have a tab. A click shows the view, in a new tab when it has none. |
 | **Save** (Ctrl+S) | Writes the open view to its file, layout included. |
 | **Save as…** | Asks for a name, and writes the members, the layout, the panes and the display of the open view to a new view file. The copy takes the place of the open view in its tab. Unpushed edits stay with the first view. |
-| **Rename…** | Changes the key `name` in the view file. The id and the file name stay, so tabs and saved addresses keep working. |
+| **Edit view…** | Changes the keys `name` and `description` in the view file. The id and the file name stay, so tabs and saved addresses keep working. A right-click on a tab, then **Edit…**, opens the same dialog for that tab. |
 | **Auto-save** | Switches the preference `autoSave`. A tick shows that it holds `true`. |
 | **Open in new window** | See the list above. |
 | **Close tab** | Closes the tab of the open view. Disabled when the window has one tab. |
 | **Board configuration…** | Opens the dialog that shows and changes `.lpm/config.yml`. See [What it does](#what-it-does). |
 | **Remote board…** | Opens the same dialog on the tab **Remote board**, which sets up git sync and, with the experimental features on, the tracker remotes. |
+| **Library…** | Opens the dialog that lists, adds, edits and deletes the documents of the [board library](#the-board-library). |
 | **Delete view…** | Asks, then deletes the view file. The issues stay on the board. |
+
+The key `description` of a view file holds a short text that says what the
+view shows. The New view dialog and the Edit view dialog write it. The value is
+an empty text when nobody wrote one, and a view file without the key reads as
+an empty description. The tooltip of the tab and the "All projects" page show
+it.
 
 The id of a view is the slug of the name that the view had when it was created,
 and the id names the file. When a file already uses the slug, the server adds a

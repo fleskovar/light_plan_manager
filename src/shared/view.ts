@@ -92,6 +92,13 @@ export interface ViewDocument {
   version: number;
   id: string;
   name: string;
+  /**
+   * A short text that says what the view shows. The New view dialog and the
+   * Edit view dialog write it. The tab strip shows it as the tooltip of the
+   * tab, and the "All projects" page shows it beside the name. Empty when
+   * nobody wrote one.
+   */
+  description: string;
   created: string;
   updated: string;
   /** Issue ids imported into this view. Everything else stays off the canvas. */
@@ -111,17 +118,24 @@ export interface ViewDocument {
 export interface ViewSummary {
   id: string;
   name: string;
+  description: string;
   updated: string;
   members: number;
   pendingChanges: number;
   mode: ViewMode;
 }
 
-export function emptyView(id: string, name: string, now = new Date().toISOString()): ViewDocument {
+export function emptyView(
+  id: string,
+  name: string,
+  now = new Date().toISOString(),
+  description = '',
+): ViewDocument {
   return {
     version: VIEW_VERSION,
     id,
     name,
+    description,
     created: now,
     updated: now,
     members: [],
@@ -144,13 +158,19 @@ export function emptyView(id: string, name: string, now = new Date().toISOString
  * simply absent would take the whole screen down with it.
  */
 export function completeView(view: ViewDocument): ViewDocument {
-  return view.queue ? view : { ...view, queue: { open: true, width: DEFAULT_QUEUE_WIDTH } };
+  if (view.queue && typeof view.description === 'string') return view;
+  return {
+    ...view,
+    description: view.description ?? '',
+    queue: view.queue ?? { open: true, width: DEFAULT_QUEUE_WIDTH },
+  };
 }
 
 export function summarize(view: ViewDocument): ViewSummary {
   return {
     id: view.id,
     name: view.name,
+    description: view.description ?? '',
     updated: view.updated,
     members: view.members.length,
     pendingChanges: view.changes.length,

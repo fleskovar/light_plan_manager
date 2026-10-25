@@ -233,6 +233,48 @@ export interface CommentDto {
   body: string;
 }
 
+/**
+ * One document of the board library (`.lpm/library/<id>.md`), as the list of
+ * `GET /api/library` returns it: without the body.
+ */
+export interface LibraryEntryDto {
+  /** The path below `.lpm/library` without `.md`, for example `prompts/code-review`. */
+  id: string;
+  title: string;
+  description: string;
+  /** The file, relative to the folder that holds the board folder. */
+  path: string;
+  /** The modification time of the file, as an ISO date. */
+  updated: string;
+}
+
+/** One library document with its body, as `GET /api/library/:id` returns it. */
+export interface LibraryDocDto extends LibraryEntryDto {
+  body: string;
+  /** Send it back with an update. The server refuses the update with 409 when the file holds another one. */
+  revision: string;
+  /** The ids of the issues and templates that reference the document. */
+  referencedBy: string[];
+}
+
+/** What `POST /api/library/:id/move` returns. */
+export interface LibraryMoveResultDto {
+  /** Each document that moved, with its old and its new id. A folder move moves several. */
+  moved: { from: string; to: string }[];
+  /** The issues and templates whose references the move rewrote. */
+  rewritten: string[];
+  /** The issues and templates that still reference an old id, because the request kept the references. */
+  stale: string[];
+}
+
+/** What an edit of a library document sends. A key that is absent keeps its value. */
+export interface LibraryDocPatch {
+  title?: string;
+  description?: string;
+  body?: string;
+  revision?: string;
+}
+
 export interface ProblemDto {
   level: 'error' | 'warn';
   path: string;

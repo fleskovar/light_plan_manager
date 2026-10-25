@@ -1,4 +1,4 @@
-import type { BackupListDto, BoardBackupDto, ProjectEntryDto, StoreJobDto } from '$shared';
+import type { BackupListDto, BoardBackupDto, ProjectEntryDto, StoreJobDto, ViewSummary } from '$shared';
 import type { Confirmation } from '$lib/app/shell.svelte.js';
 import { StoreJobWatcher, type Schedule } from './jobs.svelte.js';
 import {
@@ -31,6 +31,11 @@ import {
  * (`StoreJobWatcher`). Replacing a backup needs the typed word `backup`, and a
  * restore needs the typed word `restore`.
  *
+ * Each row of the tab Projects has a collapsible section with the views of the
+ * board. The first expand asks the server for the view list of that board
+ * (`views`), and the page keeps the answer until it loads again. A click on a
+ * view opens the board on that view.
+ *
  * The logic is here and `ProjectsPage.svelte` only draws it, so the tests in
  * `web/test/projects-page.test.ts` need no browser.
  */
@@ -39,6 +44,8 @@ import {
 export interface ProjectsApi {
   list(): Promise<ProjectEntryDto[]>;
   open(lpmDir: string): Promise<{ url: string }>;
+  /** The views of the board in `lpmDir`, newest save first. */
+  views(lpmDir: string): Promise<ViewSummary[]>;
   reveal(lpmDir: string): Promise<void>;
   backups(): Promise<BackupListDto>;
   jobs(): Promise<StoreJobDto[]>;
@@ -69,6 +76,29 @@ export interface ProjectRow extends ProjectEntryDto {
   backup: BoardBackupDto | null;
   /** The job of the project that runs or ended last, or null. */
   job: StoreJobDto | null;
+  /** False for a board that is not at its recorded place. Its views cannot be read. */
+  canListViews: boolean;
+  /** True while the section with the views of the board is open. */
+  expanded: boolean;
+  /** The views of the board, as far as the page read them. */
+  views: ProjectViews;
+}
+
+/** The views of one board, as the collapsible section of its row shows them. */
+export interface ProjectViews {
+  /** True while the request for the list runs. */
+  loading: boolean;
+  /** The message of a failed request, or null. */
+  error: string | null;
+  /** Null until the first request answered. */
+  list: ViewSummary[] | null;
+}
+
+const NO_VIEWS: ProjectViews = { loading: false, error: null, list: null };
+
+/** The address that shows the view `viewId` on the board server at `url`. */
+export function viewUrl(url: string, viewId: string): string {
+  return `${url.replace(/[/#]+$/, '')}/#/view/${encodeURIComponent(viewId)}`;
 }
 
 /** One row of the tab Backups. */
@@ -116,6 +146,10 @@ export class ProjectsPage {
   /** The confirmation that the page shows, or null. */
   confirmation = $state<Confirmation | null>(null);
   notice = $state<JobNotice | null>(null);
+  /** The board folders whose section of views is open. */
+  expanded = $state.raw<ReadonlySet<string>>(new Set());
+  /** The view lists that the page read, by board folder. */
+  viewLists = $state.raw<Readonly<Record<string, ProjectViews>>>({});
 
   readonly watcher: StoreJobWatcher;
   readonly #api: ProjectsApi;
@@ -191,12 +225,18 @@ export class ProjectsPage {
       canBackup: ok && !running && (hasStore || entry.store === 'central'),
       backup,
       job,
+      canListViews: entry.state !== 'missing',
+      expanded: this.expanded.has(entry.lpmDir),
+      views: this.viewLists[entry.lpmDir] ?? NO_VIEWS,
     };
   }
 
   async load(): Promise<void> {
     this.loading = true;
     this.error = null;
+    // A new load reads each view list again when its section opens.
+    this.viewLists = {};
+    this.expanded = new Set();
     try {
       const [entries, backups] = await Promise.all([this.#api.list(), this.#api.backups()]);
       this.entries = entries;
@@ -220,6 +260,43 @@ export class ProjectsPage {
   async open(lpmDir: string): Promise<void> {
     if (!this.#row(lpmDir)?.canOpen) return;
     await this.#run(lpmDir, async () => this.#navigate((await this.#api.open(lpmDir)).url));
+  }
+
+  /** Open or close the section with the views of a board. The first open reads the list. */
+  async toggleViews(lpmDir: string): Promise<void> {
+    const row = this.#row(lpmDir);
+    if (!row?.canListViews) return;
+    const next = new Set(this.expanded);
+    if (next.has(lpmDir)) {
+      next.delete(lpmDir);
+      this.expanded = next;
+      return;
+    }
+    next.add(lpmDir);
+    this.expanded = next;
+    if (row.views.list !== null || row.views.loading) return;
+    await this.reloadViews(lpmDir);
+  }
+
+  /** Read the view list of a board again. */
+  async reloadViews(lpmDir: string): Promise<void> {
+    this.#setViews(lpmDir, { ...(this.viewLists[lpmDir] ?? NO_VIEWS), loading: true, error: null });
+    try {
+      const list = await this.#api.views(lpmDir);
+      this.#setViews(lpmDir, { loading: false, error: null, list });
+    } catch (error) {
+      this.#setViews(lpmDir, { loading: false, error: messageOf(error), list: null });
+    }
+  }
+
+  /** Open the board of `lpmDir` on the view `viewId`. */
+  async openView(lpmDir: string, viewId: string): Promise<void> {
+    if (!this.#row(lpmDir)?.canOpen) return;
+    await this.#run(lpmDir, async () => this.#navigate(viewUrl((await this.#api.open(lpmDir)).url, viewId)));
+  }
+
+  #setViews(lpmDir: string, views: ProjectViews): void {
+    this.viewLists = { ...this.viewLists, [lpmDir]: views };
   }
 
   async reveal(lpmDir: string): Promise<void> {

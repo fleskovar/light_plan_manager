@@ -10,7 +10,8 @@
  * document edit. `experimental` writes the key that shows the unfinished
  * features, in the same way. `config-edit` changes the types, the statuses and the
  * attributes that `.lpm/config.yml` declares, and rewrites every document that
- * holds a renamed name. `board-template` saves a config as a template for new
+ * holds a renamed name. `library` adds, edits and deletes the markdown
+ * documents in `.lpm/library/`, under the same lock. `board-template` saves a config as a template for new
  * boards; it writes the user folder and never a board.
  * Each validates its inputs up front and only then touches the filesystem, so
  * a rejected operation leaves nothing half-written. The ones that add, remove,
@@ -44,6 +45,7 @@ export * from './flag.js';
 export * from './git-sync.js';
 export * from './remotes-off.js';
 export * from './init.js';
+export * from './library.js';
 export * from './link.js';
 export * from './move.js';
 export * from './planning.js';
