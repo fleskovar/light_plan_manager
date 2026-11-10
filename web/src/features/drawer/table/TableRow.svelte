@@ -208,8 +208,10 @@
         checked={subtreeInView === 'all'}
         indeterminate={subtreeInView === 'some'}
         title={subtreeInView === 'all'
-          ? 'Remove this issue and its children from the canvas'
-          : 'Add this issue and its children to the canvas'}
+          ? 'Remove this issue and its children from the canvas. While the whole branch is on the canvas, new items in it are added too'
+          : subtreeInView === 'some'
+            ? 'Part of this branch is hidden. Click to put the whole branch on the canvas'
+            : 'Add this issue and its children to the canvas'}
         aria-label="Subtree on the canvas"
         onclick={(event) => event.stopPropagation()}
         onchange={() => ontoggleMembership(row.node.id, true)}
@@ -298,6 +300,12 @@
   .open:focus-visible {
     background: var(--accent-soft);
     color: var(--accent-ink);
+  }
+
+  /* A branch that is partly on the canvas. The browser draws an indeterminate
+     box in the accent colour, close to a ticked box, so it is grey here. */
+  .member input:indeterminate {
+    accent-color: var(--ink-faint);
   }
 
   .flag {

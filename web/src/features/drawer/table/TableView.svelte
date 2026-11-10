@@ -445,6 +445,11 @@
 </div>
 
 <style>
+  /* Part of the list is on the canvas. Grey, so it does not read as ticked. */
+  th input:indeterminate {
+    accent-color: var(--ink-faint);
+  }
+
   .table-view {
     height: 100%;
     display: flex;

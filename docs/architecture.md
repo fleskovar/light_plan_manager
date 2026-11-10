@@ -1192,6 +1192,16 @@ Things to keep true here:
   so a `set` that replaced the order would lose the order of the clicks. `set`
   reads the current ids with `untrack`, because an effect that calls `set`
   must not depend on the selection that it writes.
+- **A view follows each branch that it shows whole.** A view stores only its
+  list of members, and no rule. After each re-read of the board (`pull`, the
+  background poll and `push`), `Workspace.#rebuildFollowing` compares the
+  documents before and after. `arrivalsToShow` in `lib/workspace/follow.ts`
+  returns each document that is new, or has a new parent, under a parent whose
+  whole branch was a member before the re-read. The workspace adds those
+  documents to the members. A branch with a hidden document takes no
+  arrivals, so a choice to hide part of a branch stays. A push passes the ids
+  that it gave to the view's own new documents, and those ids never join this
+  way.
 - **Highlighting is not selection.** `highlight.ts` answers "what is one hop
   from here?" and `CanvasGraph.refreshHighlights` writes the answer onto the
   flow arrays. It never touches `Selection`, and it never rebuilds the graph —

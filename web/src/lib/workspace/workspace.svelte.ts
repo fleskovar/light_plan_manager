@@ -27,6 +27,7 @@ import { applyChange, replay } from '$lib/board/working.js';
 import { buildIndex, type NodeIndexImpl } from '$lib/board/index.js';
 import { CanvasMode } from './canvas-mode.svelte.js';
 import { Selection } from './selection.svelte.js';
+import { arrivalsToShow } from './follow.js';
 
 /**
  * The open board: one snapshot, one view, one working copy, one queue.
@@ -384,7 +385,7 @@ export class Workspace {
     this.status = 'loading';
     try {
       this.snapshot = await api.board();
-      this.#rebuild();
+      this.#rebuildFollowing();
       if (!silent) this.notify('info', 'Pulled the latest board');
     } catch (error) {
       this.report(error);
@@ -418,7 +419,7 @@ export class Workspace {
     if (!this.view) return;
     try {
       this.snapshot = await api.board();
-      this.#rebuild();
+      this.#rebuildFollowing();
     } catch {
       // A quiet poll failing is not worth interrupting anybody for; the next
       // tick tries again.
@@ -462,6 +463,24 @@ export class Workspace {
     this.selection.retain((id) => Boolean(this.nodes[id]));
     this.canvasMode.retain((id) => Boolean(this.nodes[id]));
     this.#seedTempIds();
+  }
+
+  /**
+   * Rebuild after a re-read of the board, and add to the view each document
+   * that arrived in a branch that the view showed whole (`arrivalsToShow`).
+   * MCP, the CLI and other windows create documents that this view did not
+   * create, and those documents take the visibility of their branch. The ids
+   * in `own` belong to documents that this view created, and never join here.
+   */
+  #rebuildFollowing(own: ReadonlySet<string> = new Set()): void {
+    const before = this.nodes;
+    this.#rebuild();
+    const view = this.view;
+    if (!view) return;
+    const joined = arrivalsToShow(before, this.nodes, new Set(view.members)).filter(
+      (id) => !own.has(id),
+    );
+    if (joined.length) this.addMembers(joined);
   }
 
   #reportBoardProblems(snapshot: BoardSnapshot): void {
@@ -786,7 +805,9 @@ export class Workspace {
       if (Object.keys(result.idMap).length) {
         this.#allocated = { ...this.#allocated, ...result.idMap };
       }
-      this.#rebuild();
+      // The ids that the push gave to new documents of this view are not
+      // arrivals: the view already decided whether to show them.
+      this.#rebuildFollowing(new Set(Object.values(result.idMap)));
 
       if (result.failures.length) {
         this.notify(

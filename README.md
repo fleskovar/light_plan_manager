@@ -3455,7 +3455,14 @@ item becomes the active item.
   checkbox per row for what appears on the canvas. The checkbox in the header
   puts everything the filter matches on the canvas at once, and
   <kbd>Shift</kbd>- or right-clicking a row's checkbox takes that issue's whole
-  subtree. Quick filters answer the usual questions without typing — what is in
+  subtree. The **Tree** box of a row acts on the issue and everything
+  under it. It is ticked when the whole branch is on the canvas, and grey with
+  a dash when part of the branch is hidden. One click on a grey box puts the
+  whole branch on the canvas. While a branch is on the canvas whole, a new
+  issue in it joins the canvas when the editor next reads the board (every 5
+  seconds). This applies to an issue that MCP, the CLI or another window
+  creates or moves there. A branch with a hidden issue in it does not take new
+  issues, so the issues you hid stay hidden. Quick filters answer the usual questions without typing — what is in
   progress, what just finished, what was just added, what is on the canvas — and
   *Show down to* folds the tree to a level, so one click leaves the programmes
   showing with their epics closed. Clicking a row moves the graph to it, and
