@@ -1153,21 +1153,45 @@ Things to keep true here:
   `planCarryOver` **refuses** when there is no next period rather than
   unscheduling the work. Nothing creates a period to hold the overflow: work
   piling up in the last sprint is the fact a reader needs to see.
-- **Alt+drag carries an issue off the graph without moving it.** `carry.ts`
-  takes the drag over from a capture-phase pointerdown, exactly as `pan.ts` does
-  for Ctrl — SvelteFlow never starts a node drag, so no node moves, no position
-  is written and there is no drag for the viewport to auto-pan along with. That
-  is the whole design: scheduling an issue into a sprint is not a change to the
-  picture, so the picture must not change. Do not reach for `onnodedrag` here;
-  it fires only when a node's *position* changes, and a node inside a subflow is
-  clamped to its parent, so it goes quiet exactly when it is carried out.
-  Where the pointer comes up decides what the carry meant: a box in the Periods
-  drawer schedules the work under it (`periodDropAt`, which lives beside the
-  component emitting `data-period-drop`, because a pointer drag has no drop
-  targets of its own), an edge splices it into that dependency, anything else is
-  a change of mind. The two modifiers are exclusive by construction — `isCarry`
-  refuses Ctrl and Cmd, `isCameraPan` requires one — so their order in the
-  handler is not load-bearing.
+- **A node drag has two kinds, and the Alt key at its start picks the kind.**
+  `createDragHandlers` in `Canvas.svelte.ts` reads `event.altKey` in
+  `onnodedragstart` (`dragKindOf`). The kind stays the same until the drop.
+  Ctrl and Cmd start a camera pan in `pan.ts`, so they never reach a node drag.
+  - **A plain drag (`reshape`) changes only positions.** `CanvasGraph.beginReshape`
+    stores the boxes of the start. On each `onnodedrag`, `reshapeDrag` converts
+    the positions from SvelteFlow into those boxes and calls `reshape` in
+    `reshape.ts`. That function pushes the siblings that a held node meets and
+    grows each frame around its children, from the deepest frame up to the top
+    level. Each step starts from the boxes of the start, so a pushed node
+    returns when the held node moves back. `endReshape` saves the positions.
+    The canvas saves no frame size: `fitGroups` gives the same size on the next
+    rebuild. A resize does the same through `resizeHandlers` in
+    `NodeShell.svelte.ts`. The resizer of SvelteFlow calls `onResize` before it
+    writes its own change, so `reshapeResize` runs in a microtask.
+  - **An Alt drag (`structure`) changes the board.** `clampToParents(true)`
+    gives the children the extent `parent` for the length of the drag.
+    SvelteFlow reads the extent on each move, so the clamp applies to a drag
+    that has already started. A clamped node sends no `onnodedrag` while it
+    sits at the edge of its frame. So the handlers follow `pointermove` to
+    light the period box under the pointer (`periodDropAt`, beside the
+    component that emits `data-period-drop`) and to stop auto-pan over the
+    drawer. `dropStructure` reads the pointer at the drop. A period box
+    schedules the work under the node, and the node goes back. An edge splices
+    the node into that dependency. A node becomes the new parent when
+    `dropParent` allows it. Any other place keeps the new position.
+- **The key F adds dependencies, and `link.ts` holds both ways.** A release
+  of F with two or more items selected runs `linkSelection`: each item
+  depends on the item selected before it (`chainPairs`). The release, not the
+  press, runs it, so a hold of F for a link drag does not also link the
+  selection. A pointerdown on a node while F is held starts `startLinkDrag` in
+  the capture phase, as `pan.ts` does for Ctrl. SvelteFlow never sees it, so
+  the node does not move. The canvas draws a line to the pointer, and a release
+  over another node calls `addDependency`. The order of the selection comes
+  from `Selection`: `toggle` appends, and `set` keeps the place of each id that
+  stays selected. SvelteFlow reports its selection in the order of its nodes,
+  so a `set` that replaced the order would lose the order of the clicks. `set`
+  reads the current ids with `untrack`, because an effect that calls `set`
+  must not depend on the selection that it writes.
 - **Highlighting is not selection.** `highlight.ts` answers "what is one hop
   from here?" and `CanvasGraph.refreshHighlights` writes the answer onto the
   flow arrays. It never touches `Selection`, and it never rebuilds the graph —

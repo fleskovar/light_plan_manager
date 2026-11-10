@@ -5,7 +5,13 @@
   import { flagLabel } from '$shared';
   import type { CanvasNodeData } from '../model.js';
   import { cleanTitle } from '../editing.js';
-  import { hasFlagInside, isRaisedFlag, isDriftSync, nodeMinSize } from './NodeShell.svelte.js';
+  import {
+    hasFlagInside,
+    isRaisedFlag,
+    isDriftSync,
+    nodeMinSize,
+    type ResizeHandlers,
+  } from './NodeShell.svelte.js';
   import TitleField from './TitleField.svelte';
 
   /**
@@ -19,8 +25,8 @@
     data: CanvasNodeData;
     selected: boolean;
     ontoggle: (id: string) => void;
-    /** Where a drag on a corner ends up. Omitted where nothing may be resized. */
-    onresize?: (id: string, size: { x: number; y: number; width: number; height: number }) => void;
+    /** The events of a drag on a corner. Omitted where nothing may be resized. */
+    resize?: ResizeHandlers;
     /** True while the title is open for typing. */
     renaming?: boolean;
     /** Receives the typed title, or null when the typing was cancelled or left nothing. */
@@ -35,7 +41,7 @@
     data,
     selected,
     ontoggle,
-    onresize,
+    resize,
     renaming = false,
     onrename,
     onenter,
@@ -56,14 +62,16 @@
   class:holds-flag={hasFlagInside(data)}
   data-node-id={data.node.id}
 >
-  {#if onresize}
+  {#if resize}
     <NodeResizer
       {minWidth}
       {minHeight}
       isVisible={selected}
       handleClass="lpm-resize-handle"
       lineClass="lpm-resize-line"
-      onResizeEnd={(_event, params) => onresize?.(data.node.id, params)}
+      onResizeStart={() => resize.start(data.node.id)}
+      onResize={(_event, params) => resize.resize(data.node.id, params)}
+      onResizeEnd={(_event, params) => resize.end(data.node.id, params)}
     />
   {/if}
 

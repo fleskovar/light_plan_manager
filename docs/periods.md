@@ -158,12 +158,14 @@ pick up, it is the name of the stories you do, which is the same rule
 `web/src/lib/board/selectors.ts`). A story whose type is declared `atomic` is one
 of those units, so its sub-tasks are not scheduled separately either.
 
-The graph itself does not move: the node stays where it is, the camera holds
-still and no position is saved, because being scheduled into a sprint says
-nothing about where an issue belongs on the canvas. Escape puts it down having
-changed nothing, and dropping onto the unscheduled box takes the whole subtree
-back out. Alt+drag onto an *edge* still splices a node into that dependency; the
-two are told apart by where the pointer is when the button comes up.
+During an Alt drag the node stays inside its frame. While the pointer is over
+the drawer, the camera does not pan. After a drop on a box, the node returns to
+the place where the drag started, and the canvas saves no position. A sprint
+does not say where an issue belongs on the canvas. A drop onto the unscheduled
+box takes the whole subtree back out. The same Alt drag also splices a node
+into a dependency when it ends on an *edge*, and reparents the node when it ends
+on another node. The place of the pointer at the drop decides which change the
+drag makes.
 
 ## What "running" changes
 

@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { BINDINGS, shortcutLabel } from '$lib/shortcuts/bindings.js';
+  import { BINDINGS, GESTURES, shortcutLabel } from '$lib/shortcuts/bindings.js';
   import Modal from '$lib/ui/Modal.svelte';
 
   /**
-   * The list of keyboard shortcuts that Help ▸ Keyboard shortcuts opens. The
-   * rows come from `BINDINGS`, so the list always matches the keys that work.
+   * The list of keyboard shortcuts that Help ▸ Keyboard shortcuts, the
+   * Shortcuts button of the top bar and the key ? open. The rows come from
+   * `BINDINGS` and `GESTURES`, so the list always matches what works.
    */
   interface Props {
     onclose: () => void;
@@ -15,11 +16,21 @@
 
 <Modal title="Keyboard shortcuts" size="sm" {onclose}>
   <p class="hint">A shortcut does not run while the cursor is in a text field.</p>
+  <h3>Keys</h3>
   <dl>
     {#each BINDINGS as binding (binding.id)}
       <div>
         <dt><kbd>{shortcutLabel(binding)}</kbd></dt>
         <dd>{binding.description}</dd>
+      </div>
+    {/each}
+  </dl>
+  <h3>Canvas: mouse and held keys</h3>
+  <dl>
+    {#each GESTURES as gesture (gesture.keys)}
+      <div>
+        <dt><kbd>{gesture.keys}</kbd></dt>
+        <dd>{gesture.description}</dd>
       </div>
     {/each}
   </dl>
@@ -30,6 +41,15 @@
     margin: 0 0 var(--space-3);
     color: var(--ink-muted);
     font-size: var(--text-sm);
+  }
+
+  h3 {
+    margin: var(--space-3) 0 var(--space-1);
+    font-size: var(--text-sm);
+  }
+
+  h3:first-of-type {
+    margin-top: 0;
   }
 
   dl {

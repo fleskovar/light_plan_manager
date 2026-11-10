@@ -23,7 +23,8 @@ export type BindingId =
   | 'clear'
   | 'mode'
   | 'new-item'
-  | 'rename';
+  | 'rename'
+  | 'shortcuts';
 
 export interface Binding {
   /** The name that a menu entry uses to find this binding. */
@@ -160,6 +161,59 @@ export const BINDINGS: Binding[] = [
       const id = workspace.selection.primary;
       if (workspace.canvasMode.editing && id) workspace.canvasMode.startRename(id);
     },
+  },
+  {
+    id: 'shortcuts',
+    key: '?',
+    description: 'Show this list of shortcuts',
+    run: ({ shell }) => (shell.shortcutsOpen = true),
+  },
+];
+
+/**
+ * A shortcut that a key press alone does not describe: a held key with a
+ * drag, a click, or a key that acts on release. The canvas implements each
+ * one. Help ▸ Keyboard shortcuts lists them under the bindings.
+ */
+export interface Gesture {
+  keys: string;
+  description: string;
+}
+
+export const GESTURES: Gesture[] = [
+  {
+    keys: 'Shift+click',
+    description: 'Add an item to the selection, or take it out. The selection keeps the order of the clicks',
+  },
+  {
+    keys: 'F',
+    description:
+      'With two or more items selected, press and release F. Each item then depends on the item selected before it',
+  },
+  {
+    keys: 'F+drag',
+    description: 'Hold F and drag from one item to another. The second item then depends on the first',
+  },
+  {
+    keys: 'Drag a handle',
+    description: 'Drag from the right handle of an item to another item. The second item then depends on the first',
+  },
+  {
+    keys: 'Drag',
+    description: 'Move an item. Items in the way move aside, and the frames around it grow',
+  },
+  {
+    keys: 'Alt+drag',
+    description:
+      'Keep the item inside its frame. Drop it on an item to change its parent, on an arrow to insert it, or on a sprint box to schedule it',
+  },
+  {
+    keys: 'Ctrl+drag',
+    description: 'Move the camera, also from inside an item',
+  },
+  {
+    keys: 'Double-click',
+    description: 'Read mode: open the window of the item. Edit mode: enter a frame, or rename an item',
   },
 ];
 

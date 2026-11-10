@@ -1,10 +1,10 @@
 /**
- * Decision logic extracted from Canvas.svelte: hit-testing, drag/carry/drop
+ * Decision logic extracted from Canvas.svelte: hit-testing, drag and drop
  * interpretation, reparent resolution, and roster drop handling.
  *
  * The component keeps the reactive state, the SvelteFlow event wiring, the
  * template, and the CSS. What lives here is the part that decides what an event
- * means — the same family as `carry.ts`, `pan.ts` and `menus.ts`.
+ * means — the same family as `pan.ts` and `menus.ts`.
  */
 
 import type { Edge, Node } from '@xyflow/svelte';
@@ -21,7 +21,6 @@ import {
   spliceOntoEdge,
 } from '$lib/workspace/mutations.js';
 import { periodDropAt } from '$features/drawer/periods/periods.js';
-import { carriedIds, type CarryHandlers } from './carry.js';
 import type { CanvasGraph } from './graph.svelte.js';
 import { NODE_HEIGHT, NODE_WIDTH } from './model.js';
 
@@ -166,77 +165,110 @@ export function createDoubleClickHandler(): {
 }
 
 // ---------------------------------------------------------------------------
-// Carry
+// Drag
 // ---------------------------------------------------------------------------
 
-/** State the carry handlers need to update in the component. */
-export interface CarryUI {
-  setCarrying(v: boolean): void;
-  setPeriodDropTarget(key: string | null): void;
+/**
+ * The two kinds of node drag.
+ *
+ * - `reshape`, a drag with no key held, moves the node. `CanvasGraph` pushes
+ *   the nodes that it meets out of the way and grows the frames around it. A
+ *   drop keeps the new positions and never changes the board.
+ * - `structure`, a drag with Alt held, keeps the node inside its frame. The
+ *   place where the pointer comes up decides the change to the board: a box in
+ *   the Periods drawer schedules the work, an edge splices the node into that
+ *   dependency, and another node becomes its parent (`dropParent`).
+ *
+ * The key state at the start of the drag decides the kind for the whole drag.
+ * Ctrl and Cmd belong to the camera (`pan.ts`), so they never start a node drag.
+ */
+export type DragKind = 'reshape' | 'structure';
+
+export function dragKindOf(event: { altKey: boolean }): DragKind {
+  return event.altKey ? 'structure' : 'reshape';
 }
 
-/**
- * Build the carry handlers that connect the capture-phase `carry.ts` gesture
- * to the board. `carry.ts` owns the pointer tracking; these own what the three
- * events (pick, move, drop) *mean*.
- */
-export function createCarryHandlers(
+/** State the drag handlers update in the component. */
+export interface DragUI {
+  /** True for the length of a structural drag. */
+  setStructural(on: boolean): void;
+  /** SvelteFlow pans the camera during a drag only while this is true. */
+  setAutoPan(on: boolean): void;
+}
+
+export interface DragHandlers {
+  start(event: MouseEvent | TouchEvent): void;
+  drag(nodes: Node[]): void;
+  stop(params: { targetNode: Node | null; nodes: Node[]; event: MouseEvent | TouchEvent }): void;
+}
+
+/** Connect the three node-drag events of SvelteFlow to the canvas and the board. */
+export function createDragHandlers(
   workspace: Workspace,
   shell: Shell,
-  ui: CarryUI,
+  ui: DragUI,
   graph: CanvasGraph,
   screenToFlow: ScreenToFlow,
-): CarryHandlers {
+): DragHandlers {
+  let kind: DragKind | null = null;
+  let follow: ((event: PointerEvent) => void) | null = null;
+
+  function stopFollowing(): void {
+    if (follow) window.removeEventListener('pointermove', follow, true);
+    follow = null;
+  }
+
   return {
-    pick: (nodeId) => {
-      if (workspace.node(nodeId)?.kind !== 'issue') return null;
-      ui.setCarrying(true);
-      return carriedIds(nodeId, workspace.selection.ids);
-    },
-
-    move: (_ids, event) => {
-      shell.periodDropTarget = periodDropAt(event.clientX, event.clientY)?.key ?? null;
-    },
-
-    drop: (ids, event) => {
-      ui.setCarrying(false);
-      shell.periodDropTarget = null;
-      const box = periodDropAt(event.clientX, event.clientY);
-      if (box) {
-        scheduleSelection(workspace, ids, box.period);
+    start(event) {
+      kind = dragKindOf(event);
+      if (kind === 'reshape') {
+        graph.beginReshape();
         return;
       }
-
-      const edge = edgeUnder(
-        graph.nodes,
-        graph.edges,
-        screenToFlow,
-        event,
-        new Set(ids),
-      );
-      const data = edge?.data as { from: string; to: string } | undefined;
-      if (edge && data && ids.length === 1) {
-        spliceOntoEdge(workspace, ids[0]!, data.from, data.to);
-      }
+      ui.setStructural(true);
+      graph.clampToParents(true);
+      // SvelteFlow reports no move while the extent holds the node at the edge
+      // of its frame, so the canvas follows the pointer itself. Over the
+      // drawer, auto-pan stops: the camera holds still while the reader picks
+      // a box.
+      follow = (moved) => {
+        shell.periodDropTarget = periodDropAt(moved.clientX, moved.clientY)?.key ?? null;
+        ui.setAutoPan(overCanvas(moved));
+      };
+      window.addEventListener('pointermove', follow, true);
     },
 
-    cancel: () => {
-      ui.setCarrying(false);
+    drag(nodes) {
+      if (kind === 'reshape') graph.reshapeDrag(nodes);
+    },
+
+    stop({ targetNode, nodes, event }) {
+      const ended = kind;
+      kind = null;
+      if (ended !== 'structure') {
+        // Dropped off the canvas: the node was going nowhere, so everything
+        // that it moved goes back.
+        if (event instanceof MouseEvent && !overCanvas(event)) graph.cancelReshape();
+        else graph.endReshape();
+        return;
+      }
+      stopFollowing();
+      ui.setStructural(false);
+      ui.setAutoPan(true);
       shell.periodDropTarget = null;
+      graph.clampToParents(false);
+      dropStructure({ targetNode, nodes, event, graph, workspace, shell, screenToFlow });
     },
   };
 }
 
-// ---------------------------------------------------------------------------
-// Drag interpretation
-// ---------------------------------------------------------------------------
-
 /**
- * A SvelteFlow drag stopped. What it meant depends on where the pointer is:
- * an edge (splice onto it), the drawer (snap back), a node (reparent), or the
- * canvas (just remember where it landed).
+ * A structural drag ended. Where the pointer is decides what it meant: a box
+ * in the Periods drawer (schedule, and the node goes back), an edge (splice
+ * onto it), off the canvas (the node goes back), a node (reparent, when
+ * `dropParent` allows it), or the canvas (keep the new position).
  */
-export function handleDragStop(params: {
+export function dropStructure(params: {
   targetNode: Node | null;
   nodes: Node[];
   event: MouseEvent | TouchEvent;
@@ -251,11 +283,19 @@ export function handleDragStop(params: {
     graph.persistPositions();
     return;
   }
-  const moving = new Set(nodes.map((node) => node.id));
+  const ids = nodes.map((node) => node.id);
+  const moving = new Set(ids);
 
-  // Alt pressed *after* a drag began, which `carry.ts` never saw. The node
-  // has already moved, so the only thing still on offer is the edge splice.
-  if (event.altKey) {
+  // Being scheduled into a sprint is not a change to the picture, so the
+  // node goes back to where the drag started.
+  const box = periodDropAt(event.clientX, event.clientY);
+  if (box) {
+    scheduleSelection(workspace, ids, box.period);
+    graph.sync();
+    return;
+  }
+
+  if (ids.length === 1) {
     const edge = edgeUnder(graph.nodes, graph.edges, screenToFlow, event, moving);
     const data = edge?.data as { from: string; to: string } | undefined;
     if (edge && data && spliceOntoEdge(workspace, dragged.id, data.from, data.to)) {
@@ -263,20 +303,48 @@ export function handleDragStop(params: {
     }
   }
 
-  // Dropped clean off the canvas and onto nothing that wanted it. The node was
-  // never going there, so it goes back rather than keeping a position halfway
-  // into the drawer.
   if (!overCanvas(event)) {
     graph.sync();
     return;
   }
 
-  const dropTarget = nodeUnder(graph.nodes, screenToFlow, event, moving);
-  if (dropTarget && dropTarget.id !== workspace.node(dragged.id)?.parentId) {
-    resolveReparent(workspace, shell, graph, dragged.id, dropTarget.id);
+  const newParent = dropParent({
+    parentId: workspace.node(dragged.id)?.parentId ?? null,
+    targetId: nodeUnder(graph.nodes, screenToFlow, event, moving)?.id ?? null,
+    drawn: new Set(graph.nodes.map((node) => node.id)),
+    scope: graph.scope,
+  });
+  if (newParent) {
+    resolveReparent(workspace, shell, graph, dragged.id, newParent);
     return;
   }
   graph.persistPositions();
+}
+
+/**
+ * Returns the new parent that a drop asks for, or null when the drop only moves
+ * the node on the canvas.
+ *
+ * - `parentId` is the parent of the dragged node on the board.
+ * - `targetId` is the node under the pointer, if any.
+ * - `drawn` holds the ids of the nodes on the canvas.
+ * - `scope` is the active item of edit mode, or null.
+ *
+ * A drop changes the parent only when the canvas shows the current parent.
+ * The canvas shows it as a node, or as the whole canvas when the parent is the
+ * active item. When the view hides the parent, or draws its type as a badge, a
+ * drop onto another node only moves the dragged node.
+ */
+export function dropParent(input: {
+  parentId: string | null;
+  targetId: string | null;
+  drawn: ReadonlySet<string>;
+  scope: string | null;
+}): string | null {
+  const { parentId, targetId, drawn, scope } = input;
+  if (!targetId || targetId === parentId) return null;
+  const parentShown = parentId === null || parentId === scope || drawn.has(parentId);
+  return parentShown ? targetId : null;
 }
 
 /**

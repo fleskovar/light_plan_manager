@@ -11,7 +11,8 @@
   /**
    * The top bar, in two rows. The first row holds the name of the board on
    * the left. On the right it holds the Library button, which opens the
-   * Library page in its own window, how far behind `.lpm` the active view is,
+   * Library page in its own window, the Shortcuts button, which opens the list
+   * of shortcuts, how far behind `.lpm` the active view is,
    * and the switch between read mode and edit mode. The second row holds the
    * menu bar (File, Edit, View, Help). The component also sets the title of
    * the browser window to the name of the board.
@@ -87,6 +88,14 @@
         onclick={() => openLibrary({ tabs, workspace }, null)}
       >
         Library
+      </button>
+      <button
+        type="button"
+        class="library"
+        title="Show the keyboard shortcuts and the mouse gestures of the canvas (?)"
+        onclick={() => (shell.shortcutsOpen = true)}
+      >
+        Shortcuts
       </button>
       <span class="status" class:dirty={workspace.dirty || workspace.unsaved}>{statusLabel}</span>
       <ModeSwitch mode={workspace.canvasMode} />

@@ -1,6 +1,8 @@
+import { getContext, setContext } from 'svelte';
 import { MarkerType, type Edge, type Node } from '@xyflow/svelte';
 import type { PeriodDto } from '$shared';
 import { relatedTo } from './highlight.js';
+import { reshape, type Box } from './reshape.js';
 import {
   FRAME_ORIGIN,
   applyLayout,
@@ -11,7 +13,7 @@ import {
   shiftTopLevel,
 } from './layout.js';
 import type { CanvasEdge, CanvasNode, CanvasNodeData } from './model.js';
-import { buildGraph } from './model.js';
+import { NODE_HEIGHT, NODE_WIDTH, buildGraph } from './model.js';
 import type { GraphSource } from './source.js';
 
 /**
@@ -150,6 +152,7 @@ export class CanvasGraph {
   sync(): void {
     const source = this.source;
     if (!source.ready) return;
+    this.#gesture = null;
 
     // Badging a level hoists everything under it to a new parent, and a saved
     // position is relative to that parent — so the arrangement is worked out
@@ -181,6 +184,7 @@ export class CanvasGraph {
 
   /** Lay the whole canvas out again and remember where everything landed. */
   arrange(): void {
+    this.#gesture = null;
     const graph = this.#build();
     // Positions are what arranging replaces. A size someone dragged is not a
     // position, so it survives and the layout works around it.
@@ -211,6 +215,152 @@ export class CanvasGraph {
       if (saved?.x === node.position.x && saved?.y === node.position.y) continue;
       this.source.setLayout(node.id, node.position);
     }
+  }
+
+  // -- Push and grow --------------------------------------------------------
+
+  /**
+   * The boxes of the nodes when the current drag or resize started, or null
+   * when no gesture is running. `sync` and `arrange` clear it, because the
+   * boxes no longer describe the canvas after a rebuild.
+   */
+  #gesture: Map<string, Box> | null = null;
+
+  /**
+   * The positions that the last `reshape` of the gesture gave to the held
+   * nodes. At the end of a drag, SvelteFlow writes back the positions that it
+   * measured on its last move. Those are relative to the frames before that
+   * move grew them, so `endReshape` writes these positions again.
+   */
+  #heldPositions = new Map<string, { x: number; y: number }>();
+
+  /** Remember the boxes that a plain drag or a resize starts from. */
+  beginReshape(): void {
+    this.#gesture = new Map(this.nodes.map((node) => [node.id, boxOf(node)]));
+    this.#heldPositions = new Map();
+  }
+
+  /**
+   * A plain drag moved `dragged`. SvelteFlow gives their positions relative to
+   * the parents as the canvas draws them now, and a parent can have moved since
+   * the drag started. So each position goes through the screen position into
+   * the boxes of the start, and `reshape` runs on those boxes.
+   */
+  reshapeDrag(dragged: readonly Pick<Node, 'id' | 'position'>[]): void {
+    const start = this.#gesture;
+    if (!start) return;
+    const now = new Map(this.nodes.map((node) => [node.id, boxOf(node)]));
+    const held = new Map<string, Box>();
+    for (const node of dragged) {
+      const before = start.get(node.id);
+      const current = now.get(node.id);
+      if (!before || !current) continue;
+      const screen = absoluteOf({ ...current, position: node.position }, now);
+      const parent = before.parentId ? start.get(before.parentId) : undefined;
+      const origin = parent ? absoluteOf(parent, start) : { x: 0, y: 0 };
+      held.set(node.id, {
+        ...before,
+        position: { x: screen.x - origin.x, y: screen.y - origin.y },
+      });
+    }
+    this.#applyReshape(held);
+  }
+
+  /**
+   * A resize changed the box of `id`. The resizer of SvelteFlow measures from
+   * the box of the start, so `box` already is in the boxes of the start.
+   */
+  reshapeResize(id: string, box: { x: number; y: number; width: number; height: number }): void {
+    const before = this.#gesture?.get(id);
+    if (!before) return;
+    this.#applyReshape(
+      new Map([
+        [id, { ...before, position: { x: box.x, y: box.y }, width: box.width, height: box.height }],
+      ]),
+    );
+  }
+
+  /**
+   * Run `reshape` on the boxes of the start with the `held` boxes in place,
+   * and write the result onto the flow nodes. The nodes inside a held node
+   * belong to SvelteFlow during the gesture, so they are not written. A held
+   * node is written when its box differs from the flow node. That happens
+   * when a parent grew to the left or up, or moved back.
+   */
+  #applyReshape(held: Map<string, Box>): void {
+    const start = this.#gesture;
+    if (!start || !held.size) return;
+    const boxes = [...start.values()].map((box) => held.get(box.id) ?? box);
+    const result = new Map(reshape(boxes, new Set(held.keys())).map((box) => [box.id, box]));
+    for (const id of held.keys()) this.#heldPositions.set(id, result.get(id)!.position);
+
+    const insideHeld = (node: Node): boolean => {
+      const seen = new Set<string>();
+      let parent = node.parentId;
+      while (parent && !seen.has(parent)) {
+        if (held.has(parent)) return true;
+        seen.add(parent);
+        parent = start.get(parent)?.parentId;
+      }
+      return false;
+    };
+
+    let changed = false;
+    const nodes = this.nodes.map((node) => {
+      const box = result.get(node.id);
+      if (!box || insideHeld(node)) return node;
+      const current = boxOf(node);
+      if (
+        samePosition(box.position, current.position) &&
+        box.width === current.width &&
+        box.height === current.height
+      ) {
+        return node;
+      }
+      changed = true;
+      return { ...node, position: box.position, width: box.width, height: box.height };
+    });
+    if (changed) this.nodes = nodes;
+  }
+
+  /** The gesture ended on the canvas: keep where everything landed. */
+  endReshape(): void {
+    if (this.#gesture && this.#heldPositions.size) {
+      const held = this.#heldPositions;
+      this.nodes = this.nodes.map((node) => {
+        const position = held.get(node.id);
+        return position && !samePosition(position, node.position) ? { ...node, position } : node;
+      });
+    }
+    this.#gesture = null;
+    this.#heldPositions = new Map();
+    this.persistPositions();
+  }
+
+  /** A resize ended: keep the positions, and the size that `id` was given. */
+  endResize(id: string, size: { width: number; height: number }): void {
+    this.endReshape();
+    this.source.setLayout(id, size);
+  }
+
+  /** The gesture ended off the canvas: put everything back. */
+  cancelReshape(): void {
+    this.#gesture = null;
+    this.sync();
+  }
+
+  /**
+   * Keep the children inside their frames for the rest of an Alt drag, or let
+   * them out again. SvelteFlow reads the extent of a node on each move of a
+   * drag, so the change applies to a drag that has already started.
+   */
+  clampToParents(clamp: boolean): void {
+    this.nodes = this.nodes.map((node) => {
+      if (!node.parentId) return node;
+      if (clamp) return { ...node, extent: 'parent' as const };
+      const { extent: _extent, ...rest } = node;
+      return rest;
+    });
   }
 
   /** Mirror the selection onto the canvas without a full rebuild. */
@@ -283,11 +433,56 @@ function toFlowNode(node: CanvasNode, selected: boolean): Node {
     width: node.width,
     height: node.height,
     selected,
-    // Children are clipped to their subflow, which is what makes a group read
-    // as a container rather than as a node that happens to sit behind others.
-    ...(node.parentId ? { parentId: node.parentId, extent: 'parent' as const } : {}),
+    // A plain drag can take a child past the edge of its frame, and `reshape`
+    // grows the frame around it. An Alt drag adds the extent `parent` for its
+    // length (`clampToParents`).
+    ...(node.parentId ? { parentId: node.parentId } : {}),
     zIndex: node.level,
   };
+}
+
+/** The box of a flow node, with the size the canvas gave it. */
+function boxOf(node: Node): Box {
+  return {
+    id: node.id,
+    parentId: node.parentId,
+    position: { ...node.position },
+    width: node.width ?? node.measured?.width ?? NODE_WIDTH,
+    height: node.height ?? node.measured?.height ?? NODE_HEIGHT,
+  };
+}
+
+/** The position of `box` on the canvas, through each parent in `boxes`. */
+function absoluteOf(box: Box, boxes: ReadonlyMap<string, Box>): { x: number; y: number } {
+  let { x, y } = box.position;
+  const seen = new Set<string>();
+  let parent = box.parentId ? boxes.get(box.parentId) : undefined;
+  while (parent && !seen.has(parent.id)) {
+    seen.add(parent.id);
+    x += parent.position.x;
+    y += parent.position.y;
+    parent = parent.parentId ? boxes.get(parent.parentId) : undefined;
+  }
+  return { x, y };
+}
+
+function samePosition(a: { x: number; y: number }, b: { x: number; y: number }): boolean {
+  return a.x === b.x && a.y === b.y;
+}
+
+const CANVAS_GRAPH = Symbol('canvas-graph');
+
+/**
+ * Give the node components the graph that draws them. A resize starts inside
+ * a node component, and the push and grow of a resize run in the graph.
+ */
+export function provideCanvasGraph(graph: CanvasGraph): CanvasGraph {
+  return setContext(CANVAS_GRAPH, graph);
+}
+
+/** The graph that draws this node, or undefined outside a canvas. */
+export function useCanvasGraph(): CanvasGraph | undefined {
+  return getContext<CanvasGraph | undefined>(CANVAS_GRAPH);
 }
 
 function toFlowEdge(edge: CanvasEdge): Edge {

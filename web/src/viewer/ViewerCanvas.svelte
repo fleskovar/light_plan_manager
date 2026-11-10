@@ -11,7 +11,7 @@
   import { statusTone } from '$lib/board/selectors.js';
   import Button from '$lib/ui/Button.svelte';
   import DependencyEdge from '$features/canvas/edges/DependencyEdge.svelte';
-  import { CanvasGraph } from '$features/canvas/graph.svelte.js';
+  import { CanvasGraph, provideCanvasGraph } from '$features/canvas/graph.svelte.js';
   import GroupNode from '$features/canvas/nodes/GroupNode.svelte';
   import IssueNode from '$features/canvas/nodes/IssueNode.svelte';
   import { startCameraPan } from '$features/canvas/pan.js';
@@ -36,7 +36,7 @@
   // The store instance is created once by the shell and never swapped, so
   // reading it here rather than in a closure is what is meant.
   // svelte-ignore state_referenced_locally
-  const graph = new CanvasGraph(provideGraphSource(board));
+  const graph = provideCanvasGraph(new CanvasGraph(provideGraphSource(board)));
 
   const nodeTypes = { issue: IssueNode, group: GroupNode };
   const edgeTypes = { dependency: DependencyEdge };
@@ -129,7 +129,9 @@
         _dblClickTarget = null;
       }, 300);
     }}
-    onnodedragstop={() => graph.persistPositions()}
+    onnodedragstart={() => graph.beginReshape()}
+    onnodedrag={({ nodes }) => graph.reshapeDrag(nodes)}
+    onnodedragstop={() => graph.endReshape()}
     onpaneclick={() => board.selection.clear()}
     onselectionchange={({ nodes }) => board.selection.set(nodes.map((node) => node.id))}
   >

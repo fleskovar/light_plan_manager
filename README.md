@@ -3004,7 +3004,7 @@ the pointer on another name opens that menu.
 | **File** | The commands for views, which the next table lists, **Board configuration…**, **Remote board…**, **Library…** and **All projects…**. |
 | **Edit** | **New** creates a document of the chosen type on the board. **Copy**, **Paste**, **Duplicate**, **Clear the selection**, **Remove from the view** and **Delete from the board…** act on the selection. **Push pending changes** pushes at once. |
 | **View** | **Board overview…**, **Arrange the graph**, **Hierarchy display…**, a switch for each pane (**Queue panel**, **Details panel**, **Drawer**) and **Appearance**. |
-| **Help** | **Keyboard shortcuts…** lists every shortcut. |
+| **Help** | **Keyboard shortcuts…** lists every shortcut and every mouse gesture of the canvas. The **Shortcuts** button in the top bar and the key <kbd>?</kbd> open the same list. |
 
 Each entry with a shortcut shows the keys at its right edge. An entry that
 needs the board is disabled while a view loads.
@@ -3154,9 +3154,23 @@ item becomes the active item.
   right along the dependencies, subflows stretch in both directions to hold what
   is inside them, and issues added later are set down clear of the ones already
   placed. *Arrange* lays the whole thing out again.
-- **Interaction** — context menus on the canvas, on a node and on an edge; drag a
-  node onto another to reparent it, hold <kbd>Alt</kbd> and drop one onto an
-  edge to splice it in, rubber-band or <kbd>Shift</kbd>-click to multi-select,
+- **Interaction** — context menus on the canvas, on a node and on an edge. A
+  drag with no key held moves the node and never changes the board. A node
+  that it meets moves out of the way, to 24 pixels from it. A frame grows
+  around a child that moves past its edge. That frame then pushes the nodes
+  that it meets in the same way, up to the top of the canvas. A resize pushes
+  and grows in the same way. During the drag, the nodes that moved return to
+  their places when the dragged node moves back. Hold <kbd>Alt</kbd> to change
+  the board instead: the node stays inside its frame, and the drop decides the
+  change. A drop on another node reparents the node. When the view hides the
+  parent of the node, or draws the parent's type as a badge, that drop only
+  moves the node. A drop on an edge splices the node into that dependency. A
+  drop on a sprint box schedules it (see below). Two shortcuts add a
+  dependency. Select items in order (click, then <kbd>Shift</kbd>-click) and
+  press and release <kbd>F</kbd>: each item then depends on the item selected
+  before it. Or hold <kbd>F</kbd> and drag from one item to another: the second
+  item then depends on the first. Rubber-band or
+  <kbd>Shift</kbd>-click to multi-select,
   <kbd>Ctrl</kbd>+<kbd>C</kbd>/<kbd>V</kbd> to copy structures. Holding
   <kbd>Ctrl</kbd> turns every surface into the pane: dragging pans the camera
   even when it starts inside a node, which is what makes a subflow the size of
@@ -3464,11 +3478,10 @@ item becomes the active item.
   you do; nor are the sub-tasks inside an `atomic` story, which travels whole. Dropping onto the unscheduled box takes the whole subtree back out
   again.
 
-  Nothing on the canvas moves while you do it: the node stays exactly where it
-  is, the camera holds still, and no position is saved. Being scheduled into a
-  sprint is not a change to the picture, so the picture does not change — only
-  the box under the pointer lights up. Escape puts it down with nothing altered.
-  Without Alt a drag still moves the node, as it always did.
+  The box under the pointer lights up during the drag, and the camera does not
+  pan while the pointer is over the drawer. After the drop, the node returns to
+  the place where the drag started, and the canvas saves no position. Without
+  Alt, a drag only moves the node, and pushes and grows as described above.
 
   Headers edit the period's name and dates in place, and each box
   counts its issues and its effort: its own, and the total including everything

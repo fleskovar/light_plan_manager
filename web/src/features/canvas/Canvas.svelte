@@ -13,15 +13,16 @@
   import { useShell } from '$lib/app/shell.svelte.js';
   import { statusTone } from '$lib/board/selectors.js';
   import Button from '$lib/ui/Button.svelte';
+  import { isTyping } from '$lib/shortcuts/bindings.js';
   import { addDependency } from '$lib/workspace/mutations.js';
   import { useWorkspace } from '$lib/workspace/workspace.svelte.js';
   import { useRemoteState } from '$features/drawer/remote/remote.svelte.js';
-  import { startCarry } from './carry.js';
   import DraftCard from './DraftCard.svelte';
   import { cleanTitle, provideCanvasEditing } from './editing.js';
   import DependencyEdge from './edges/DependencyEdge.svelte';
-  import { CanvasGraph } from './graph.svelte.js';
+  import { CanvasGraph, provideCanvasGraph } from './graph.svelte.js';
   import { edgeMenu, nodeMenu, paneMenu, type EditActions } from './menus.js';
+  import { isLinkKey, linkSelection, startLinkDrag, type LinkDragHandlers } from './link.js';
   import GroupNode from './nodes/GroupNode.svelte';
   import IssueNode from './nodes/IssueNode.svelte';
   import { startCameraPan } from './pan.js';
@@ -38,10 +39,9 @@
   import {
     centredOn,
     commitDraft,
-    createCarryHandlers,
     createDoubleClickHandler,
+    createDragHandlers,
     finishRename,
-    handleDragStop,
     handleRosterDrop,
     isPaneTarget,
     nextDraft,
@@ -82,7 +82,9 @@
   // Read mode or edit mode, and the active item of edit mode. The graph draws
   // the inside of `mode.scope`, which is null in read mode.
   const mode = workspace.canvasMode;
-  const graph = new CanvasGraph(provideGraphSource(workspace), { scope: () => mode.scope });
+  const graph = provideCanvasGraph(
+    new CanvasGraph(provideGraphSource(workspace), { scope: () => mode.scope }),
+  );
   const screenToFlow = (p: { x: number; y: number }) =>
     flow.screenToFlowPosition(p);
 
@@ -94,12 +96,20 @@
   const nodeTypes = { issue: IssueNode, group: GroupNode };
   const edgeTypes = { dependency: DependencyEdge };
 
-  /** True while Alt is held: a drag carries the issue instead of moving it. */
+  /** True while Alt is held: a drag changes the board instead of the picture. */
   let splicing = $state(false);
   /** True while Ctrl is held: the canvas is a camera, not a set of nodes. */
   let panning = $state(false);
-  /** True between picking a node up with Alt and putting it down. */
+  /** True between the start and the end of an Alt drag. */
   let carrying = $state(false);
+  /** False while an Alt drag is over the drawer, so the camera holds still. */
+  let autoPan = $state(true);
+  /** True while F is held: a drag from a node draws a dependency (`link.ts`). */
+  let linkKey = $state(false);
+  /** True when a link drag ran during the current hold of F, so the release links nothing. */
+  let linkDragged = false;
+  /** The line of a link drag, in pixels from the top-left corner of the canvas. */
+  let linkLine = $state<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
 
   // -- Double-click ---------------------------------------------------------
 
@@ -218,15 +228,62 @@
     startDraft(screenToFlow({ x: event.clientX, y: event.clientY }));
   }
 
-  // -- Carry ----------------------------------------------------------------
+  // -- Drag -----------------------------------------------------------------
 
-  const carryUI = {
-    setCarrying: (v: boolean) => { carrying = v; },
-    setPeriodDropTarget: (v: string | null) => { shell.periodDropTarget = v; },
-  };
-  const carryHandlers = $derived(
-    createCarryHandlers(workspace, shell, carryUI, graph, screenToFlow),
+  const dragHandlers = createDragHandlers(
+    workspace,
+    shell,
+    {
+      setStructural: (on) => (carrying = on),
+      setAutoPan: (on) => (autoPan = on),
+    },
+    graph,
+    screenToFlow,
   );
+
+  // -- Link -----------------------------------------------------------------
+
+  const linkHandlers: LinkDragHandlers = {
+    move: (from, x, y) => {
+      const box = canvasElement?.getBoundingClientRect();
+      const source = canvasElement
+        ?.querySelector(`[data-node-id="${CSS.escape(from)}"]`)
+        ?.getBoundingClientRect();
+      if (!box || !source) return;
+      linkLine = {
+        x1: source.left + source.width / 2 - box.left,
+        y1: source.top + source.height / 2 - box.top,
+        x2: x - box.left,
+        y2: y - box.top,
+      };
+    },
+    drop: (from, to) => {
+      linkLine = null;
+      linkDragged = true;
+      if (to && to !== from) addDependency(workspace, to, from);
+    },
+    cancel: () => {
+      linkLine = null;
+      linkDragged = true;
+    },
+  };
+
+  function onKeyDown(event: KeyboardEvent): void {
+    splicing = event.altKey;
+    panning = event.ctrlKey || event.metaKey;
+    if (!event.repeat && isLinkKey(event) && !isTyping(event.target)) {
+      linkKey = true;
+      linkDragged = false;
+    }
+  }
+
+  function onKeyUp(event: KeyboardEvent): void {
+    splicing = event.altKey;
+    panning = event.ctrlKey || event.metaKey;
+    if (event.key.toLowerCase() !== 'f' || !linkKey) return;
+    linkKey = false;
+    if (!linkDragged && workspace.ready) linkSelection(workspace);
+  }
 
   // -- Graph sync -----------------------------------------------------------
 
@@ -312,17 +369,12 @@
   blur resets them: a window that loses focus mid-chord never sees the keyup.
 -->
 <svelte:window
-  onkeydown={(event) => {
-    splicing = event.altKey;
-    panning = event.ctrlKey || event.metaKey;
-  }}
-  onkeyup={(event) => {
-    splicing = event.altKey;
-    panning = event.ctrlKey || event.metaKey;
-  }}
+  onkeydown={onKeyDown}
+  onkeyup={onKeyUp}
   onblur={() => {
     splicing = false;
     panning = false;
+    linkKey = false;
   }}
 />
 
@@ -331,13 +383,14 @@
   class:splicing
   class:panning
   class:carrying
+  class:linking={linkKey}
   class:editing={mode.editing}
   role="application"
   aria-label="Dependency graph"
   bind:this={canvasElement}
   ondblclick={onCanvasDoubleClick}
   onpointerdowncapture={(event) => {
-    if (startCarry(event, carryHandlers)) return;
+    if (startLinkDrag(event, linkKey, linkHandlers)) return;
     startCameraPan(event, flow, event.currentTarget);
     // Right-click on a node: SvelteFlow's internal node drag handler calls
     // preventDefault() on pointerdown, which suppresses the browser's
@@ -362,12 +415,14 @@
     nodeDragThreshold={2}
     zoomOnDoubleClick={!mode.editing}
     nodesDraggable={!panning}
+    autoPanOnNodeDrag={autoPan}
     selectionKey="Shift"
     multiSelectionKey="Shift"
     deleteKey={null}
     onnodeclick={({ node, event }) => onNodeClick(node.id, event as MouseEvent)}
-    onnodedragstop={(params) =>
-      handleDragStop({ ...params, graph, workspace, shell, screenToFlow })}
+    onnodedragstart={({ event }) => dragHandlers.start(event)}
+    onnodedrag={({ nodes }) => dragHandlers.drag(nodes)}
+    onnodedragstop={(params) => dragHandlers.stop(params)}
     onnodecontextmenu={({ node, event }) => {
       if (!workspace.selection.has(node.id)) workspace.selection.set([node.id]);
       shell.openMenu(
@@ -435,6 +490,23 @@
       onchoose={chooseType}
       onadd={() => startDraft(null)}
     />
+  {/if}
+
+  {#if linkLine}
+    <svg class="link-line" aria-hidden="true">
+      <defs>
+        <marker id="lpm-link-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" />
+        </marker>
+      </defs>
+      <line
+        x1={linkLine.x1}
+        y1={linkLine.y1}
+        x2={linkLine.x2}
+        y2={linkLine.y2}
+        marker-end="url(#lpm-link-arrow)"
+      />
+    </svg>
   {/if}
 
   <div class="toolbar">
@@ -507,15 +579,40 @@
     stroke-width: 3px;
   }
 
-  /* Alt over a node: it can be picked up and carried to the drawer. */
+  /* Alt over a node: a drag can reparent it, splice it or schedule it. */
   .splicing :global(.svelte-flow__node) {
     cursor: grab;
   }
 
-  /* Carrying: the pointer is holding work, and the graph is not moving. */
+  /* An Alt drag is running: the pointer is holding work. */
   .carrying,
   .carrying :global(.svelte-flow__node) {
     cursor: grabbing;
+  }
+
+  /* While F is held, a drag from a node draws a dependency. */
+  .linking :global(.svelte-flow__node) {
+    cursor: crosshair;
+  }
+
+  /* The line of a link drag, from the first node to the pointer. */
+  .link-line {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .link-line line {
+    stroke: var(--accent);
+    stroke-width: 2;
+    stroke-dasharray: 6 4;
+  }
+
+  .link-line path {
+    fill: var(--accent);
   }
 
   /* While Ctrl is held every surface is the camera, so it all reads as pannable. */

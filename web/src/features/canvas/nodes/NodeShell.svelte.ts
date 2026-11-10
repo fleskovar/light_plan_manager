@@ -1,15 +1,56 @@
 import { isDerivedFlag } from '$shared';
 import type { SyncBadge } from '$shared';
+import type { CanvasGraph } from '../graph.svelte.js';
 import type { CanvasNodeData } from '../model.js';
 import { MIN_LEAF_HEIGHT, MIN_LEAF_WIDTH } from '../layout.js';
+import type { GraphSource } from '../source.js';
 
 /**
  * Derivations extracted from NodeShell.svelte.
  *
  * The component is deliberately kept as markup, CSS and callback wiring.
  * What lives here is the narrow strip of logic it needs: the floor a node may
- * not be dragged below, and the display text for the schedule badge.
+ * not be dragged below, the resize callbacks, and the display text for the
+ * schedule badge.
  */
+
+/** A box as the resizer of SvelteFlow reports it: position relative to the parent. */
+export interface ResizeBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** The three events of a resize, for one node. */
+export interface ResizeHandlers {
+  start(id: string): void;
+  resize(id: string, box: ResizeBox): void;
+  end(id: string, box: ResizeBox): void;
+}
+
+/**
+ * The resize callbacks of a node component.
+ *
+ * With a `CanvasGraph`, a resize pushes the nodes that it meets and grows the
+ * frames around it, as a plain drag does. The resizer of SvelteFlow calls
+ * `onResize` before it writes its own change to the node. So the push runs in
+ * a microtask, after that write. Without a graph, the end of a resize only
+ * stores the box.
+ */
+export function resizeHandlers(
+  graph: CanvasGraph | undefined,
+  source: Pick<GraphSource, 'setLayout'>,
+): ResizeHandlers {
+  if (!graph) {
+    return { start: () => {}, resize: () => {}, end: (id, box) => source.setLayout(id, box) };
+  }
+  return {
+    start: () => graph.beginReshape(),
+    resize: (id, box) => queueMicrotask(() => graph.reshapeResize(id, box)),
+    end: (id, box) => graph.endResize(id, { width: box.width, height: box.height }),
+  };
+}
 
 /**
  * The smallest size a node may be dragged to.
