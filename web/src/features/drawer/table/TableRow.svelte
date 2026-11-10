@@ -5,6 +5,7 @@
   import LazySelect from '$lib/ui/fields/LazySelect.svelte';
   import StatusChip from '$lib/ui/StatusChip.svelte';
   import TypeIcon from '$lib/ui/TypeIcon.svelte';
+  import { opensIssueWindow } from './open.js';
   import type { TableRow } from './rows.js';
 
   /**
@@ -37,6 +38,10 @@
     /** `subtree` puts everything under the issue on the canvas as well. */
     ontoggleMembership: (id: string, subtree: boolean) => void;
     oncontext: (id: string, event: MouseEvent) => void;
+    /** Open the issue window of `id`. A double-click on the row and the link ↗ call it. */
+    onopen: (id: string) => void;
+    /** The address of the issue window, for the link ↗. */
+    openHref: string;
   }
 
   let {
@@ -55,6 +60,8 @@
     onattribute,
     ontoggleMembership,
     oncontext,
+    onopen,
+    openHref,
   }: Props = $props();
 
   const issue = $derived(row.node.kind === 'issue' ? row.node : null);
@@ -72,6 +79,9 @@
   data-row={row.node.id}
   onclick={(event) => onselect(row.node.id, event)}
   oncontextmenu={(event) => oncontext(row.node.id, event)}
+  ondblclick={(event) => {
+    if (opensIssueWindow(event.target)) onopen(row.node.id);
+  }}
 >
   <td class="title" style="--depth: {row.depth}">
     <!-- The flex row lives on a wrapper, not on the `td`: a table cell told to
@@ -99,6 +109,19 @@
       {/if}
       <span class="icon"><TypeIcon type={row.node.type} depth={row.node.depth} /></span>
       <span class="id">{row.node.id}</span>
+      <!-- A real address, so a middle-click or "Open in new tab" also works.
+           A plain click opens the named issue window that the canvas opens. -->
+      <a
+        class="open"
+        href={openHref}
+        title="Open {row.node.id} in its own window"
+        aria-label="Open {row.node.id} in its own window"
+        onclick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onopen(row.node.id);
+        }}
+      >↗</a>
       {#if issue?.flag}
         <!-- Read-only here: raising or clearing one needs the comment that makes
              it actionable, and that lives in the side panel. -->
@@ -259,6 +282,22 @@
     font-family: var(--font-mono);
     font-size: var(--text-xs);
     color: var(--ink-muted);
+  }
+
+  .open {
+    flex: none;
+    padding: 0 0.15rem;
+    border-radius: var(--radius-sm);
+    color: var(--accent);
+    font-size: var(--text-sm);
+    line-height: 1;
+    text-decoration: none;
+  }
+
+  .open:hover,
+  .open:focus-visible {
+    background: var(--accent-soft);
+    color: var(--accent-ink);
   }
 
   .flag {

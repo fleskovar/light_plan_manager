@@ -1,6 +1,8 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte';
   import type { AttributeDto, NodeDto } from '$shared';
+  import { openIssueWindow } from '$lib/app/issue-window.js';
+  import { issueHash } from '$lib/app/router.svelte.js';
   import { useShell } from '$lib/app/shell.svelte.js';
   import { ancestorsOf, nodesOfKind, subtreeIds } from '$lib/board/selectors.js';
   import { editNode } from '$lib/workspace/mutations.js';
@@ -21,6 +23,10 @@
    * Selecting a row selects the node everywhere, which is what makes clicking
    * here move the canvas — and, the other way round, selecting a node anywhere
    * else scrolls this list to it and opens whatever it was buried under.
+   *
+   * A double-click on a row, outside its fields, opens the issue window, as a
+   * double-click on a node of the canvas does in read mode. The link ↗ after
+   * the id opens the same window.
    */
   const workspace = useWorkspace();
   const shell = useShell();
@@ -415,6 +421,8 @@
             onattribute={(id, name, value) =>
               editNode(workspace, id, { attributes: { [name]: value } })}
             ontoggleMembership={toggleMembership}
+            onopen={(id) => openIssueWindow(id, workspace.doc.id)}
+            openHref={issueHash(row.node.id, workspace.doc.id)}
             oncontext={(id, event) => {
               // Shift-clicking rows and then right-clicking one is how a bulk
               // edit is asked for here, so a right-click inside the selection

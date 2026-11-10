@@ -3460,7 +3460,11 @@ item becomes the active item.
   *Show down to* folds the tree to a level, so one click leaves the programmes
   showing with their epics closed. Clicking a row moves the graph to it, and
   selecting anything anywhere scrolls this list to it and opens whatever it was
-  folded inside.
+  folded inside. A double-click on a row opens the window of the issue, as a
+  double-click on a node of the canvas does in read mode. A double-click in the
+  title field or another field of the row edits that field instead. The link
+  ↗ after each id opens the same window. A middle-click on the link opens the
+  issue in a new browser tab.
 - **Periods** — the timeline as boxes of work, nested the way the periods are:
   each sprint is drawn *inside* the increment it belongs to, one band under
   another down the pane, with everything unscheduled in a box at the end. Every
