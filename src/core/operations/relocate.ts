@@ -75,7 +75,7 @@ import type { BoardStore } from './init.js';
  */
 
 export interface RelocateOptions {
-  /** Copies the folder `from` into the new, empty folder `to`. Tests pass one that fails. */
+  /** Copies the folder `from` into `to`. `to` is a new folder, or an existing folder that holds only the kept names. Tests pass one that fails. */
   copy?: (from: string, to: string, filter: (source: string) => boolean) => void;
   /** Back the board up before the move. On by default. */
   backup?: boolean;
@@ -100,8 +100,24 @@ export interface RelocateResult {
   backup: BoardBackup | null;
 }
 
+/**
+ * Copy the folder `from` into `to` with `cpSync`. A move into the project
+ * copies into the existing folder `<project>/.lpm`, which holds the pointer.
+ * On Linux, Node 24.22 `cpSync` with `errorOnExist` fails with `EEXIST` when
+ * `to` exists, also when `to` is a folder. Node 24.19 on Windows merges into
+ * the folder. So when `to` exists, this function copies each top entry of
+ * `from` to its own new path in `to`.
+ */
 const defaultCopy: NonNullable<RelocateOptions['copy']> = (from, to, filter) => {
-  cpSync(from, to, { recursive: true, filter, errorOnExist: true, force: false });
+  const options = { recursive: true, filter, errorOnExist: true, force: false };
+  if (!existsSync(to)) {
+    cpSync(from, to, options);
+    return;
+  }
+  for (const name of readdirSync(from)) {
+    const entry = path.join(from, name);
+    if (filter(entry)) cpSync(entry, path.join(to, name), options);
+  }
 };
 
 const NOTHING_MOVED = 'Nothing was moved.';

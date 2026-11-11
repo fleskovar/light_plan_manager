@@ -159,7 +159,10 @@ The move runs under the board lock and takes five steps:
    the project.
 1. Copy the board folder to the target, without the lock file. The move to
    `local` copies into the pointer folder `<project>/.lpm`, without
-   `project.json` and without `config.yml`.
+   `project.json` and without `config.yml`. Because `<project>/.lpm`
+   exists, the move copies each top entry of the board folder to its own new
+   path in `<project>/.lpm`. On Linux, Node 24.22 `cpSync` with
+   `errorOnExist` fails with `EEXIST` on an existing target folder.
 2. Compare the two folder trees: the file lists, the file sizes and the
    SHA-256 digest of each file. When the trees differ, the move deletes the
    copy, waits 1 second, and copies again. A third copy follows after
