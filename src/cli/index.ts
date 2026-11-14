@@ -36,6 +36,7 @@ import * as team from './commands/team.js';
 import * as library from './commands/library.js';
 import * as template from './commands/template.js';
 import * as ui from './commands/ui.js';
+import * as upgrade from './commands/upgrade.js';
 import * as upstream from './commands/upstream.js';
 import { bold, dim, err, out, pad, red, reportError } from './ui.js';
 
@@ -81,6 +82,7 @@ const commands: Record<string, Command> = {
   mcp,
   agent,
   hcm,
+  upgrade,
 };
 const aliases: Record<string, string> = {
   publish: 'export',
@@ -149,6 +151,7 @@ const summaries: Record<string, string> = {
   mcp: 'Serve the board to AI agents over MCP',
   agent: 'Install the light-plan agents and skills into a project',
   hcm: 'Register the agents and skills as hcm bundles, for every project',
+  upgrade: 'Upgrade light-plan to the latest version on the npm registry',
 };
 
 function version(): string {

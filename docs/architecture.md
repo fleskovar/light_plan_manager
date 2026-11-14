@@ -1852,9 +1852,15 @@ and eligibility rules in core, not in the command. `lpm planning` is one
 `setPlanning` call and a report; it decides nothing about what the mode means.
 `lpm experimental` is one `setExperimental` call, one
 `installMissingDependencies` call (`cli/experimental-deps.ts`) and a report.
-It is the one command that starts `npm`. The runner is an argument of every
-function that needs it, so `test/experimental.test.ts` passes a recorder and
-no test starts npm.
+`lpm upgrade` is one `upgradeLightPlan` call (`cli/self-upgrade.ts`) and a
+report. `lpm experimental` and `lpm upgrade` are the two commands that start
+`npm`. Both use `installTarget` and `runNpm` from `cli/experimental-deps.ts`.
+The runner is an argument of every function that needs it, so
+`test/experimental.test.ts` and `test/upgrade.test.ts` pass a recorder and no
+test starts npm. A global upgrade runs npm in the folder above the global
+`node_modules`, not in the package folder. `npm install -g` renames the package
+folder, and Windows refuses that rename while the folder is the working folder
+of the npm process (`EBUSY`).
 `lpm period` is its sibling
 for the timeline and takes flags rather than subcommands; every branch is one
 `updateNode` or one planner from `src/shared/plans/`, and none of the date

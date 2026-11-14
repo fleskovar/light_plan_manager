@@ -21,6 +21,11 @@ npm install -g light-plan
 lpm init
 ```
 
+To upgrade to the latest version later, run `lpm upgrade`. The command runs
+`npm install -g light-plan@<latest>` for a global install, and
+`lpm upgrade --check` only compares the versions. See
+[Upgrading light-plan](#upgrading-light-plan-lpm-upgrade).
+
 Or run it without installing anything:
 
 ```bash
@@ -2827,6 +2832,7 @@ still refused.
 | `lpm mcp` | Serve the board to AI agents over MCP. `--user`, `--profile`, `--read-only`, `--allow-remote`, `--root` |
 | `lpm mcp setup` | Write the MCP config a host needs. `--file`, `-o/--output`, `--name`, `--user`, `--profile`, `--read-only`, `--allow-remote`, `--print`, `--force` |
 | `lpm agent` | Install the agents, skills and MCP config into a project. `--target`, `--type`, `--project`, `--global`, `--dir`, `--name`, `--user`, `--profile`, `--read-only`, `--no-mcp`, `--force`, `--dry-run` |
+| `lpm upgrade` | Upgrade light-plan to the latest version on the npm registry. `--check` compares the versions and installs nothing |
 | `lpm hcm init` / `build` / `remove` | Register the agents, skills and MCP server as hcm bundles; render them without registering; unregister them. `--dir`, `--dev` |
 
 `lpm check` exits 1 when errors remain, so it drops straight into CI or a
@@ -2903,6 +2909,30 @@ register the `/api/remotes` routes at all, and the Sync tab and the tab
 **Remote board** offer [sharing the board through git](docs/git-sync.md) and
 nothing else. The bullets below marked *(experimental)* describe the mode with
 the features on. The `lpm remote` commands are unaffected.
+
+### Upgrading light-plan: `lpm upgrade`
+
+```bash
+lpm upgrade           # install the latest version, when it is newer
+lpm upgrade --check   # compare the installed version with the latest version
+```
+
+`lpm upgrade` asks npm for the version that the tag `latest` names
+(`npm view light-plan version`). When that version is newer than the installed
+version, the command runs npm where light-plan is installed:
+
+| light-plan is installed | The command that `lpm upgrade` runs |
+| --- | --- |
+| globally (`npm install -g light-plan`) | `npm install -g light-plan@<latest>` |
+| in a project (`npm install light-plan`) | `npm install light-plan@<latest>`, in the project. npm writes the new version into the `package.json` of the project. |
+| from a clone, or with `npm link` | none. The command prints `git pull && npm install && npm run build`. |
+| through `npx`, or with pnpm or yarn | none. For `npx`, the command prints `npx light-plan@latest <command>`. |
+
+The command exits with the status 1 when npm fails, when npm cannot reach the
+registry, and when npm does not manage the install. Restart a running `lpm ui`
+or `lpm mcp` after an upgrade. The upgrade does not install the experimental
+packages again. Run `lpm experimental on` when a new version needs a new
+package.
 
 ### Experimental features: `lpm experimental`
 
