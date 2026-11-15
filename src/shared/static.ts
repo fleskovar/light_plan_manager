@@ -1,5 +1,5 @@
 import type { BoardSnapshot } from './model.js';
-import type { NodeLayout, TypeDisplay, ViewDocument } from './view.js';
+import type { LevelLayout, NodeLayout, TypeDisplay, ViewDocument } from './view.js';
 
 /**
  * A board frozen into one file, for a viewer that has no server behind it.
@@ -40,6 +40,13 @@ export interface StaticView {
    * published. Optional, so a board exported before this existed still reads.
    */
   display?: Record<string, TypeDisplay>;
+  /**
+   * The detail level the view was published at, and the arrangement of each
+   * other level. @see ViewDocument.level. Optional, so a board exported before
+   * these existed still reads.
+   */
+  level?: number | null;
+  levelLayouts?: Record<string, Record<string, LevelLayout>>;
 }
 
 export interface StaticBoard {
@@ -65,6 +72,17 @@ export function toStaticView(view: ViewDocument, alive: (id: string) => boolean)
     members: view.members.filter(alive),
     layout: Object.fromEntries(Object.entries(view.layout).filter(([id]) => alive(id))),
     display: view.display,
+    ...(view.level !== undefined ? { level: view.level } : {}),
+    ...(view.levelLayouts
+      ? {
+          levelLayouts: Object.fromEntries(
+            Object.entries(view.levelLayouts).map(([key, entries]) => [
+              key,
+              Object.fromEntries(Object.entries(entries).filter(([id]) => alive(id))),
+            ]),
+          ),
+        }
+      : {}),
   };
 }
 

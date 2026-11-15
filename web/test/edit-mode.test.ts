@@ -288,6 +288,8 @@ describe('CanvasGraph with an active item', () => {
       members: everything,
       layout,
       display: {},
+      level: null,
+      setLevel: () => true,
       selection: new Selection(),
       isCollapsed: () => false,
       toggleCollapsed: () => {},

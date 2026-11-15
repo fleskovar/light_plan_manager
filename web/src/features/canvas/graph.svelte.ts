@@ -182,6 +182,18 @@ export class CanvasGraph {
     this.#publish(fitGroups(keepInsideFrames(placed)), graph.edges);
   }
 
+  /**
+   * Show the canvas at the detail level `level`: a hierarchy depth, or null for
+   * every level. A level that the reader visited before gets its arrangement
+   * back. A level without one is laid out again, because folding a level
+   * leaves the gaps of everything that it hid.
+   */
+  setLevel(level: number | null): void {
+    if (level === this.source.level) return;
+    if (this.source.setLevel(level)) this.sync();
+    else this.arrange();
+  }
+
   /** Lay the whole canvas out again and remember where everything landed. */
   arrange(): void {
     this.#gesture = null;
@@ -496,6 +508,8 @@ function toFlowEdge(edge: CanvasEdge): Edge {
       tone: edge.tone,
       animated: edge.animated,
       aggregated: edge.aggregated,
+      written: edge.written,
+      links: edge.links,
       stalled: edge.stalled,
       from: edge.from,
       to: edge.to,

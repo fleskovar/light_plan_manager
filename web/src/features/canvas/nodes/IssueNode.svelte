@@ -38,7 +38,11 @@
       <span class="effort" title="Effort">{data.effort}</span>
     {/if}
     {#if data.collapsed}
-      <span class="rolled">collapsed</span>
+      <!-- The number of items folded into this node, so a canvas at a high
+           level still says how much work each node holds. -->
+      <span class="rolled" title="{data.foldedInside} item{data.foldedInside === 1 ? '' : 's'} folded inside">
+        {data.foldedInside} inside
+      </span>
     {/if}
   {/snippet}
 </NodeShell>

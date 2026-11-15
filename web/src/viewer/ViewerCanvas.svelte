@@ -16,6 +16,8 @@
   import IssueNode from '$features/canvas/nodes/IssueNode.svelte';
   import { startCameraPan } from '$features/canvas/pan.js';
   import { provideGraphSource } from '$features/canvas/source.js';
+  import LevelBar from '$features/canvas/LevelBar.svelte';
+  import { hierarchyLevels } from '$lib/board/levels.js';
   import type { ViewerBoard } from './board.svelte.js';
 
   /**
@@ -72,6 +74,19 @@
 
   let _dblClickTimer: ReturnType<typeof setTimeout> | null = null;
   let _dblClickTarget: string | null = null;
+
+  /** The steps of the level bar: one for each level of the hierarchy. */
+  const levels = $derived(
+    board.ready
+      ? hierarchyLevels(board.config, board.nodeKind, board.nodes, board.members, board.display)
+      : [],
+  );
+
+  /** Show the canvas at `level`, then fit the new picture. */
+  function showLevel(level: number | null): void {
+    graph.setLevel(level);
+    requestAnimationFrame(() => void flow.fitView({ duration: 320, maxZoom: 1.1, padding: 0.15 }));
+  }
 
   /** Forget the saved positions and lay the whole thing out from scratch. */
   function arrange(): void {
@@ -146,6 +161,10 @@
     />
   </SvelteFlow>
 
+  <div class="bars">
+    <LevelBar {levels} current={board.level} onselect={showLevel} />
+  </div>
+
   <div class="toolbar">
     <Button size="sm" onclick={arrange} title="Re-arrange the graph">Arrange</Button>
     <Button size="sm" onclick={() => void flow.fitView({ duration: 240 })}>Fit</Button>
@@ -203,6 +222,21 @@
   .panning :global(.svelte-flow__pane:active),
   .panning :global(.svelte-flow__node:active) {
     cursor: grabbing;
+  }
+
+  .bars {
+    position: absolute;
+    top: var(--space-3);
+    left: var(--space-3);
+    /* The toolbar with Arrange and Fit keeps the top-right corner. */
+    right: 9rem;
+    z-index: 5;
+    display: flex;
+    pointer-events: none;
+  }
+
+  .bars > :global(*) {
+    pointer-events: auto;
   }
 
   .toolbar {

@@ -832,6 +832,23 @@ describe('view files', () => {
     const view = parseView({ id: 'v', name: 'V', queue: { open: false, width: 410 } }, 'v');
     expect(view.queue).toEqual({ open: false, width: 410 });
   });
+
+  it('keeps the detail level and the arrangement of each level', () => {
+    const levelLayouts = { all: { F1: { x: 1, y: 2, collapsed: true } } };
+    const view = parseView({ id: 'v', name: 'V', level: 2, levelLayouts }, 'v');
+    expect(view.level).toBe(2);
+    expect(view.levelLayouts).toEqual(levelLayouts);
+  });
+
+  it('opens a view written before levels existed without a level', () => {
+    const view = parseView({ id: 'old', name: 'Old' }, 'old');
+    expect(view.level).toBeUndefined();
+    expect(view.levelLayouts).toBeUndefined();
+  });
+
+  it('refuses a level that is not a depth', () => {
+    expect(() => parseView({ id: 'v', name: 'V', level: -1 }, 'v')).toThrow(/not a valid view/);
+  });
 });
 
 describe('GET /api/me', () => {

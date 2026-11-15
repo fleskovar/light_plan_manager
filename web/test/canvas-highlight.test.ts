@@ -25,6 +25,8 @@ function source(nodes = sampleBoard()): GraphSource & { selection: Selection } {
     members,
     layout,
     display: {} as Record<string, TypeDisplay>,
+    level: null,
+    setLevel: () => true,
     selection: new Selection(),
     isCollapsed: (id) => collapsed.has(id),
     toggleCollapsed: (id) => {

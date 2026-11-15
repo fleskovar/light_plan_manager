@@ -152,6 +152,8 @@ describe('CanvasGraph push and grow', () => {
       members: ['F1', 'S1', 'S2'],
       layout,
       display: {},
+      level: null,
+      setLevel: () => true,
       selection: new Selection(),
       isCollapsed: () => false,
       toggleCollapsed: () => {},

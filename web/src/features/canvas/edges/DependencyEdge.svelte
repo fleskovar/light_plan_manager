@@ -1,12 +1,17 @@
 <script lang="ts">
-  import { BaseEdge, getSmoothStepPath, type EdgeProps } from '@xyflow/svelte';
+  import { BaseEdge, EdgeLabel, getSmoothStepPath, type EdgeProps } from '@xyflow/svelte';
   import type { StatusTone } from '$lib/board/selectors.js';
 
   /**
    * A dependency. Its colour follows the downstream issue's status, and it
    * animates while that work is in progress — so a glance at the canvas shows
-   * where the flow actually is. A dashed edge stands for several dependencies
-   * folded into a collapsed subflow.
+   * where the flow actually is.
+   *
+   * A dashed edge joins two nodes that no dependency joins directly: every
+   * dependency it stands for runs between items folded into them. A canvas at
+   * the feature level draws one between two features whose stories depend on
+   * each other. An edge that stands for more than one dependency carries their
+   * number at its midpoint.
    *
    * The route is orthogonal rather than curved: a plan is read by following one
    * line among dozens, and a right angle is far easier to keep your eye on than
@@ -18,6 +23,10 @@
     tone: StatusTone;
     animated: boolean;
     aggregated: boolean;
+    /** A dependency joins the two drawn nodes themselves. */
+    written?: boolean;
+    /** The dependencies the edge stands for. */
+    links?: { from: string; to: string }[];
     /** The blocker at the far end is flagged: drawn red, selected or not. */
     stalled?: boolean;
     /** Touches the current selection: drawn heavier. */
@@ -38,7 +47,7 @@
     data,
   }: EdgeProps & { data?: Data } = $props();
 
-  const path = $derived(
+  const route = $derived(
     getSmoothStepPath({
       sourceX,
       sourceY,
@@ -48,8 +57,15 @@
       targetPosition,
       borderRadius: 0,
       offset: 18,
-    })[0],
+    }),
   );
+  const path = $derived(route[0]);
+
+  /** The number of dependencies, shown when the edge stands for more than one. */
+  const count = $derived(data?.links?.length ?? 1);
+
+  /** Only folded items are joined: the edge reports an implied order. */
+  const implied = $derived(Boolean(data?.aggregated) && data?.written === false);
 
   /**
    * Lit up because of what is selected. It takes a colour of its own rather
@@ -75,9 +91,18 @@
   style="
     stroke-width: {width}px;
     opacity: {data?.faded ? 0.25 : 1};
-    {data?.aggregated && !live ? 'stroke-dasharray: 2 4;' : ''}
+    {implied && !live ? 'stroke-dasharray: 2 4;' : ''}
   "
 />
+{#if count > 1 && !data?.faded}
+  <EdgeLabel x={route[1]} y={route[2]} class="edge-count nodrag nopan">
+    <span
+      title="{count} dependencies{implied ? ' between the items inside' : ''}"
+    >
+      {count}
+    </span>
+  </EdgeLabel>
+{/if}
 {#if data?.animated && !data?.faded}
   <circle class="pulse tone-{data.tone}" r="3">
     <animateMotion dur="2.2s" repeatCount="indefinite" path={path} />
@@ -149,5 +174,16 @@
 
   .pulse {
     fill: var(--tone);
+  }
+
+  :global(.svelte-flow__edge-label.edge-count) {
+    padding: 0 0.35rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface-1);
+    color: var(--ink-muted);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    line-height: 1.4;
   }
 </style>

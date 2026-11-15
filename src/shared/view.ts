@@ -25,6 +25,13 @@ export interface NodeLayout {
   height?: number;
 }
 
+/** The part of a `NodeLayout` that belongs to one detail level of the canvas. */
+export interface LevelLayout {
+  x: number;
+  y: number;
+  collapsed?: boolean;
+}
+
 /**
  * The drawer's tabs. The queue used to be one of them and is now a panel of its
  * own (`QueuePanelState`); a view file saved on that tab is read as `table`.
@@ -110,6 +117,20 @@ export interface ViewDocument {
   queue: QueuePanelState;
   /** Issue type -> how the canvas draws it. A type that is absent is a node. */
   display: Record<string, TypeDisplay>;
+  /**
+   * The hierarchy depth where the canvas folds: a node at this depth or deeper
+   * draws its children folded into itself, and the dependencies between them
+   * on itself. The key `collapsed` of a layout entry overrides it for one node.
+   * The level bar of the canvas writes it. Absent or null folds nothing.
+   */
+  level?: number | null;
+  /**
+   * The arrangement of each level that the reader left: by level (`0`, `1`,
+   * … or `all` for no level), then by node id, the position and the key
+   * `collapsed`. The level bar writes and reads it. Absent when the level
+   * never changed.
+   */
+  levelLayouts?: Record<string, Record<string, LevelLayout>>;
   /** Whether this view is a canvas over the board or over the registry. */
   mode: ViewMode;
 }

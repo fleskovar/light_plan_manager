@@ -901,7 +901,22 @@ Things to keep true here:
   "collapsed, but put it wherever you like", and `CanvasGraph` treats any layout
   entry as a saved position — so seeding coordinates to express a fold would rob
   the graph of its automatic layout. `ViewerBoard` keeps a separate collapsed
-  map, which is what lets "All issues" open folded and still lay itself out.
+  map. "All issues" opens at level 0, so it opens folded and still lays itself
+  out.
+- **The detail level is a default fold, and the key `collapsed` overrides it.**
+  The view key `level` holds a hierarchy depth. `isFolded` in
+  `web/src/lib/board/levels.ts` is the one rule: a layout entry with the key
+  `collapsed` decides, else a node at `depth >= level` folds. `Workspace` and
+  `ViewerBoard` both answer `isCollapsed` with it, so `visibleTree` and the edge
+  roll-up need no change: a folded feature is the `representative` of its
+  stories, and their dependencies become edges on the feature. `buildEdges`
+  sets `written` when one dependency joins the two drawn nodes themselves, and
+  `links` lists every dependency an edge stands for. `DependencyEdge` dashes an
+  edge whose `written` is false. `switchLevel` stores the positions and the
+  `collapsed` keys of the level left in the view key `levelLayouts`, and
+  restores those of the level entered. `CanvasGraph.setLevel` lays the canvas
+  out when no arrangement was stored. The level bar is `LevelBar.svelte`, and
+  the editor and the viewer both mount it.
 - **Appearance is the reader's, never the view's.** Theme, accent and text
   size live in `localStorage` (`lib/app/preferences.svelte.ts`), because a view
   is committed and inheriting a teammate's dark mode on pull would be absurd.

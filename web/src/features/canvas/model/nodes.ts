@@ -25,6 +25,12 @@ export interface CanvasNodeData extends Record<string, unknown> {
   /** Has children in the view whether or not they are showing. */
   collapsible: boolean;
   collapsed: boolean;
+  /**
+   * Members of the view folded into this node: its descendants that the
+   * canvas does not draw because this node is collapsed. Zero for a node that
+   * is not collapsed.
+   */
+  foldedInside: number;
   /** Children that exist on the board but are not in the view. */
   hiddenChildren: number;
   assigneeLabel: string | null;
@@ -129,6 +135,14 @@ function countFlaggedInside(input: GraphInput, tree: VisibleTree, id: string): n
   return count;
 }
 
+function countFoldedInside(tree: VisibleTree, id: string): number {
+  let count = 0;
+  for (const [member, drawnAs] of tree.representative) {
+    if (drawnAs === id && member !== id) count += 1;
+  }
+  return count;
+}
+
 function countHiddenChildren(input: GraphInput, tree: VisibleTree, id: string): number {
   return Object.values(input.nodes).filter(
     (node) =>
@@ -158,6 +172,10 @@ export function buildNodes(input: GraphInput, tree: VisibleTree): CanvasNode[] {
     const node = input.nodes[id]!;
     const children = tree.childrenOf.get(id) ?? [];
     const group = children.length > 0;
+    const collapsible = (tree.memberChildrenOf.get(id) ?? []).length > 0;
+    // A level folds every node at its depth, and a node with nothing to fold
+    // is not drawn as collapsed.
+    const collapsed = collapsible && input.isCollapsed(id);
     return {
       id,
       type: group ? 'group' : 'issue',
@@ -173,8 +191,9 @@ export function buildNodes(input: GraphInput, tree: VisibleTree): CanvasNode[] {
         typeLabel: input.config.types[node.type]?.label ?? node.type,
         tone: node.kind === 'issue' ? statusTone(input.config, node.status) : 'todo',
         group,
-        collapsible: (tree.memberChildrenOf.get(id) ?? []).length > 0,
-        collapsed: input.isCollapsed(id),
+        collapsible,
+        collapsed,
+        foldedInside: collapsed ? countFoldedInside(tree, id) : 0,
         hiddenChildren: countHiddenChildren(input, tree, id),
         lineage: (tree.lineageOf.get(id) ?? []).map((ancestorId) => {
           const ancestor = input.nodes[ancestorId];

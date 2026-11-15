@@ -75,12 +75,8 @@
 
 <style>
   .scope-bar {
-    position: absolute;
-    top: var(--space-3);
-    left: var(--space-3);
-    /* The toolbar with Arrange and Fit keeps the top-right corner. */
-    right: 9rem;
-    z-index: 5;
+    /* The canvas places the bar: top left, above the level bar. */
+    align-self: stretch;
     display: flex;
     align-items: center;
     gap: var(--space-3);

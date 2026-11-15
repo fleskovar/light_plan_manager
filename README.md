@@ -2986,7 +2986,7 @@ Work in the UI happens inside a **view**: a saved slice of the board, stored as
 JSON in `.lpm/views/<name>.json` and committed like everything else. A view
 records which issues are on the canvas, where they sit, how big they were
 dragged, which subflows are collapsed, which levels are drawn as badges rather
-than as nodes, how the panes are sized, and any edits that have not been written
+than as nodes, the level of detail of the canvas, how the panes are sized, and any edits that have not been written
 to the board yet.
 
 The app opens on a view. It has no separate start page.
@@ -3069,7 +3069,8 @@ compares names without regard to capitals.
 
 **Auto-save** decides when a change to the layout reaches the view file. The
 layout is the members of the view, the positions and sizes of the nodes, the
-collapsed subflows, the pane sizes and the hierarchy display. The app stores
+collapsed subflows, the pane sizes, the hierarchy display and the level of
+detail. The app stores
 the preference in the `localStorage` entry `lpm:preferences`, under the key
 `autoSave`. The values are `true` and `false`, and the default is `true`.
 
@@ -3459,6 +3460,32 @@ item becomes the active item.
   its badge stays a node, and the choice is saved with the view (and published
   with it). The canvas is laid out again when it changes, because badging a
   level moves everything below it.
+- **The level bar** — the bar in the top-left corner of the canvas. It shows
+  one button for each level of the hierarchy, for example
+  **Epic › Feature › User Story**, with the number of view members at each
+  level. A click on a level folds every node at that level into a single
+  node, together with everything under it. Each folded node shows the number
+  of items inside it. A dependency between two folded items is drawn between
+  the nodes that hold them. For example, at the **Feature** level a story in
+  feature A that waits on a story in feature B draws an edge from B to A.
+  - A dashed edge reports an order that only the items inside imply. A solid
+    edge contains at least one dependency between the two drawn nodes
+    themselves.
+  - An edge that stands for more than one dependency shows their number.
+    Right-click it for **Expand both ends**, or for **Dependencies**, which
+    lists each dependency and opens the nodes that hold it.
+  - The chevron of a node opens or folds that one node, whatever the level
+    says. Use it to look inside one feature without leaving the level.
+  - The deepest level folds nothing. A level that **Hierarchy display** draws
+    as badges is disabled.
+
+  The bar writes the key `level` of the view file. The key holds a depth of
+  the hierarchy (0 is the top level). The key is absent for the deepest level.
+  Each level keeps its own arrangement. When you leave a level, the app stores
+  the positions and the folds of that level under the key `levelLayouts`.
+  When you return, the app restores them. A level that you open for the first
+  time is laid out again. The published viewer has the same bar, and
+  **All issues** opens at the top level.
 - **Queue Mode** — the switch at the very top of the queue panel, after the
   label **Queue Mode**, with a **?** at the end of the row that explains the two
   states. The switch is green and reads **On**, or grey and reads **Off**. It

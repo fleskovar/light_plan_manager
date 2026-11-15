@@ -128,6 +128,19 @@ const viewSchema = z.object({
   // (`planning` used to sit here too; it is board config now, `planning:` in
   // config.yml, and a view file still carrying it opens with the key dropped.)
   display: z.record(z.string(), z.enum(['node', 'badge'])).default({}),
+  // The hierarchy depth where the canvas folds, and the arrangement of each
+  // level the reader left. Both are optional: a view without them folds by
+  // its `collapsed` keys only.
+  level: z.number().int().min(0).nullable().optional(),
+  levelLayouts: z
+    .record(
+      z.string(),
+      z.record(
+        z.string(),
+        z.object({ x: z.number(), y: z.number(), collapsed: z.boolean().optional() }),
+      ),
+    )
+    .optional(),
   // A canvas over the board, or over the template registry. A view written
   // before this existed is a board view, which is what every one of them was.
   mode: z.enum(['board', 'templates']).default('board'),

@@ -1,6 +1,7 @@
 import type {
   ConfigDto,
   NodeDto,
+  NodeKind,
   NodeLayout,
   StaticBoard,
   StaticView,
@@ -9,6 +10,7 @@ import type {
 import { baseline, type WorkingNodes } from '$lib/board/working.js';
 import { buildIndex, type NodeIndexImpl } from '$lib/board/index.js';
 import { Selection } from '$lib/workspace/selection.svelte.js';
+import { clampLevel, isFolded, switchLevel, type LevelLayouts } from '$lib/board/levels.js';
 
 /**
  * The board, read-only.
@@ -45,9 +47,16 @@ export class ViewerBoard {
   /** How the published view draws each level: as nodes, or as badges. */
   display = $state.raw<Record<string, TypeDisplay>>({});
   /**
-   * Kept apart from `layout` because a node can be collapsed without having a
-   * position yet: "All issues" starts folded up, and seeding coordinates to
-   * express that would rob it of the automatic layout it needs.
+   * The hierarchy depth where the canvas folds, or null when it folds nothing.
+   * @see $lib/board/levels.ts
+   */
+  level = $state<number | null>(null);
+  /** The arrangement of each level the reader left. @see switchLevel */
+  #levelLayouts = $state.raw<LevelLayouts>({});
+  /**
+   * The nodes the reader folded or opened against the level, as the key
+   * `collapsed` of a layout entry stores it. Kept apart from `layout` because a
+   * node can carry one without having a position yet.
    */
   #collapsed = $state<Record<string, boolean>>({});
 
@@ -120,27 +129,67 @@ export class ViewerBoard {
         { x: entry.x, y: entry.y, width: entry.width, height: entry.height },
       ]),
     );
-    // A saved view says what its author folded up. The whole board has no
-    // author, so it folds every parent and opens at its top level.
-    this.#collapsed =
-      view.id === ALL_ISSUES
-        ? foldParents(this.nodes, this.members)
-        : Object.fromEntries(
-            Object.entries(view.layout)
-              .filter(([, entry]) => entry.collapsed)
-              .map(([id]) => [id, true]),
-          );
+    // A saved view says what its author folded up and at which level. The
+    // whole board has no author, so it opens at the top level of the hierarchy.
+    this.level = clampLevel(view.id === ALL_ISSUES ? 0 : view.level, this.#levels());
+    this.#levelLayouts = view.levelLayouts ?? {};
+    this.#collapsed = Object.fromEntries(
+      Object.entries(view.layout)
+        .filter(([, entry]) => entry.collapsed !== undefined)
+        .map(([id, entry]) => [id, entry.collapsed === true]),
+    );
     this.selection.clear();
   }
 
   // -- what the canvas asks for ----------------------------------------------
 
+  /** The collection the view draws: the registry when its members are templates. */
+  get nodeKind(): NodeKind {
+    return this.nodes[this.members[0] ?? '']?.kind === 'template' ? 'template' : 'issue';
+  }
+
+  #levels(): number {
+    return this.data?.board.config.hierarchy[this.nodeKind].length ?? 0;
+  }
+
   isCollapsed(id: string): boolean {
-    return this.#collapsed[id] === true;
+    const node = this.nodes[id];
+    if (!node) return false;
+    const collapsed = this.#collapsed[id];
+    return isFolded(collapsed === undefined ? undefined : { collapsed }, node.depth, this.level);
   }
 
   toggleCollapsed(id: string): void {
-    this.#collapsed = { ...this.#collapsed, [id]: !this.#collapsed[id] };
+    this.#collapsed = { ...this.#collapsed, [id]: !this.isCollapsed(id) };
+  }
+
+  /**
+   * Show the canvas at `level`, the way `Workspace.setLevel` does, in memory.
+   * Returns true when an arrangement for `level` was restored.
+   */
+  setLevel(level: number | null): boolean {
+    const to = clampLevel(level, this.#levels());
+    if (to === this.level) return true;
+    const layout = Object.fromEntries(
+      Object.entries(this.layout).map(([id, entry]) => [
+        id,
+        this.#collapsed[id] === undefined ? entry : { ...entry, collapsed: this.#collapsed[id] },
+      ]),
+    );
+    // A fold on a node with no position yet is not kept for the level: a
+    // stored position of 0,0 would pin the node to the origin.
+    const next = switchLevel(layout, this.#levelLayouts, this.level, to);
+    this.level = to;
+    this.#levelLayouts = next.levelLayouts;
+    this.#collapsed = Object.fromEntries(
+      Object.entries(next.layout)
+        .filter(([, entry]) => entry.collapsed !== undefined)
+        .map(([id, entry]) => [id, entry.collapsed === true]),
+    );
+    this.layout = Object.fromEntries(
+      Object.entries(next.layout).map(([id, { collapsed: _collapsed, ...entry }]) => [id, entry]),
+    );
+    return next.restored;
   }
 
   setLayout(id: string, layout: Partial<NodeLayout>): void {
@@ -170,8 +219,8 @@ export class ViewerBoard {
 
 /**
  * The whole board as a view: every issue a member, and no saved positions, so
- * the canvas lays it out itself. It carries no layout because a `NodeLayout`
- * cannot say "folded, but put it wherever you like" — `foldParents` says that.
+ * the canvas lays it out itself. It carries no layout and no level: the viewer
+ * opens it at the top level of the hierarchy (`ViewerBoard.open`).
  */
 export function allIssues(board: StaticBoard): StaticView {
   return {
@@ -181,19 +230,4 @@ export function allIssues(board: StaticBoard): StaticView {
     members: board.board.issues.map((issue) => issue.id),
     layout: {},
   };
-}
-
-/**
- * Collapse everything that has a child among `members`, so a board of hundreds
- * of sub-tasks opens as its handful of top-level items and unfolds where the
- * reader is interested.
- */
-export function foldParents(nodes: WorkingNodes, members: string[]): Record<string, boolean> {
-  const shown = new Set(members);
-  const folded: Record<string, boolean> = {};
-  for (const id of members) {
-    const parentId = nodes[id]?.parentId;
-    if (parentId && shown.has(parentId)) folded[parentId] = true;
-  }
-  return folded;
 }

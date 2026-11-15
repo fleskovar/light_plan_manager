@@ -25,6 +25,18 @@ export interface CanvasEdge {
   /** The edge is a stand-in for one or more edges hidden inside a subflow. */
   aggregated: boolean;
   /**
+   * True when one of the dependencies runs between the two drawn nodes
+   * themselves. False when every dependency runs between nodes folded into
+   * them, so the edge only reports an order that their contents imply. The
+   * edge component draws an implied-only edge dashed.
+   */
+  written: boolean;
+  /**
+   * Every dependency the edge stands for. In each entry, `to` waits on `from`,
+   * as in the fields `from` and `to` above. An ordinary edge has one entry.
+   */
+  links: { from: string; to: string }[];
+  /**
    * The work at the *blocker* end has stopped: somebody flagged it.
    *
    * Drawn red whatever is selected, because "which part of this graph is stuck
@@ -56,9 +68,12 @@ export function buildEdges(input: GraphInput, tree: VisibleTree): CanvasEdge[] {
       const blocker = input.nodes[blockerId];
       const stalled = blocker?.kind === 'issue' && Boolean(blocker.flag);
 
+      const written = source === blockerId && target === node.id;
       const existing = byId.get(id);
       if (existing) {
         existing.aggregated = true;
+        existing.written ||= written;
+        existing.links.push({ from: blockerId, to: node.id });
         // One flagged blocker among several is still a flagged blocker: the
         // work behind this line has stopped, whichever dependency stopped it.
         existing.stalled ||= stalled;
@@ -73,6 +88,8 @@ export function buildEdges(input: GraphInput, tree: VisibleTree): CanvasEdge[] {
         from: blockerId,
         to: node.id,
         aggregated,
+        written,
+        links: [{ from: blockerId, to: node.id }],
         stalled,
         tone,
         animated:

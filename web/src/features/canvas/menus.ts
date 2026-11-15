@@ -467,10 +467,66 @@ function editNodeEntries(context: MenuContext, node: NodeDto): MenuEntry[] {
   return entries;
 }
 
-export function edgeMenu(
-  context: MenuContext,
-  edge: { from: string; to: string; aggregated: boolean },
-): MenuEntry[] {
+/** What the edge menu needs to know about the edge that was clicked. */
+export interface EdgeMenuTarget {
+  /** The first dependency the edge stands for: `to` waits on `from`. */
+  from: string;
+  to: string;
+  aggregated: boolean;
+  /** The drawn nodes at the two ends, when they differ from `from` and `to`. */
+  source?: string;
+  target?: string;
+  /** Every dependency the edge stands for. */
+  links?: { from: string; to: string }[];
+}
+
+/**
+ * Open every collapsed member above `id`, so the canvas draws `id`, and
+ * select it. The chevron of each node writes the same key `collapsed`.
+ */
+export function reveal(workspace: Workspace, id: string): void {
+  const members = new Set(workspace.members);
+  for (const ancestor of ancestorsOf(workspace.nodes, id)) {
+    if (members.has(ancestor.id) && workspace.isCollapsed(ancestor.id)) {
+      workspace.toggleCollapsed(ancestor.id);
+    }
+  }
+  workspace.selection.focus(id);
+}
+
+/**
+ * The entries of an edge that stands for dependencies between folded items:
+ * open the two nodes at its ends, or go to one dependency.
+ */
+function foldedEdgeEntries(workspace: Workspace, edge: EdgeMenuTarget): MenuEntry[] {
+  if (!edge.aggregated) return [];
+  const ends = [edge.source, edge.target].filter(
+    (id): id is string => Boolean(id) && workspace.isCollapsed(id!),
+  );
+  const links = edge.links ?? [{ from: edge.from, to: edge.to }];
+  return [
+    {
+      label: 'Expand both ends',
+      disabled: !ends.length,
+      onSelect: () => {
+        for (const id of ends) workspace.toggleCollapsed(id);
+      },
+    },
+    {
+      label: `Dependencies (${links.length})`,
+      items: links.map((link) => ({
+        label: `${link.to} waits on ${link.from}`,
+        onSelect: () => {
+          reveal(workspace, link.from);
+          reveal(workspace, link.to);
+        },
+      })),
+    },
+    { separator: true },
+  ];
+}
+
+export function edgeMenu(context: MenuContext, edge: EdgeMenuTarget): MenuEntry[] {
   const { workspace } = context;
   const source = workspace.node(edge.from);
   const siblings = source
@@ -478,6 +534,7 @@ export function edgeMenu(
     : [];
 
   return [
+    ...foldedEdgeEntries(workspace, edge),
     {
       label: 'New…',
       // Splicing creates an issue between two others; the registry has no

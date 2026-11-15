@@ -25,6 +25,7 @@ import { ApiError, api } from '$lib/api/client.js';
 import type { WorkingNodes } from '$lib/board/working.js';
 import { applyChange, replay } from '$lib/board/working.js';
 import { buildIndex, type NodeIndexImpl } from '$lib/board/index.js';
+import { clampLevel, isFolded, switchLevel } from '$lib/board/levels.js';
 import { CanvasMode } from './canvas-mode.svelte.js';
 import { Selection } from './selection.svelte.js';
 import { arrivalsToShow } from './follow.js';
@@ -582,12 +583,45 @@ export class Workspace {
     this.scheduleSave();
   }
 
+  /** The chevron of a node: fold or open this one node, whatever the level says. */
   toggleCollapsed(id: string): void {
-    this.setLayout(id, { collapsed: !this.doc.layout[id]?.collapsed });
+    this.setLayout(id, { collapsed: !this.isCollapsed(id) });
   }
 
+  /** True when the node folds its children: by its key `collapsed`, else by the level. */
   isCollapsed(id: string): boolean {
-    return this.view?.layout[id]?.collapsed === true;
+    const node = this.nodes[id];
+    if (!node) return false;
+    return isFolded(this.view?.layout[id], node.depth, this.level);
+  }
+
+  /**
+   * The hierarchy depth where the canvas folds, or null when it folds nothing.
+   * Read from the view key `level`. @see $lib/board/levels.ts
+   */
+  get level(): number | null {
+    const view = this.view;
+    if (!view || !this.snapshot) return null;
+    return clampLevel(view.level, this.config.hierarchy[this.nodeKind].length);
+  }
+
+  /**
+   * Show the canvas at `level`. Writes the view keys `level`, `layout` and
+   * `levelLayouts` (`switchLevel`). Returns true when the view held an
+   * arrangement for `level`, and false when the canvas must lay it out.
+   */
+  setLevel(level: number | null): boolean {
+    const view = this.doc;
+    const from = this.level;
+    const to = clampLevel(level, this.config.hierarchy[this.nodeKind].length);
+    if (from === to) return true;
+    const next = switchLevel(view.layout, view.levelLayouts ?? {}, from, to);
+    view.layout = next.layout;
+    view.levelLayouts = next.levelLayouts;
+    if (to === null) delete view.level;
+    else view.level = to;
+    this.scheduleSave();
+    return next.restored;
   }
 
   /** Node, if any, whose detail dialog is open. Set by double-click. */
@@ -799,6 +833,18 @@ export class Workspace {
         layout: Object.fromEntries(
           Object.entries(view.layout).map(([id, layout]) => [result.idMap[id] ?? id, layout]),
         ),
+        ...(view.levelLayouts
+          ? {
+              levelLayouts: Object.fromEntries(
+                Object.entries(view.levelLayouts).map(([level, entries]) => [
+                  level,
+                  Object.fromEntries(
+                    Object.entries(entries).map(([id, entry]) => [result.idMap[id] ?? id, entry]),
+                  ),
+                ]),
+              ),
+            }
+          : {}),
       });
       this.selection.set(this.#remap(this.selection.ids, result.idMap));
       this.canvasMode.remap(result.idMap);

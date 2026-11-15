@@ -32,6 +32,17 @@ export interface GraphSource {
    */
   readonly syncBadges?: Readonly<Record<string, SyncBadge>>;
   readonly selection: Selection;
+  /**
+   * The hierarchy depth where the canvas folds, or null when it folds nothing.
+   * @see $lib/board/levels.ts
+   */
+  readonly level: number | null;
+  /**
+   * Show the canvas at `level`. Returns true when the source restored an
+   * arrangement for that level, and false when the canvas must lay it out.
+   */
+  setLevel(level: number | null): boolean;
+  /** True when the node folds its children: by its own choice, else by the level. */
   isCollapsed(id: string): boolean;
   toggleCollapsed(id: string): void;
   setLayout(id: string, layout: Partial<NodeLayout>): void;

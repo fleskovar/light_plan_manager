@@ -52,7 +52,14 @@ export function pruneView(view: ViewDocument, board: BoardSnapshot): ViewDocumen
 
   const members = view.members.filter(alive);
   const layout = Object.fromEntries(Object.entries(view.layout).filter(([id]) => alive(id)));
-  return { ...view, members, layout };
+  if (!view.levelLayouts) return { ...view, members, layout };
+  const levelLayouts = Object.fromEntries(
+    Object.entries(view.levelLayouts).map(([level, entries]) => [
+      level,
+      Object.fromEntries(Object.entries(entries).filter(([id]) => alive(id))),
+    ]),
+  );
+  return { ...view, members, layout, levelLayouts };
 }
 
 export function saveView(paths: BoardPaths, view: ViewDocument): ViewDocument {

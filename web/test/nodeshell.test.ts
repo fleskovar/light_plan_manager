@@ -26,6 +26,7 @@ function makeData(overrides: Partial<CanvasNodeData> = {}): CanvasNodeData {
     },
     typeLabel: 'User Story',
     tone: 'todo',
+    foldedInside: 0,
     templateRoot: false,
     templateDescription: '',
     group: false,

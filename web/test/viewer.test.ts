@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { StaticBoard } from '$shared';
-import { ALL_ISSUES, ViewerBoard, allIssues, foldParents } from '../src/viewer/board.svelte.js';
+import { ALL_ISSUES, ViewerBoard, allIssues } from '../src/viewer/board.svelte.js';
 import { fetchStaticBoard, resolveLocation } from '../src/viewer/source.js';
 import { board as makeNodes, config, issue, period, resource } from './fixtures.js';
 
@@ -145,22 +145,6 @@ describe('allIssues', () => {
   });
 });
 
-describe('foldParents', () => {
-  it('folds a node that has a child on screen, and nothing else', () => {
-    const nodes = makeNodes(
-      issue('P', 'program', null),
-      issue('E', 'epic', 'P'),
-      issue('S1', 'user_story', 'E'),
-    );
-    expect(foldParents(nodes, ['P', 'E', 'S1'])).toEqual({ P: true, E: true });
-  });
-
-  it('ignores a parent that is not on screen', () => {
-    const nodes = makeNodes(issue('P', 'program', null), issue('E', 'epic', 'P'));
-    expect(foldParents(nodes, ['E'])).toEqual({});
-  });
-});
-
 describe('ViewerBoard', () => {
   it('opens the whole board when there are no saved views', () => {
     const store = new ViewerBoard();
@@ -169,10 +153,11 @@ describe('ViewerBoard', () => {
     expect(store.ready).toBe(true);
     expect(store.viewId).toBe(ALL_ISSUES);
     expect(store.members).toEqual(['P', 'E', 'F1', 'S1', 'S2']);
-    // Everything with children starts folded, so the board opens at its top.
+    // The whole board opens at the top level of the hierarchy, so every node
+    // with children starts folded.
+    expect(store.level).toBe(0);
     expect(store.isCollapsed('P')).toBe(true);
     expect(store.isCollapsed('F1')).toBe(true);
-    expect(store.isCollapsed('S1')).toBe(false);
     expect(store.layout).toEqual({});
   });
 
@@ -232,6 +217,50 @@ describe('ViewerBoard', () => {
     // `collapsed` does not travel in the positional map, or the canvas would
     // treat a fold as a saved position and skip the automatic layout.
     expect(store.layout).toEqual({ F1: { x: 5, y: 6 }, S1: { x: 7, y: 8 } });
+  });
+
+  it('opens a saved view at its level', () => {
+    const store = new ViewerBoard();
+    store.load(
+      staticBoard({
+        views: [{ id: 'a', name: 'A', updated: '', members: ['F1', 'S1'], layout: {}, level: 2 }],
+      }),
+    );
+    expect(store.level).toBe(2);
+    expect(store.isCollapsed('F1')).toBe(true);
+  });
+
+  it('keeps the arrangement of each level the reader leaves', () => {
+    const store = new ViewerBoard();
+    store.load(
+      staticBoard({
+        views: [
+          {
+            id: 'a',
+            name: 'A',
+            updated: '',
+            members: ['F1', 'S1', 'S2'],
+            layout: { F1: { x: 5, y: 6 }, S1: { x: 7, y: 8, collapsed: true } },
+          },
+        ],
+      }),
+    );
+
+    // A level never visited has no arrangement, and the fold of S1 goes.
+    expect(store.setLevel(2)).toBe(false);
+    expect(store.level).toBe(2);
+    expect(store.isCollapsed('F1')).toBe(true);
+    store.setLayout('F1', { x: 100, y: 200 });
+
+    // Back at every level, the positions and the fold of S1 return.
+    expect(store.setLevel(null)).toBe(true);
+    expect(store.layout.F1).toEqual({ x: 5, y: 6 });
+    expect(store.isCollapsed('S1')).toBe(true);
+    expect(store.isCollapsed('F1')).toBe(false);
+
+    // And the feature level kept where F1 was moved to.
+    expect(store.setLevel(2)).toBe(true);
+    expect(store.layout.F1).toEqual({ x: 100, y: 200 });
   });
 
   it('drops a member the board no longer has', () => {

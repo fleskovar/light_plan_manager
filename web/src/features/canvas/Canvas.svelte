@@ -21,12 +21,14 @@
   import { cleanTitle, provideCanvasEditing } from './editing.js';
   import DependencyEdge from './edges/DependencyEdge.svelte';
   import { CanvasGraph, provideCanvasGraph } from './graph.svelte.js';
-  import { edgeMenu, nodeMenu, paneMenu, type EditActions } from './menus.js';
+  import { edgeMenu, nodeMenu, paneMenu, type EdgeMenuTarget, type EditActions } from './menus.js';
   import { isLinkKey, linkSelection, startLinkDrag, type LinkDragHandlers } from './link.js';
   import GroupNode from './nodes/GroupNode.svelte';
   import IssueNode from './nodes/IssueNode.svelte';
   import { startCameraPan } from './pan.js';
   import ScopeBar from './ScopeBar.svelte';
+  import LevelBar from './LevelBar.svelte';
+  import { hierarchyLevels } from '$lib/board/levels.js';
   import {
     breadcrumb,
     canEnter,
@@ -136,6 +138,25 @@
   const newDepth = $derived(childDepth(activeNode));
   const newType = $derived(chosenType(newTypes, newDepth, mode.newTypes));
   const typeLabel = (type: string): string => workspace.config.types[type]?.label ?? type;
+
+  /** The steps of the level bar: one for each level of the hierarchy. */
+  const levels = $derived(
+    workspace.ready
+      ? hierarchyLevels(
+          workspace.config,
+          workspace.nodeKind,
+          workspace.nodes,
+          workspace.members,
+          workspace.display,
+        )
+      : [],
+  );
+
+  /** Show the canvas at `level`, then fit the new picture. */
+  function showLevel(level: number | null): void {
+    graph.setLevel(level);
+    requestAnimationFrame(() => void flow.fitView({ duration: 320, maxZoom: 1.1, padding: 0.15 }));
+  }
 
   /** The card of a new item that waits for its title, or null. */
   let draft = $state<Draft | null>(null);
@@ -436,8 +457,11 @@
       graph.refreshHighlights();
     }}
     onedgecontextmenu={({ edge, event }) => {
-      const data = edge.data as { from: string; to: string; aggregated: boolean };
-      shell.openMenu(event, edgeMenu({ workspace, shell }, data));
+      const data = edge.data as unknown as EdgeMenuTarget;
+      shell.openMenu(
+        event,
+        edgeMenu({ workspace, shell }, { ...data, source: edge.source, target: edge.target }),
+      );
     }}
     onpaneclick={() => {
       workspace.selection.clear();
@@ -481,16 +505,21 @@
     {/if}
   </SvelteFlow>
 
-  {#if mode.editing}
-    <ScopeBar
-      {crumbs}
-      types={newTypes.map((type) => ({ value: type, label: typeLabel(type) }))}
-      chosen={newType}
-      onnavigate={navigate}
-      onchoose={chooseType}
-      onadd={() => startDraft(null)}
-    />
-  {/if}
+  <!-- The top-left corner holds the bar of edit mode above the level bar, so
+       the two never cover each other. -->
+  <div class="bars">
+    {#if mode.editing}
+      <ScopeBar
+        {crumbs}
+        types={newTypes.map((type) => ({ value: type, label: typeLabel(type) }))}
+        chosen={newType}
+        onnavigate={navigate}
+        onchoose={chooseType}
+        onadd={() => startDraft(null)}
+      />
+    {/if}
+    <LevelBar {levels} current={workspace.level} onselect={showLevel} />
+  </div>
 
   {#if linkLine}
     <svg class="link-line" aria-hidden="true">
@@ -628,6 +657,24 @@
   /* Edit mode: an accent frame inside the canvas shows that a double-click creates. */
   .canvas.editing {
     box-shadow: inset 0 0 0 2px var(--accent-soft);
+  }
+
+  .bars {
+    position: absolute;
+    top: var(--space-3);
+    left: var(--space-3);
+    /* The toolbar with Arrange and Fit keeps the top-right corner. */
+    right: 9rem;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+    pointer-events: none;
+  }
+
+  .bars > :global(*) {
+    pointer-events: auto;
   }
 
   .toolbar {
